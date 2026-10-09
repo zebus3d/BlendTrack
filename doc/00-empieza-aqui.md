@@ -6,7 +6,9 @@ Una aplicación de escritorio hecha con **Python** y **PySide6 (Qt Widgets)** qu
 sirve para buscar, descargar, organizar y lanzar versiones de
 [Blender](https://www.blender.org/): LTS, estables y de desarrollo (diarias y
 ramas experimentales). Funciona en Linux, Windows y macOS, y está pensada para
-ser **portable**: una vez empaquetada no hace falta instalar nada.
+ser **portable**: una vez empaquetada no hace falta instalar nada. También
+descarga y lanza dos programas basados en Blender, **Bforartists** y **UPBGE**,
+si se activan en Ajustes.
 
 ## Cómo se ejecuta en modo desarrollo
 
@@ -17,7 +19,7 @@ ser **portable**: una vez empaquetada no hace falta instalar nada.
 # Equivalente a mano
 .venv/bin/python src/main.py
 
-# Con registro detallado
+# Si la app revienta (un fallo nativo de Qt), deja la pila de Python en el log
 .venv/bin/python src/main.py --debug
 
 # Sin ventana: lista las compilaciones disponibles por consola
@@ -36,11 +38,15 @@ ser **portable**: una vez empaquetada no hace falta instalar nada.
 **`src/main.py`**. Es el punto de entrada. Sus tareas, en orden, son:
 
 1. Poner `src/` en el `sys.path` para poder importar `services`, `ui`, `model`.
-2. Leer los argumentos (`--smoke`, `--debug`, `--screenshot`, `--apply-update`).
-3. Definir el modo `--smoke` (lista por consola, **sin** crear `QApplication`).
-4. Cargar los ajustes y el idioma.
-5. Crear `QApplication`, cargar la fuente de iconos y aplicar el QSS.
-6. Crear `MainWindow`, dimensionarla y mostrarla.
+2. Leer los argumentos (`--smoke`, `--debug`, `--screenshot` y los de uso
+   interno `--apply-update` y `--grant-access`). Los modos que no abren ventana
+   terminan aquí, **sin** importar Qt.
+3. Cargar los ajustes y el idioma.
+4. Crear `QApplication` y comprobar que no haya otra instancia abierta (si la
+   hay, se le pide que salga al frente y esta se cierra).
+5. Cargar la fuente de iconos y aplicar el QSS.
+6. Crear `MainWindow`, dimensionarla y mostrarla (o dejarla en la bandeja si se
+   pidió arrancar minimizado).
 
 ## Mapa rápido del proyecto
 
@@ -50,14 +56,15 @@ src/
   version.py         # número de versión (el CI lo reescribe en los releases)
   paths.py           # rutas: en código fuente vs. empaquetado
   i18n.py            # el mecanismo de traducción (los textos, en locale/)
-  locale/es.json     # las traducciones al español (la clave es el inglés)
+  locale/*.json      # es, zh, ru, ja, pt_BR (la clave es el texto en inglés)
 
   model/
     build.py         # los "objetos" de datos: Build y InstalledBuild
 
   services/          # la lógica de verdad (no saben nada de Qt)
     api.py           # consulta el listado de Blender, lo filtra y lo cachea
-    detector.py      # detecta el sistema operativo y la arquitectura
+    forks.py         # los listados de Bforartists y UPBGE
+    detector.py      # detecta el sistema operativo, la arquitectura y Wayland
     settings.py      # ajustes, biblioteca de carpetas y modo portable
     channels.py      # la única definición de "de qué tipo es esta versión"
     downloader.py    # descarga en segundo plano con progreso y SHA-256
@@ -76,6 +83,7 @@ src/
     blender_style.py     # tema y mapa de teclas como presets
     opener.py        # abre URLs y carpetas con un entorno limpio (AppImage)
     sources.py       # elige la fuente de descarga más rápida
+    net.py           # el User-Agent con el que la app se presenta (uno solo)
     tls.py           # contexto TLS con un almacén de CAs que exista de verdad
     elevate.py       # permiso de escritura en Windows (UAC)
     autostart.py     # arrancar con la sesión, en cada plataforma
@@ -83,6 +91,7 @@ src/
 
   ui/                # la interfaz (lo único que conoce Qt)
     qss.py           # el aspecto de TODA la app (una hoja de estilos)
+    single_instance.py # abrir la app dos veces trae al frente la que ya corre
     theme.py         # los colores, en constantes
     icons.py         # los glifos de la fuente de iconos
     fonts.py         # carga de la fuente de iconos
@@ -104,6 +113,7 @@ src/
       layouts.py       # vaciar layouts, listas con scroll, notas apagadas
       menus.py         # menús contextuales con el aspecto de la app
       folders.py       # la fila de una carpeta de la biblioteca
+      busy.py          # barra de progreso indeterminada (cargando el listado)
       tray.py          # el icono de la bandeja
 
   assets/            # logo de Blender, icono de la app y fuente de iconos

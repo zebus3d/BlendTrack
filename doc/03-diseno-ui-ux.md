@@ -37,9 +37,10 @@ Los colores están en `src/ui/theme.py` y el QSS los usa con f-strings
 | `SUCCESS_TEXT` | `#6FCF7A` | Verde claro para texto "Instalada" |
 | `INFO_TEXT` | `#7AA7E0` | Azul claro para etiquetas de canal |
 
-> Importante: las variantes `_TEXT` existen porque los colores "de fondo"
-> (verde `SUCCESS`, azul `INFO`) son demasiado oscuros para leerlos como texto
-> sobre una tarjeta.
+> Importante: los colores de texto llevan el sufijo `_TEXT` porque son más
+> claros que los de fondo o de borde del mismo tono (`INFO_DISC`, `ACCENT`):
+> un verde o un azul pensados para rellenar se leen mal como texto sobre una
+> tarjeta.
 
 ## Cómo se comunica el estado
 
@@ -62,25 +63,29 @@ El resaltado al pasar el ratón sale de la propiedad dinámica `hover`, que pone
 - **Márgenes exteriores**: 14 a 16 px.
 - **Márgenes interiores de tarjeta**: 12 a 14 px (escalan con el zoom).
 - **Separación entre hermanos**: 10 px en rejillas, 6 px en grupos juntos.
-- **Alto de la cabecera**: 72 px. **Barra de filtros**: 44 px. **Barra lateral**:
-  74 px.
+- **Alto de la cabecera**: 72 px. **Barra de filtros**: 50 px
+  (`theme.FILTERS_HEIGHT`). **Barra lateral**: 74 px.
 - Se usan **píxeles enteros**: `setContentsMargins(14, 14, 14, 14)`. No hay
   `dp()` como en Kivy; lo único que escala es el **zoom** de la rejilla, que se
-  aplica calculando los valores (`int(68 * zoom)`).
+  aplica calculando los valores (el alto de una tarjeta de rejilla sale de
+  `_grid_height(zoom)` en `ui/widgets/cards.py`; las de lista miden 68 px
+  fijos).
 
 ## La pantalla, en tres zonas
 
 ```
 +--------[ Cabecera: 72 px ]--------+   logo, título, buscador, refrescar
-+--------[ Filtros:  44 px ]--------+   canales, vista, plataforma, arquitectura
-| barra |                             |
-| late- |        contenido            |   tienda / instaladas / ajustes
-| ral   |                             |
+| barra +--[ Filtros:  50 px ]-------+   pestañas de canal, vista, plataforma...
+| late- |                             |
+| ral   |        contenido            |   Nube / Local / Migración / Ajustes
+|       |                             |
 +--------[ Pie:    ~40 px ]---------+   estado, progreso, zoom
 ```
 
 La cabecera, la barra de filtros y el pie tienen alto fijo (`setFixedHeight`). El
-cuerpo se queda con el espacio que sobra.
+cuerpo se queda con el espacio que sobra. La fila de filtros **solo existe en
+Nube y Local** (vive con las listas, en `build_lists.py`); Migración y Ajustes
+no la llevan.
 
 ## Reglas de lectura
 

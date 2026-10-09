@@ -30,8 +30,8 @@ que está aprendiendo Python y Qt, así que empieza por lo básico y va subiendo
                  └────────────────────┬─────────────────────┘
                                       │ pide datos / acciones
                  ┌────────────────────▼─────────────────────┐
-   LA LÓGICA →   │  services/  (api, downloader, extractor,  │
-                 │  installed, launcher, settings, updater)  │
+   LA LÓGICA →   │  services/  (api, forks, downloader,      │
+                 │  installed, settings, updater... ~25)     │
                  └────────────────────┬─────────────────────┘
                                       │ usa
                  ┌────────────────────▼─────────────────────┐
@@ -39,9 +39,11 @@ que está aprendiendo Python y Qt, así que empieza por lo básico y va subiendo
                  └──────────────────────────────────────────┘
 ```
 
-La regla de oro del proyecto: **el QSS describe el aspecto, el controlador
-(`ui/widgets/main_window.py`) decide qué hacer, y los servicios hacen el trabajo
-pesado**. Si mantienes esa separación, todo seguirá siendo fácil de entender.
+La regla de oro del proyecto: **el QSS describe el aspecto, la ventana
+(`ui/widgets/main_window.py` y sus mixins: `build_lists.py`, `downloads.py`,
+`updates.py`, `settings_view.py`, `folder_library.py`) decide qué hacer, y los
+servicios hacen el trabajo pesado**. Si mantienes esa separación, todo seguirá
+siendo fácil de entender.
 
 > Nota histórica: este proyecto nació con **Kivy** y se portó a Qt Widgets
 > (PySide6) porque Kivy necesita OpenGL y eso hacía depender el binario del
