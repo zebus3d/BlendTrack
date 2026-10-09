@@ -23,7 +23,6 @@ from services.opener import clean_env
 # La salida del guion se busca por este prefijo: Blender escribe mucha cosa en
 # la consola y no queremos confundir un mensaje suyo con el resultado.
 RESULT_MARKER = "BLENDERMANAGER_RESULT="
-PY_MARKER = "BLENDERMANAGER_PY="
 
 # Tope por defecto para arrancar Blender. Habilitar unos cuantos addons tarda
 # segundos; si pasa de aquí, algo va mal (addon colgado) y se mata.
@@ -83,13 +82,6 @@ except Exception as exc:
 print("BLENDERMANAGER_RESULT=" + json.dumps(
     {"enabled": enabled, "disabled": disabled, "errors": errors}))
 '''
-
-_PY_SCRIPT = (
-    "import json, sys; "
-    "print('" + PY_MARKER + "' + json.dumps('.'.join(str(v) for v in "
-    "sys.version_info[:2])))"
-)
-
 
 def _run(executable, args, extra_env=None, timeout=DEFAULT_TIMEOUT):
     """Arranca Blender y devuelve ``(returncode, stdout, stderr)``.
@@ -159,22 +151,6 @@ def _parse_marker(output: str, marker: str):
         except json.JSONDecodeError:
             continue
     return payload
-
-
-def python_version(executable, timeout=30) -> str:
-    """Versión de Python que embebe esa build (``"3.13"``), o "" si falló.
-
-    Se pregunta al propio Blender en vez de mantener una tabla: así no hay que
-    actualizarla cada vez que Blender cambia de Python.
-    """
-    if not executable:
-        return ""
-    code, out, _ = _run(executable, ["--background", "--python-expr", _PY_SCRIPT],
-                        timeout=timeout)
-    if code is None:
-        return ""
-    version = _parse_marker(out, PY_MARKER)
-    return str(version) if version else ""
 
 
 def set_addons(executable, enable=None, disable=None,

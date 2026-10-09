@@ -13,7 +13,6 @@ Es un módulo de ``services/``: no importa Qt.
 """
 
 import os
-import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -42,6 +41,12 @@ MANIFEST_NAME = "blender_manifest.toml"
 
 # Marcador donde anotamos qué copiamos, para poder deshacer más adelante.
 MIGRATION_MARKER = ".blendermanager-migration.json"
+# Sufijo de las copias de seguridad. **Solo se conserva una por destino** (ver
+# ``blender_addons.park_existing``), no un histórico con fecha.
+BACKUP_SUFFIX = ".blendermanager-bak"
+# Sufijo de la copia a medio hacer: se copia primero aquí y, solo cuando está
+# completa, se renombra a su sitio (ver ``blender_addons.replace_with_copy``).
+STAGING_SUFFIX = ".blendermanager-tmp"
 
 # Estados de compatibilidad de un addon. El texto lo pone la interfaz.
 OK = "ok"            # compatible
@@ -56,13 +61,16 @@ REASON_WHEEL_ABI = "wheel_abi"             # sus wheels no son para este Python
 REASON_UNKNOWN_VERSION = "unknown_version"  # el addon no declara versión mínima
 
 
-
 # Versión de Python que embebe cada serie de Blender. Solo se usa para avisar
-# de wheels incompatibles; si la serie no está en la tabla, no se avisa (mejor
-# no dar un falso positivo que inventar). Está comprobada arrancando las builds
-# con ``--python-expr`` (ver ``services.blender_runner.python_version``, que es
-# la fuente de verdad cuando la build está instalada): 4.5/5.0 dan 3.11 y
-# 5.1/5.2 dan 3.13.
+# de wheels incompatibles; si la serie es más vieja que todas las de la tabla,
+# no se avisa (mejor no dar un falso positivo que inventar). Las de 4.5, 5.0,
+# 5.1 y 5.2 están comprobadas arrancando cada build y preguntándole
+# ``sys.version_info``; las demás salen de las notas de versión de Blender.
+#
+# Es una tabla, y no una pregunta al Blender de destino, a propósito: el plan
+# de migración se recalcula cada vez que se cambia de versión en los
+# desplegables, y arrancar un Blender en cada cambio son segundos de espera
+# para un dato que solo cambia una vez cada pocos años.
 _PYTHON_BY_SERIES = {
     (3, 6): "3.10",
     # 4.0 sigue con 3.10; el salto a 3.11 llegó en 4.1 (con la plataforma VFX
@@ -84,10 +92,8 @@ def python_for_version(version: str) -> str:
     para una serie **más nueva que todas las de la tabla** esto *extrapola*:
     devuelve el Python de la última conocida. Mientras Blender no cambie de
     Python acierta, y el día que lo cambie el aviso de wheels de esa serie será
-    erróneo hasta que se añada la fila (una línea). La alternativa —preguntarle
-    al Blender destino con ``blender_runner.python_version``, que es la fuente
-    de verdad— cuesta un arranque de Blender por cada recálculo del plan, y el
-    plan se recalcula al cambiar de versión en los desplegables.
+    erróneo hasta que se añada la fila (una línea; ver ``_PYTHON_BY_SERIES``
+    para por qué es una tabla).
     """
     target = version_tuple(version)
     if not target:
@@ -101,52 +107,35 @@ def python_for_version(version: str) -> str:
 
 # --------------------------------------------------------------- ubicaciones
 
+# Carpeta de configuración de cada programa en cada sistema: ``(Linux, macOS,
+# Windows)``. En Linux cuelga de ``$XDG_CONFIG_HOME`` (``~/.config``), en macOS
+# de ``~/Library/Application Support`` y en Windows de ``%APPDATA%``, donde los
+# tres usan dos niveles (organización y programa). Comprobado en el
+# ``getUserDir`` de cada uno: Bforartists y UPBGE escriben en su propio sitio,
+# no en el de Blender, aunque sean Blender por dentro.
+_CONFIG_FOLDERS = {
+    FORK_BLENDER: ("blender", "Blender", ("Blender Foundation", "Blender")),
+    FORK_BFORARTISTS: ("bforartists", "Bforartists",
+                       ("Bforartists", "Bforartists")),
+    FORK_UPBGE: ("upbge", "UPBGE", ("UPBGE", "Blender")),
+}
+
+
 def config_base(platform: str, env: dict | None = None,
                 fork: str = FORK_BLENDER) -> Path:
     """Carpeta que contiene una subcarpeta por versión de Blender (o del fork).
 
-    Cada fork escribe su configuración en su propio sitio, con su propio
-    nombre (comprobado en su ``getUserDir``):
-
-    * **Bforartists**: ``~/.config/bforartists`` en Linux,
-      ``%APPDATA%\\Bforartists\\Bforartists`` en Windows y
-      ``~/Library/Application Support/Bforartists`` en macOS.
-    * **UPBGE**: ``~/.config/upbge``, ``%APPDATA%\\UPBGE\\Blender`` y
-      ``~/Library/Application Support/UPBGE``.
-
-    * **Blender**: ``~/.config/blender`` (o ``$XDG_CONFIG_HOME``),
-      ``%APPDATA%\\Blender Foundation\\Blender`` y
-      ``~/Library/Application Support/Blender``.
+    Para Blender: ``~/.config/blender``, ``%APPDATA%\\Blender
+    Foundation\\Blender`` y ``~/Library/Application Support/Blender``. Los
+    nombres de los forks están en ``_CONFIG_FOLDERS``; un fork desconocido se
+    trata como Blender.
     """
     env = os.environ if env is None else env
-    if fork == FORK_BFORARTISTS:
-        return _fork_base(platform, env, linux="bforartists",
-                          macos="Bforartists",
-                          windows=("Bforartists", "Bforartists"))
-    if fork == FORK_UPBGE:
-        return _fork_base(platform, env, linux="upbge", macos="UPBGE",
-                          windows=("UPBGE", "Blender"))
-    base = env.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
+    linux, macos, windows = _CONFIG_FOLDERS.get(fork,
+                                                _CONFIG_FOLDERS[FORK_BLENDER])
     if platform == "windows":
         appdata = env.get("APPDATA") or str(Path.home() / "AppData" / "Roaming")
-        return Path(appdata) / "Blender Foundation" / "Blender"
-    if platform == "darwin":
-        return Path.home() / "Library" / "Application Support" / "Blender"
-    return Path(base) / "blender"
-
-
-def _fork_base(platform: str, env: dict, linux: str, macos: str,
-               windows: tuple) -> Path:
-    """Carpeta base de un fork, con el nombre que usa en cada sistema.
-
-    En Windows la configuración cuelga de ``%APPDATA%\\<organización>`` y, en
-    los dos forks, de una segunda carpeta con el nombre del programa
-    (``Bforartists\\Bforartists`` o ``UPBGE\\Blender``).
-    """
-    if platform == "windows":
-        appdata = env.get("APPDATA") or str(Path.home() / "AppData" / "Roaming")
-        organization, subfolder = windows
-        return Path(appdata) / organization / subfolder
+        return Path(appdata).joinpath(*windows)
     if platform == "darwin":
         return Path.home() / "Library" / "Application Support" / macos
     base = env.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
@@ -176,11 +165,6 @@ class BlenderConfig:
     def addons_dir(self) -> Path:
         """Carpeta de los addons legacy (``scripts/addons``)."""
         return self.scripts_dir / LEGACY_ADDONS_SUBDIR
-
-    @property
-    def userpref(self) -> Path:
-        """Fichero de preferencias de esa versión."""
-        return self.config_dir / "userpref.blend"
 
     def exists(self) -> bool:
         """True si la carpeta de esa versión ya existe."""
@@ -223,94 +207,6 @@ def config_for(version: str, platform: str, env: dict | None = None,
     )
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Sufijo de las copias de seguridad. **Solo se conserva una por destino** (ver
-# ``park_existing``), no un histórico con fecha.
-BACKUP_SUFFIX = ".blendermanager-bak"
-# Sufijo de la copia a medio hacer: se copia primero aquí y, solo cuando está
-# completa, se renombra a su sitio (ver ``blender_addons.replace_with_copy``).
-STAGING_SUFFIX = ".blendermanager-tmp"
-
-
-
-
-
-
-
-
-
-
-# --------------------------------------------------------- fábrica / reset
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # ------------------------------------------------------------ preferencias
 
 # Ficheros de la carpeta ``config`` que forman las preferencias del usuario.
@@ -327,11 +223,3 @@ PREFERENCE_FILES = (
     ("userpref", USERPREF_FILE),
     ("startup", STARTUP_FILE),
 )
-
-
-
-
-
-
-
-

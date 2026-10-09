@@ -2,7 +2,7 @@
 
 Todo es disco y funciones puras: no se lanza ningún Blender (eso vive en
 ``services.blender_runner`` y se prueba con ``subprocess`` mockeado en
-``test_services.py``). Se montan carpetas de configuración de mentira con
+``test_blender_runner.py``). Se montan carpetas de configuración de mentira con
 addons legacy y extensiones reales (ficheros de texto).
 """
 

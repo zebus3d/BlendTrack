@@ -17,23 +17,6 @@ def _completed(stdout="", stderr="", code=0):
                                        stdout=stdout, stderr=stderr)
 
 
-class PythonVersionTest(unittest.TestCase):
-    def test_parsea_la_version(self):
-        with mock.patch.object(blender_runner.subprocess, "run",
-                               return_value=_completed("BLENDERMANAGER_PY=3.13\n")):
-            self.assertEqual(blender_runner.python_version("/bin/blender"), "3.13")
-
-    def test_sin_ejecutable_no_lanza_nada(self):
-        with mock.patch.object(blender_runner.subprocess, "run") as run:
-            self.assertEqual(blender_runner.python_version(""), "")
-            run.assert_not_called()
-
-    def test_sin_marcador_devuelve_vacio(self):
-        with mock.patch.object(blender_runner.subprocess, "run",
-                               return_value=_completed("ruido\n")):
-            self.assertEqual(blender_runner.python_version("/bin/blender"), "")
-
-
 class EnableAddonsTest(unittest.TestCase):
     def test_parsea_el_resultado(self):
         output = ('BLENDERMANAGER_RESULT={"enabled": ["foo"], "errors": []}\n')
@@ -57,6 +40,11 @@ class EnableAddonsTest(unittest.TestCase):
             result = blender_runner.enable_addons("/bin/blender", [])
             run.assert_not_called()
         self.assertFalse(result["ok"])
+
+    def test_sin_ejecutable_no_lanza_nada(self):
+        with mock.patch.object(blender_runner.subprocess, "run") as run:
+            self.assertEqual(blender_runner.enabled_addons(""), [])
+            run.assert_not_called()
 
     def test_salida_sin_marcador(self):
         with mock.patch.object(blender_runner.subprocess, "run",
