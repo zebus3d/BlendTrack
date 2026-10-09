@@ -482,8 +482,9 @@ def park_existing(destination: Path) -> Path | None:
     **Una sola copia por destino, reutilizable**: los usuarios migran más de una
     vez (y a veces en la dirección contraria), y con un sufijo por fecha se
     acumulaba un ``.bak`` por intento sin que nadie los viera. Se reutiliza el
-    mismo nombre y se pisa: lo que interesa conservar es el estado
-    *inmediatamente anterior* al último cambio, no un histórico.
+    mismo nombre y se pisa. Cuando lo que hay en destino es una copia nuestra
+    de una migración anterior, no se llega a llamar a esto (pisaría el
+    original): ver ``_copy_with_undo``.
 
     Devuelve la ruta del respaldo, o ``None`` si no había nada que apartar. Un
     enlace simbólico roto no "existe" para ``Path.exists`` pero sí estorba al
@@ -508,7 +509,8 @@ def park_existing(destination: Path) -> Path | None:
     return backup
 
 
-def replace_with_copy(source: Path, destination: Path) -> Path | None:
+def replace_with_copy(source: Path, destination: Path,
+                      discard_existing: bool = False) -> Path | None:
     """Pone una copia de ``source`` en ``destination`` sin dejarlo a medias.
 
     El orden es lo que importa. Antes se apartaba primero lo que hubiera y
@@ -525,6 +527,11 @@ def replace_with_copy(source: Path, destination: Path) -> Path | None:
     Si falla el paso 1, el destino no se ha tocado; si falla el 3, se devuelve
     el respaldo a su sitio. En los dos casos se relanza el ``OSError`` para que
     quien llama lo cuente. Devuelve la ruta del respaldo, o ``None``.
+
+    ``discard_existing`` es para cuando lo que hay en destino es **una copia
+    nuestra** de una migración anterior: no se respalda (pisaría el ``.bak``
+    con el original del usuario, ver ``_copy_with_undo``), se tira en cuanto la
+    copia nueva está en su sitio.
     """
     destination = Path(destination)
     staging = destination.with_name(f".{destination.name}{STAGING_SUFFIX}")
@@ -535,34 +542,87 @@ def replace_with_copy(source: Path, destination: Path) -> Path | None:
     except OSError:
         delete_path(staging)
         raise
-    backup = park_existing(destination)
+    backup = displaced = None
+    if not discard_existing:
+        backup = park_existing(destination)
+    elif destination.exists() or destination.is_symlink():
+        # Nuestra copia vieja se aparta (no se borra todavía) por si el paso
+        # siguiente falla y hay que devolverla.
+        displaced = destination.with_name(
+            f".{destination.name}{STAGING_SUFFIX}-old")
+        delete_path(displaced)
+        destination.rename(displaced)
     try:
         os.replace(staging, destination)
     except OSError:
-        if backup is not None:
+        previous = backup or displaced
+        if previous is not None:
             try:
-                backup.rename(destination)
+                previous.rename(destination)
             except OSError:
-                # El original sigue entero en el ``.bak``: no se ha perdido,
+                # Lo de antes sigue entero donde se apartó: no se ha perdido,
                 # solo no se pudo devolver a su sitio. El error que importa es
                 # el de arriba, que es el que se relanza.
                 pass
         delete_path(staging)
         raise
+    if displaced is not None:
+        delete_path(displaced)
     return backup
 
 
-def _undo_action(destination: Path, backup: Path | None,
-                 backed_up: list) -> dict:
-    """Entrada del marcador para poder deshacer esta copia.
+def _copies_in_marker(target: BlenderConfig, key: str) -> dict:
+    """Destinos que copió la última migración (``key``), con su respaldo.
+
+    Devuelve ``{ruta destino: respaldo o None}``. Es lo que permite reconocer,
+    al migrar otra vez, que lo que hay en destino lo puso BlenderManager. Los
+    marcadores de versiones anteriores de la app anotaban dos entradas por copia
+    (una con respaldo y otra sin él): se queda la que lo tiene.
+    """
+    payload = read_migration_marker(target)
+    if payload.get("version") != target.version:
+        return {}
+    copies = {}
+    for action in payload.get(key) or []:
+        path = action.get("path")
+        if not path:
+            continue
+        backup = action.get("backup")
+        backup = Path(backup) if backup and Path(backup).exists() else None
+        copies[path] = copies.get(path) or backup
+    return copies
+
+
+def _copy_with_undo(source: Path, destination: Path, previous: dict,
+                    backed_up: list) -> dict:
+    """Copia ``source`` a ``destination`` y devuelve su entrada del marcador.
+
+    **Migrar dos veces no puede perder el original.** El respaldo es uno por
+    destino; si la segunda migración apartaba lo que había, apartaba *nuestra
+    propia copia de la primera* y pisaba con ella el ``.bak``, que era el único
+    sitio donde seguía el addon (o las preferencias) que el usuario tenía antes
+    de migrar. Así que, si el marcador dice que ese destino lo copiamos
+    nosotros (``previous``, de ``_copies_in_marker``), la copia vieja se tira
+    sin respaldarla y se hereda el respaldo original: deshacer vuelve al estado
+    de antes de BlenderManager, no a una copia intermedia.
+
+    El precio, a sabiendas: si el usuario retocó a mano esa copia entre una
+    migración y otra, el retoque se pierde. Es una copia del origen, que sigue
+    intacto, y perder el original era mucho peor (no había forma de recuperarlo).
 
     Con respaldo, deshacer lo devuelve a su sitio; sin él (el destino no
-    existía), deshacer borra la copia. De paso anota el respaldo en
+    existía), deshacer borra la copia. Los respaldos hechos ahora se anotan en
     ``backed_up``, que es lo que enseña el resumen de la interfaz.
     """
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    ours = str(destination) in previous
+    backup = replace_with_copy(source, destination, discard_existing=ours)
+    if ours:
+        backup = previous[str(destination)]
+    elif backup is not None:
+        backed_up.append(backup)
     if backup is None:
         return {"path": str(destination)}
-    backed_up.append(backup)
     return {"path": str(destination), "backup": str(backup)}
 
 
@@ -604,6 +664,7 @@ def apply_migration(plans, target: BlenderConfig,
     """
     result = MigrationResult(dry_run=dry_run)
     actions = []
+    previous = _copies_in_marker(target, "actions")
     for plan in plans:
         if not plan.selected or plan.blocked:
             result.skipped.append(plan)
@@ -612,12 +673,11 @@ def apply_migration(plans, target: BlenderConfig,
             result.copied.append(plan)
             continue
         try:
-            destination = Path(plan.destination)
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            backup = replace_with_copy(plan.addon.path, destination)
+            actions.append(_copy_with_undo(plan.addon.path,
+                                           Path(plan.destination), previous,
+                                           result.backed_up))
             result.copied.append(plan)
             result.modules.append(plan.enable_module)
-            actions.append(_undo_action(destination, backup, result.backed_up))
         except OSError as error:
             result.failed.append((plan, str(error)))
     if not dry_run and actions:
@@ -755,6 +815,7 @@ def copy_preference_files(items, target: BlenderConfig,
     """
     result = PreferenceResult(dry_run=dry_run)
     actions = []
+    previous = _copies_in_marker(target, "preferences")
     for item in items:
         if not item.selected or not item.safe:
             continue
@@ -762,11 +823,9 @@ def copy_preference_files(items, target: BlenderConfig,
             result.copied.append(item)
             continue
         try:
-            destination = Path(item.destination)
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            backup = replace_with_copy(item.source, destination)
+            actions.append(_copy_with_undo(item.source, Path(item.destination),
+                                           previous, result.backed_up))
             result.copied.append(item)
-            actions.append(_undo_action(destination, backup, result.backed_up))
         except OSError as error:
             result.failed.append((item, str(error)))
     if not dry_run and actions:

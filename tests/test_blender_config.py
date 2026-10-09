@@ -395,9 +395,11 @@ class ApplyMigrationTest(unittest.TestCase):
     def test_backup_reutilizable_no_acumula(self):
         """Migrar varias veces no puede dejar un '.bak' por intento.
 
-        Los usuarios migran más de una vez (y a veces al revés), así que el
-        respaldo es el del **último** cambio, no un histórico que llene el disco
-        sin que nadie lo vea.
+        Los usuarios migran más de una vez (y a veces al revés), así que hay un
+        solo respaldo por destino, no un histórico que llene el disco sin que
+        nadie lo vea. Y ese respaldo es **el original** (v1): lo que había en
+        destino en la segunda migración era nuestra propia copia (retocada o
+        no), que no puede pisarlo.
         """
         with tempfile.TemporaryDirectory() as tmp:
             source = Path(tmp) / "addon"
@@ -410,11 +412,62 @@ class ApplyMigrationTest(unittest.TestCase):
             plan = self._plan(self._addon(source), destination)
             baddons.apply_migration([plan], target)   # v1 -> v3 (bak v1)
             (destination / "a.py").write_text("v2", encoding="utf-8")
-            baddons.apply_migration([plan], target)   # v2 -> v3 (bak v2)
+            baddons.apply_migration([plan], target)   # v2 -> v3 (bak v1)
             backups = [p for p in destination.parent.iterdir()
                        if "blendermanager-bak" in p.name]
             self.assertEqual(len(backups), 1)
-            self.assertEqual((backups[0] / "a.py").read_text(), "v2")
+            self.assertEqual((backups[0] / "a.py").read_text(), "v1")
+
+    def test_migrar_dos_veces_no_pierde_el_original(self):
+        """El segundo intento no pisa el ``.bak`` con nuestra primera copia.
+
+        Era pérdida de datos: el respaldo es uno por destino, la segunda
+        migración apartaba la copia de la primera encima del original y
+        deshacer devolvía... la copia.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "addon"
+            source.mkdir()
+            (source / "a.py").write_text("nuevo", encoding="utf-8")
+            target = _config(Path(tmp) / "target")
+            destination = target.addons_dir / "addon"
+            destination.mkdir(parents=True)
+            (destination / "a.py").write_text("original", encoding="utf-8")
+            plan = self._plan(self._addon(source), destination)
+            baddons.apply_migration([plan], target)
+            second = baddons.apply_migration([plan], target)
+            self.assertEqual(second.failed, [])
+            self.assertEqual((destination / "a.py").read_text(), "nuevo")
+            baddons.undo_migration(target)
+            self.assertEqual((destination / "a.py").read_text(), "original")
+
+    def test_migrar_dos_veces_sin_original_y_deshacer_lo_quita(self):
+        """Si antes no había nada, deshacer tras dos migraciones lo deja vacío."""
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "addon"
+            source.mkdir()
+            (source / "a.py").write_text("nuevo", encoding="utf-8")
+            target = _config(Path(tmp) / "target")
+            plan = self._plan(self._addon(source), target.addons_dir / "addon")
+            baddons.apply_migration([plan], target)
+            baddons.apply_migration([plan], target)
+            baddons.undo_migration(target)
+            self.assertEqual(list(target.addons_dir.iterdir()), [])
+
+    def test_migrar_dos_veces_las_preferencias_conserva_las_originales(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            origin = _config(Path(tmp) / "origin")
+            target = _config(Path(tmp) / "target")
+            origin.config_dir.mkdir(parents=True)
+            target.config_dir.mkdir(parents=True)
+            (origin.config_dir / "userpref.blend").write_bytes(b"NUEVO")
+            (target.config_dir / "userpref.blend").write_bytes(b"ORIGINAL")
+            for _ in range(2):
+                baddons.copy_preference_files(
+                    baddons.preference_plan(origin, target), target)
+            baddons.undo_migration(target)
+            self.assertEqual((target.config_dir / "userpref.blend").read_bytes(),
+                             b"ORIGINAL")
 
     def test_el_respaldo_no_borra_el_de_otro_addon_por_un_corchete(self):
         """``addon[1]`` no puede tratarse como patrón y casar con ``addon1``."""
