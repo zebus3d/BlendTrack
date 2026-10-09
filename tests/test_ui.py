@@ -5681,5 +5681,65 @@ class LongTextRowTests(unittest.TestCase):
         self.assertEqual(labels[0].minimumSizeHint().width(), 0)
 
 
+
+@unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
+class ForkNameTextTests(SettingsIsolated, unittest.TestCase):
+    """Los textos nombran el programa de verdad, no siempre "Blender"."""
+
+    app = None
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def setUp(self):
+        super().setUp()
+        import i18n
+
+        self.addCleanup(i18n.set_language, i18n.get_language())
+        i18n.set_language("en")
+
+    @staticmethod
+    def _bforartists():
+        from model.build import InstalledBuild
+
+        return InstalledBuild(name="bforartists-4.5.0", version="4.5.0",
+                              path=Path("/tmp/bforartists-4.5.0"),
+                              executable=Path("/tmp/bfa/bforartists"),
+                              fork="bforartists")
+
+    def test_migracion_nombra_bforartists(self):
+        from ui.widgets.migrate import MigrateView
+
+        message = MigrateView._running_message(self._bforartists())
+        self.assertIn("Bforartists 4.5.0", message)
+        self.assertNotIn("Blender 4.5.0", message)
+
+    def test_un_guardado_de_bforartists_lo_dice(self):
+        from ui.widgets.migrate.factory_tab import _snapshot_origin
+
+        origin = _snapshot_origin(
+            "/tmp/config-20260918-152704-v4.5.0", "Bforartists")
+        self.assertIn("Bforartists 4.5.0", origin)
+
+    def test_recientes_abre_en_el_programa_que_toca(self):
+        from ui.widgets.recent import RecentView
+
+        view = RecentView(open_file=lambda entry, path: True)
+        said = []
+        view.status_message.connect(said.append)
+        view._open("/tmp/escena.blend", self._bforartists())
+        self.assertIn("Bforartists 4.5.0", said[0])
+
+    def test_la_linea_de_un_addon_es_su_version_no_la_de_blender(self):
+        """Ponía "Blender 1.0" con la versión del propio addon."""
+        from ui.widgets.addons import _AddonRow
+
+        state = AddonsViewTests._state(self)
+        text = _AddonRow._meta_text(state)
+        self.assertIn("v1.0", text)
+        self.assertNotIn("Blender", text)
+
+
 if __name__ == "__main__":
     unittest.main()

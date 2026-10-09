@@ -113,7 +113,9 @@ class _RecentRow(QFrame):
             menu.addAction(tr("No installed versions.")).setEnabled(False)
         for entry in self._versions:
             action = menu.addAction(
-                tr("Open in Blender {version}", version=entry.version))
+                tr("Open in {program} {version}",
+                   program=fork_label(getattr(entry, "fork", "")),
+                   version=entry.version))
             action.setToolTip(tr("Open this file with that version instead of "
                                  "the newest one."))
             action.triggered.connect(
@@ -218,8 +220,10 @@ class RecentView(QWidget):
             return
         if self.open_file(entry, Path(path)):
             self.status_message.emit(
-                tr("Opening {name} in Blender {version}",
-                   name=Path(path).name, version=entry.version))
+                tr("Opening {name} in {program} {version}",
+                   name=Path(path).name,
+                   program=fork_label(getattr(entry, "fork", "")),
+                   version=entry.version))
 
     def _reveal(self, path) -> None:
         if not opener.reveal(path):

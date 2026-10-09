@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
 )
 
 from i18n import tr
+from model.build import fork_label
 from services import addons as addons_service
 from services import opener
 from services.downloader import log as download_log
@@ -97,8 +98,9 @@ class _AddonRow(QFrame):
     def _meta_text(state) -> str:
         kind = tr("Extension") if state.kind == addons_service.EXTENSION \
             else tr("Add-on")
-        parts = [f"Blender {state.addon.version}"] if state.addon.version \
-            else []
+        # La versión es **del addon**, no de Blender: antes salía como
+        # "Blender 1.3.0" y parecía la versión de Blender que pedía.
+        parts = [f"v{state.addon.version}"] if state.addon.version else []
         parts.append(kind)
         return "  ·  ".join(parts)
 
@@ -437,8 +439,9 @@ class AddonsView(QWidget):
         if self._acting or self.entry is None:
             return
         if not confirm(self, tr("Delete add-on"),
-                       tr("Delete {name}? Its files are removed from Blender "
-                          "{version}.", name=state.name,
+                       tr("Delete {name}? Its files are removed from "
+                          "{program} {version}.", name=state.name,
+                          program=fork_label(getattr(self.entry, "fork", "")),
                           version=self.entry.version),
                        accept_text=tr("Delete"), danger=True):
             return

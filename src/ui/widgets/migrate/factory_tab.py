@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (QComboBox, QFrame, QHBoxLayout, QLabel,
                                QSizePolicy, QVBoxLayout, QWidget)
 
 from i18n import tr
-from model.build import fork_label, human_size
+from model.build import human_size
 from services import blender_config as bc
 from services import blender_snapshots as bsnap
 from services import blender_prefs as bprefs
@@ -30,12 +30,12 @@ from ui.widgets.layouts import (CornerGrip, FittedList, clear_layout,
 from ui.widgets.migrate.common import (SNAPSHOT_MIN_HEIGHT,
                                        SNAPSHOT_MIN_ROWS,
                                        SNAPSHOT_SCROLL_HEIGHT, _entry_info,
-                                       _entry_key, _make_scroll,
+                                       _entry_key, _entry_program, _make_scroll,
                                        _section_names)
 from ui.widgets.migrate.prefs_tab import _PrefRow
 
 
-def _snapshot_origin(snapshot) -> str:
+def _snapshot_origin(snapshot, program: str = "Blender") -> str:
     """Qué es ese guardado, en una frase (según la etiqueta del nombre).
 
     ``factory`` es la config limpia que se aparcó al restaurar; ``vX.Y.Z`` son
@@ -46,8 +46,8 @@ def _snapshot_origin(snapshot) -> str:
     if label == "factory":
         return tr("Clean settings replaced by a restore")
     if label.startswith("v"):
-        return tr("Your settings saved when resetting Blender {version}",
-                  version=label[1:])
+        return tr("Your settings saved when resetting {program} {version}",
+                  program=program, version=label[1:])
     return tr("Saved settings")
 
 def _snapshot_files_text(details) -> str:
@@ -74,7 +74,7 @@ class _SnapshotRow(QFrame):
     """
 
     def __init__(self, snapshot, details, on_restore, on_delete, on_details,
-                 parent=None):
+                 program: str = "Blender", parent=None):
         super().__init__(parent)
         self.snapshot = Path(snapshot)
         # Preferencias leídas de este guardado (o None mientras se analiza).
@@ -89,7 +89,7 @@ class _SnapshotRow(QFrame):
         title_row = QHBoxLayout()
         title_row.setSpacing(8)
         date = bsnap.snapshot_date(self.snapshot) or self.snapshot.name
-        origin = _snapshot_origin(self.snapshot)
+        origin = _snapshot_origin(self.snapshot, program)
         # ``ElidedLabel`` y no ``QLabel``: la frase de origen es larga (y más
         # en otros idiomas) y un ``QLabel`` pediría su ancho entero, empujando
         # los botones fuera de la fila. Con estirado y tope en su ancho natural
@@ -427,7 +427,7 @@ class FactoryTabMixin:
             tr("Keep only the {keep} newest saved copies of {program} "
                "{version}? The {count} older ones are deleted for good.",
                keep=keep, count=doomed,
-               program=fork_label(getattr(entry, "fork", "")),
+               program=_entry_program(entry),
                version=getattr(entry, "version", "")),
             accept_text=tr("Delete"), danger=True)
 
@@ -468,7 +468,8 @@ class FactoryTabMixin:
                 snapshot, bsnap.snapshot_details(snapshot),
                 on_restore=self.restore_factory_snapshot,
                 on_delete=self.delete_snapshot,
-                on_details=self.show_snapshot_details)
+                on_details=self.show_snapshot_details,
+                program=_entry_program(self._factory_entry()))
             cached = self._analysis.get(str(snapshot))
             if cached is not None:
                 row.set_analysis(cached)
@@ -506,12 +507,13 @@ class FactoryTabMixin:
             self.snapshot_scroll.setVisible(False)
             self.delete_all_btn.setEnabled(False)
             return
-        _, version = _entry_info(self._factory_entry())
+        entry = self._factory_entry()
+        _, version = _entry_info(entry)
         self.factory_path_label.setText(str(config.root))
         self.factory_hint.setText(tr(
-            "Start Blender {version} as if it were freshly installed. Its "
+            "Start {program} {version} as if it were freshly installed. Its "
             "current settings are saved aside and can be put back.",
-            version=version))
+            program=_entry_program(entry), version=version))
         snapshots = bsnap.snapshots_with_settings(config)
         self.delete_all_btn.setEnabled(bool(bsnap.all_snapshots(config)))
         if not snapshots:
@@ -673,7 +675,7 @@ class FactoryTabMixin:
                 tr("Delete the {count} saved copies of {program} {version} "
                    "for good? You will not be able to restore them.",
                    count=len(snapshots),
-                   program=fork_label(getattr(entry, "fork", "")),
+                   program=_entry_program(entry),
                    version=getattr(entry, "version", "")),
                 accept_text=tr("Delete"), danger=True):
             return
@@ -699,9 +701,10 @@ class FactoryTabMixin:
         _, version = _entry_info(entry)
         if not dialogs.confirm(
                 self, tr("Reset to factory settings"),
-                tr("Blender {version} will start clean on next launch.\n\nYour "
-                   "settings are saved aside, so you can put them back from "
-                   "this same screen.", version=version),
+                tr("{program} {version} will start clean on next launch."
+                   "\n\nYour settings are saved aside, so you can put them "
+                   "back from this same screen.",
+                   program=_entry_program(entry), version=version),
                 accept_text=tr("Reset"),
                 accept_tooltip=tr("Nothing is deleted: you can put your "
                                   "settings back from this screen.")):
@@ -724,9 +727,10 @@ class FactoryTabMixin:
             return
         self._forget_analysis()
         self.status_message.emit(tr("Settings saved aside and reset."))
-        dialogs.show_info(self, tr("Reset to factory settings"),
-                  tr("Your settings were saved. Blender {version} will start "
-                     "clean the next time you open it.", version=version))
+        dialogs.show_info(self, tr("Reset to factory settings"), tr(
+            "Your settings were saved. {program} {version} will start clean "
+            "the next time you open it.", program=_entry_program(entry),
+            version=version))
         self._fill_factory()
 
     def restore_factory_snapshot(self, snapshot=None) -> None:
@@ -747,9 +751,10 @@ class FactoryTabMixin:
         date = bsnap.snapshot_date(target) or target.name
         if not dialogs.confirm(
                 self, tr("Restore settings"),
-                tr("Put back in Blender {version} the settings saved on "
+                tr("Put back in {program} {version} the settings saved on "
                    "{date}?\n\nWhat it has now is saved aside, so this can be "
-                   "undone.", version=version, date=date),
+                   "undone.", program=_entry_program(entry), version=version,
+                   date=date),
                 accept_text=tr("Restore")):
             return
         try:

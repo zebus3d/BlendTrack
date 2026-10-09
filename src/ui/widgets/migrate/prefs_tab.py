@@ -35,6 +35,7 @@ from ui.widgets.layouts import CornerGrip, FittedList, clear_layout
 from ui.widgets.migrate.common import (DETAIL_MIN_HEIGHT, DETAIL_MIN_ROWS,
                                        DETAIL_SCROLL_HEIGHT, _accent_button,
                                        _entry_info, _entry_key,
+                                       _entry_program,
                                        _failure_block, _make_scroll)
 
 
@@ -644,9 +645,10 @@ class PrefsTabMixin:
             return base
         _, version = _entry_info(self.source_entry)
         return base + " " + tr(
-            "This app has the settings of Blender {version} saved aside from a "
-            "previous reset. To put them back, open the \"Factory settings\" "
-            "tab and pick Blender {version} there.", version=version)
+            "This app has the settings of {program} {version} saved aside from "
+            "a previous reset. To put them back, open the \"Factory settings\" "
+            "tab and pick {program} {version} there.",
+            program=_entry_program(self.source_entry), version=version)
 
     def _fill_detail_rows(self) -> None:
         self._clear_detail_rows()
@@ -692,6 +694,7 @@ class PrefsTabMixin:
             return
         self.detail_status.setText(tr("Applying settings..."))
         ticket = self._prefs_write.start(version)
+        program = _entry_program(self.target_entry)
 
         enable_addons = (self.enable_addons_check.isVisible()
                          and self.enable_addons_check.isChecked())
@@ -700,7 +703,7 @@ class PrefsTabMixin:
             result = bprefs.write_preferences(executable, selected,
                                               enable_addons=enable_addons)
             self.prefs_applied.emit({"result": result, "version": version,
-                                     "ticket": ticket})
+                                     "program": program, "ticket": ticket})
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -709,12 +712,13 @@ class PrefsTabMixin:
             return
         result = payload.get("result") or {}
         version = payload.get("version") or ""
+        program = payload.get("program") or "Blender"
         applied = result.get("applied") or []
         errors = result.get("errors") or []
         enabled = [item["module"] for item in result.get("addons_enabled") or []
                    if item.get("enabled")]
-        lines = [tr("Applied {count} settings to Blender {version}.",
-                    count=len(applied), version=version)]
+        lines = [tr("Applied {count} settings to {program} {version}.",
+                    count=len(applied), program=program, version=version)]
         if not applied:
             lines = [tr("No settings were applied.")]
         if enabled:
@@ -725,14 +729,15 @@ class PrefsTabMixin:
                        if item.get("error") == bprefs.ADDON_NOT_ENABLED]
         missing = [item for item in errors if item not in not_enabled]
         lines.extend(_failure_block(
-            tr("These need their add-on enabled in Blender {version} first "
-               "(copy it from the Add-ons tab):", version=version),
+            tr("These need their add-on enabled in {program} {version} "
+               "first (copy it from the Add-ons tab):", program=program,
+               version=version),
             (item.get("path") for item in not_enabled)))
         lines.extend(_failure_block(
             tr("These settings no longer exist in this version:"),
             (item.get("path") or "Blender" for item in missing)))
         dialogs.show_info(self, tr("Settings applied"), "\n".join(lines))
         self.status_message.emit(tr("Settings applied"))
-        self.detail_status.setText(tr("Applied {count} settings to Blender "
-                                      "{version}.", count=len(applied),
-                                      version=version))
+        self.detail_status.setText(tr(
+            "Applied {count} settings to {program} {version}.",
+            count=len(applied), program=program, version=version))

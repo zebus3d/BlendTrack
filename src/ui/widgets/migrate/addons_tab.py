@@ -30,7 +30,8 @@ from ui.widgets.labels import ElidedLabel
 from ui.widgets.layouts import clear_layout, muted_note
 from ui.widgets.migrate.common import (ROW_HEIGHT, _STATUS,
                                            _accent_button, _destination_text,
-                                           _entry_info, _failure_block,
+                                           _entry_info, _entry_program,
+                                           _failure_block,
                                            _meta_text, _report_lines,
                                            _status_tooltip)
 
@@ -315,13 +316,14 @@ class AddonsTabMixin:
         # versión mientras copia, la respuesta sigue siendo de esta copia.
         plans, target_cfg = list(self.plans), self.target_cfg
         executable, version = _entry_info(self.target_entry)
+        program = _entry_program(self.target_entry)
         ticket = self._copy_job.start(version)
         self._set_controls_enabled(False)
         self.status_message.emit(tr("Copying the add-ons..."))
 
         def worker():
             payload = {"executable": executable, "version": version,
-                       "ticket": ticket}
+                       "program": program, "ticket": ticket}
             try:
                 payload["result"] = baddons.apply_migration(plans, target_cfg)
             except Exception as error:  # noqa: BLE001 - se enseña el motivo
@@ -353,7 +355,8 @@ class AddonsTabMixin:
         # Se vuelve a mirar: mientras se copiaba, el usuario pudo abrir Blender.
         if self._blocked_by_running():
             return
-        self._start_activation(executable, modules, version)
+        self._start_activation(executable, modules, version,
+                               payload["program"])
 
     def undo(self) -> None:
         """Revierte la última migración sobre el destino."""
@@ -363,9 +366,9 @@ class AddonsTabMixin:
         if not dialogs.confirm(
                 self, tr("Undo last migration"),
                 tr("This puts back what the last migration replaced and removes "
-                   "what it copied from Blender {version}.\n\nAdd-ons you have "
-                   "changed since then will be lost.",
-                   version=version),
+                   "what it copied from {program} {version}.\n\nAdd-ons you "
+                   "have changed since then will be lost.",
+                   program=_entry_program(self.target_entry), version=version),
                 accept_text=tr("Undo"), danger=True):
             return
         result = baddons.undo_migration(self.target_cfg)
@@ -402,7 +405,8 @@ class AddonsTabMixin:
         self.undo_btn.setVisible(
             bool(baddons.read_migration_marker(self.target_cfg)))
 
-    def _start_activation(self, executable, modules, version) -> None:
+    def _start_activation(self, executable, modules, version,
+                          program: str = "Blender") -> None:
         """Habilita los addons copiados en un hilo (Blender tarda en arrancar)."""
         self.status_message.emit(tr("Enabling the add-ons in Blender..."))
         ticket = self._activation_job.start(version)
@@ -410,7 +414,7 @@ class AddonsTabMixin:
         def worker():
             result = blender_runner.enable_addons(executable, modules)
             self.activation_done.emit({"result": result, "version": version,
-                                       "ticket": ticket})
+                                       "program": program, "ticket": ticket})
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -422,8 +426,9 @@ class AddonsTabMixin:
         lines = []
         enabled = result.get("enabled") or []
         if enabled:
-            lines.append(tr("Enabled {count} add-ons in Blender {version}.",
-                            count=len(enabled), version=version))
+            lines.append(tr("Enabled {count} add-ons in {program} {version}.",
+                            count=len(enabled), version=version,
+                            program=payload.get("program") or "Blender"))
         else:
             lines.append(tr("The add-ons were copied but not enabled. You can "
                             "enable them in Blender's preferences."))

@@ -196,6 +196,15 @@ def blocked_by_running(parent) -> bool:
     return True
 
 
+def _entry_program(entry) -> str:
+    """Nombre del programa de una instalada: "Blender", "Bforartists" o "UPBGE".
+
+    Los textos dicen "{program} {version}" y no "Blender {version}": con los
+    forks, "Blender 4.5.0" podía ser en realidad una Bforartists.
+    """
+    return fork_label(getattr(entry, "fork", "") or "")
+
+
 def _entry_key(entry) -> tuple:
     """Identidad de una instalada para la migración: ``(fork, versión)``.
 

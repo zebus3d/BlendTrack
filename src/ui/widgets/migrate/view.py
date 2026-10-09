@@ -37,7 +37,8 @@ from ui.widgets.cards import settings_card
 from ui.widgets.layouts import list_scroll
 from ui.widgets.migrate.addons_tab import AddonsTabMixin
 from ui.widgets.migrate.common import (LatestJob, _entry_info, _entry_key,
-                                       blender_is_running, blocked_by_running,
+                                       _entry_program, blender_is_running,
+                                       blocked_by_running,
                                        choice_label, newest_per_series)
 from ui.widgets.migrate.factory_tab import FactoryTabMixin
 from ui.widgets.migrate.prefs_tab import PrefsTabMixin
@@ -480,15 +481,17 @@ class MigrateView(AddonsTabMixin, PrefsTabMixin, FactoryTabMixin,
         fábrica), porque cada pestaña tiene la suya.
         """
         warning = warning if warning is not None else self.warning
-        executable, version = _entry_info(entry)
+        executable, _ = _entry_info(entry)
         running = blender_is_running(executable)
-        self._put_warning(warning,
-                          self._running_message(version) if running else "")
+        self._put_warning(warning, self._running_message(entry)
+                          if running else "")
 
     @staticmethod
-    def _running_message(version: str) -> str:
-        return tr("Close Blender {version} before migrating: it would "
-                  "overwrite the changes when it quits.", version=version)
+    def _running_message(entry) -> str:
+        return tr("Close {program} {version} before migrating: it would "
+                  "overwrite the changes when it quits.",
+                  program=_entry_program(entry),
+                  version=getattr(entry, "version", ""))
 
     def _blocked_by_running(self) -> bool:
         """True si hay cualquier Blender abierto (ver ``blocked_by_running``)."""
