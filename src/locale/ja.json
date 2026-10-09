@@ -546,5 +546,7 @@
   "Russian": "ロシア語",
   "Japanese": "日本語",
   "Portuguese (Brazil)": "ポルトガル語（ブラジル）",
-  "Loading the list of versions...": "バージョン一覧を読み込んでいます..."
+  "Loading the list of versions...": "バージョン一覧を読み込んでいます...",
+  "Delete older saved settings": "古い保存済み設定を削除",
+  "Keep only the {keep} newest saved copies of {program} {version}? The {count} older ones are deleted for good.": "{program} {version} の保存済みコピーを新しい {keep} 件だけ残しますか？古い {count} 件は完全に削除されます。"
 }

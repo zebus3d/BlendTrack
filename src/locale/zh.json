@@ -546,5 +546,7 @@
   "Russian": "俄语",
   "Japanese": "日语",
   "Portuguese (Brazil)": "葡萄牙语（巴西）",
-  "Loading the list of versions...": "正在加载版本列表..."
+  "Loading the list of versions...": "正在加载版本列表...",
+  "Delete older saved settings": "删除较早的已保存设置",
+  "Keep only the {keep} newest saved copies of {program} {version}? The {count} older ones are deleted for good.": "只保留 {program} {version} 最新的 {keep} 份已保存副本吗？较早的 {count} 份将被永久删除。"
 }

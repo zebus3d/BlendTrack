@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (QComboBox, QFrame, QHBoxLayout, QLabel,
                                QSizePolicy, QVBoxLayout, QWidget)
 
 from i18n import tr
-from model.build import human_size
+from model.build import fork_label, human_size
 from services import blender_config as bc
 from services import blender_snapshots as bsnap
 from services import blender_prefs as bprefs
@@ -386,16 +386,41 @@ class FactoryTabMixin:
                 self.snapshot_keep_combo.blockSignals(False)
 
     def _on_snapshot_keep_changed(self, index: int) -> None:
-        """El usuario cambió la retención: se guarda y se poda ya."""
+        """El usuario cambió la retención: se guarda y se poda ya.
+
+        Bajar el tope **borra** guardados en el acto, y sin vuelta atrás. Un
+        desplegable no se lee como un botón de borrar, así que antes se
+        pregunta diciendo cuántos se van; si dice que no, el desplegable
+        vuelve a lo que tenía y no cambia nada.
+        """
         value = self.snapshot_keep_combo.itemData(index)
         if value is None:
             return
-        self.snapshot_keep = int(value)
-        self.snapshot_keep_changed.emit(self.snapshot_keep)
+        keep = int(value)
         config = self._factory_config()
-        if config is not None and self.snapshot_keep > 0:
-            bsnap.prune_snapshots(config, self.snapshot_keep)
+        doomed = (max(0, len(bsnap.all_snapshots(config)) - keep)
+                  if config is not None and keep > 0 else 0)
+        if doomed and not self._confirm_prune(keep, doomed):
+            self.set_snapshot_keep(self.snapshot_keep)
+            return
+        self.snapshot_keep = keep
+        self.snapshot_keep_changed.emit(self.snapshot_keep)
+        if doomed:
+            bsnap.prune_snapshots(config, keep)
+            self._forget_analysis()
         self._fill_factory()
+
+    def _confirm_prune(self, keep: int, doomed: int) -> bool:
+        """Pregunta antes de borrar los ``doomed`` guardados que sobran."""
+        entry = self._factory_entry()
+        return dialogs.confirm(
+            self, tr("Delete older saved settings"),
+            tr("Keep only the {keep} newest saved copies of {program} "
+               "{version}? The {count} older ones are deleted for good.",
+               keep=keep, count=doomed,
+               program=fork_label(getattr(entry, "fork", "")),
+               version=getattr(entry, "version", "")),
+            accept_text=tr("Delete"), danger=True)
 
     def _forget_analysis(self) -> None:
         """Tira el análisis de los guardados (es de otra versión o ya no vale).

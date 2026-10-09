@@ -546,5 +546,7 @@
   "Russian": "Russo",
   "Japanese": "Japonês",
   "Portuguese (Brazil)": "Português (Brasil)",
-  "Loading the list of versions...": "Carregando a lista de versões..."
+  "Loading the list of versions...": "Carregando a lista de versões...",
+  "Delete older saved settings": "Excluir configurações salvas antigas",
+  "Keep only the {keep} newest saved copies of {program} {version}? The {count} older ones are deleted for good.": "Manter só as {keep} cópias salvas mais recentes de {program} {version}? As {count} mais antigas serão excluídas para sempre."
 }

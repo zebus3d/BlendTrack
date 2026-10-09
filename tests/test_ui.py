@@ -5120,5 +5120,79 @@ class ForkSeriesChoiceTests(SettingsIsolated, unittest.TestCase):
         self.assertIn("Bforartists", view.version_combo.currentText())
 
 
+@unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
+class FactorySafetyTests(SettingsIsolated, unittest.TestCase):
+    """La pestaña de fábrica no borra ni promete nada sin decirlo."""
+
+    app = None
+    _view = MigrateViewTests._view
+    _config = MigrateViewTests._config
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def setUp(self):
+        super().setUp()
+        import i18n
+
+        self.addCleanup(i18n.set_language, i18n.get_language())
+        i18n.set_language("en")
+
+    def _factory_view(self, tmp, copies=4):
+        """Vista en la pestaña de fábrica con ``copies`` guardados de la 5.2."""
+        from services import blender_snapshots as bsnap
+
+        config = self._config(tmp, "5.2.2")
+        for index in range(copies):
+            config.config_dir.mkdir(parents=True)
+            (config.config_dir / "userpref.blend").write_bytes(b"MIO")
+            bsnap.set_config_aside(config, label=f"v5.2.{index}")
+        view = self._view()
+        for patch in (mock.patch("services.blender_runner.is_running",
+                                 return_value=False),
+                      mock.patch.object(view, "_factory_config",
+                                        return_value=config)):
+            patch.start()
+            self.addCleanup(patch.stop)
+        view._choices = [_fake_installed("5.2.2")]
+        view.factory_combo.addItem("5.2.2")
+        view.factory_combo.setCurrentIndex(0)
+        view.set_snapshot_keep(10)
+        return view, config
+
+    def test_bajar_el_tope_pregunta_cuantos_se_borran(self):
+        """Elegir "como mucho 3" con 4 guardados borra uno: se pregunta antes."""
+        from services import blender_snapshots as bsnap
+
+        with tempfile.TemporaryDirectory() as tmp:
+            view, config = self._factory_view(tmp, copies=4)
+            seen = []
+            view.snapshot_keep_changed.connect(seen.append)
+            three = view.snapshot_keep_combo.findData(3)
+            with mock.patch("ui.widgets.dialogs.confirm",
+                            return_value=False) as ask:
+                view.snapshot_keep_combo.setCurrentIndex(three)
+            self.assertIn("1", ask.call_args[0][2])
+            self.assertTrue(ask.call_args.kwargs.get("danger"))
+            # Dijo que no: nada borrado y el desplegable vuelve a 10.
+            self.assertEqual(len(bsnap.all_snapshots(config)), 4)
+            self.assertEqual(view.snapshot_keep_combo.currentData(), 10)
+            self.assertEqual(seen, [])
+            with mock.patch("ui.widgets.dialogs.confirm", return_value=True):
+                view.snapshot_keep_combo.setCurrentIndex(three)
+            self.assertEqual(len(bsnap.all_snapshots(config)), 3)
+            self.assertEqual(seen, [3])
+
+    def test_subir_el_tope_no_pregunta(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            view, _ = self._factory_view(tmp, copies=2)
+            with mock.patch("ui.widgets.dialogs.confirm") as ask:
+                view.snapshot_keep_combo.setCurrentIndex(
+                    view.snapshot_keep_combo.findData(3))
+            ask.assert_not_called()
+            self.assertEqual(view.snapshot_keep, 3)
+
+
 if __name__ == "__main__":
     unittest.main()
