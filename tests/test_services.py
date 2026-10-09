@@ -1814,6 +1814,23 @@ class DownloaderRetryTests(unittest.TestCase):
             self.assertIs(d._connect("https://x/asset.zip"), exito)
         self.assertEqual(abrir.call_count, 2)
 
+    def test_cancelar_durante_la_espera_no_aguanta_hasta_el_final(self):
+        """Pulsar Cancelar entre dos intentos corta la espera en el acto."""
+        import threading
+        import time
+        import urllib.error
+
+        d = self.downloader.Downloader()
+        threading.Timer(0.1, d.cancel).start()
+        started = time.monotonic()
+        with mock.patch.object(self.downloader.urllib.request, "urlopen",
+                               side_effect=urllib.error.URLError("x")) as abrir, \
+                mock.patch.object(self.downloader, "RETRY_DELAY", 30):
+            with self.assertRaises(urllib.error.URLError):
+                d._connect("https://x")
+        self.assertLess(time.monotonic() - started, 5)
+        self.assertEqual(abrir.call_count, 1)
+
     def test_un_checksum_que_no_cuadra_no_deja_el_part(self):
         """El ``.part`` de una descarga corrupta no puede quedarse en disco:
         ocupa cientos de MB y nadie lo va a reanudar."""

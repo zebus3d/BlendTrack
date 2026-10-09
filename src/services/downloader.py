@@ -8,7 +8,6 @@ su responsabilidad reenviarlas al hilo de la interfaz (con una señal de Qt; ver
 
 import hashlib
 import threading
-import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -125,14 +124,25 @@ class Downloader:
                     raise
                 wait = _retry_after(error)
                 log(f"download got 429 ({url}), retry "
-                    f"{attempt}/{CONNECT_ATTEMPTS} en {wait}s")
-                time.sleep(wait)
+                    f"{attempt}/{CONNECT_ATTEMPTS} in {wait}s")
+                if self._wait_or_cancel(wait):
+                    raise
             except Exception as error:
                 if self._cancel.is_set() or attempt == CONNECT_ATTEMPTS:
                     raise
                 log(f"download connect failed ({url}), retry "
                     f"{attempt}/{CONNECT_ATTEMPTS}: {error}")
-                time.sleep(RETRY_DELAY)
+                if self._wait_or_cancel(RETRY_DELAY):
+                    raise
+
+    def _wait_or_cancel(self, seconds: float) -> bool:
+        """Espera entre dos intentos; devuelve True si cancelan mientras tanto.
+
+        ``Event.wait`` en vez de ``time.sleep``: duerme igual, pero se
+        despierta en cuanto alguien pulsa Cancelar. Con ``sleep`` la descarga
+        se quedaba hasta un minuto (el tope de ``Retry-After``) sin hacer caso.
+        """
+        return self._cancel.wait(seconds)
 
     def _run(self, url, dest_folder, filename, expected_sha256, on_progress,
              on_done, on_error, headers=None):
