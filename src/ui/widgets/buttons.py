@@ -6,9 +6,11 @@ botón nuevo se estiliza dándole un ``objectName`` y añadiendo su regla al QSS
 nunca con ``setStyleSheet`` en el código.
 
 Todos los botones de aquí toman el foco **solo con el teclado**
-(``Qt.TabFocus``, ver ``_keyboard_focus``): el QSS les pinta un aro mientras
-tienen el foco, y con el foco por clic ese aro se quedaría encendido en el
-último botón pulsado, que es justo lo que la web evita con ``:focus-visible``.
+(``Qt.TabFocus``, ver ``_keyboard_focus``) y pintan su aro de foco solo cuando
+ese foco llegó con un Tab de verdad (``_FocusRing``): es el ``:focus-visible``
+de la web. Con ``:focus`` a secas el aro salía sin tocar el teclado, porque Qt
+también mueve el foco por su cuenta (al abrir la ventana o al esconder el
+control que lo tenía) y lo dejaba en "Local" o en un interruptor de Ajustes.
 """
 
 from PySide6.QtCore import QEvent, QRectF, Qt
@@ -25,7 +27,37 @@ def _keyboard_focus(widget) -> None:
     widget.setFocusPolicy(Qt.TabFocus)
 
 
-class Pill(QPushButton):
+class _FocusRing:
+    """Marca ``focusRing`` mientras el widget tiene un foco *de teclado*.
+
+    Qt pone ``WA_KeyboardFocusChange`` en la ventana solo cuando el foco cambia
+    por una tecla (Tab, Mayús+Tab, un atajo) y lo quita con el primer clic. El
+    foco que Qt reparte solo (al mostrar la ventana, al esconder el control
+    enfocado) llega sin esa marca, así que no enciende el aro. El QSS usa
+    ``[focusRing="true"]`` y los que se pintan a mano, ``focus_ring()``.
+    """
+
+    def focusInEvent(self, event):
+        super().focusInEvent(event)
+        self._set_focus_ring(
+            self.window().testAttribute(Qt.WA_KeyboardFocusChange))
+
+    def focusOutEvent(self, event):
+        super().focusOutEvent(event)
+        self._set_focus_ring(False)
+
+    def focus_ring(self) -> bool:
+        """True si hay que pintar el aro de foco ahora."""
+        return self.hasFocus() and bool(self.property("focusRing"))
+
+    def _set_focus_ring(self, on: bool) -> None:
+        if bool(self.property("focusRing")) != on:
+            self.setProperty("focusRing", on)
+            repolish(self)
+        self.update()
+
+
+class Pill(_FocusRing, QPushButton):
     """Botón con forma de pastilla para filtros y selector de vista."""
 
     def __init__(self, text: str = "", tooltip: str = "", parent=None):
@@ -38,7 +70,7 @@ class Pill(QPushButton):
             self.setToolTip(tooltip)
 
 
-class SideButton(QPushButton):
+class SideButton(_FocusRing, QPushButton):
     """Botón cuadrado de la barra lateral (tienda, instaladas, ajustes)."""
 
     def __init__(self, glyph: str = "", tooltip: str = "", parent=None):
@@ -51,7 +83,7 @@ class SideButton(QPushButton):
             self.setToolTip(tooltip)
 
 
-class CardButton(QPushButton):
+class CardButton(_FocusRing, QPushButton):
     """Botón de acción dentro de las tarjetas (descargar, lanzar, borrar...).
 
     ``variant`` selecciona el color de relleno desde el QSS:
@@ -74,7 +106,7 @@ class CardButton(QPushButton):
         repolish(self)
 
 
-class IconLinkButton(QPushButton):
+class IconLinkButton(_FocusRing, QPushButton):
     """Icono de información de una tarjeta (abre las notas de la versión).
 
     Diana de 24x24 (mínimo AA, WCAG 2.5.8): en la era Kivy medía 22 px.
@@ -89,7 +121,7 @@ class IconLinkButton(QPushButton):
             self.setToolTip(tooltip)
 
 
-class StarButton(QPushButton):
+class StarButton(_FocusRing, QPushButton):
     """Estrella de favorito (marca y desmarca).
 
     El glifo es el mismo en los dos estados; lo que cambia es el color, que lo
@@ -114,7 +146,7 @@ class StarButton(QPushButton):
         self.setToolTip(self._tooltip_on if self.isChecked() else self._tooltip_off)
 
 
-class IconFlatButton(QPushButton):
+class IconFlatButton(_FocusRing, QPushButton):
     """Botón de icono plano sin fondo (refrescar, etc.)."""
 
     def __init__(self, glyph: str, tooltip: str = "", parent=None):
@@ -126,7 +158,7 @@ class IconFlatButton(QPushButton):
             self.setToolTip(tooltip)
 
 
-class SwitchPill(QPushButton):
+class SwitchPill(_FocusRing, QPushButton):
     """Interruptor de sí/no con forma de *toggle* (pista + bolita).
 
     Qt no trae un interruptor y un ``QCheckBox`` con ``::indicator`` no deja
@@ -188,7 +220,7 @@ class SwitchPill(QPushButton):
         painter.drawEllipse(QRectF(rect.x() + offset, rect.y() + self.MARGIN,
                                    diameter, diameter))
 
-        if self.hasFocus():
+        if self.focus_ring():
             # Aro de foco para quien navega con el teclado. En FOCUS_RING y no
             # en ACCENT: encendido, la pista ya es ACCENT y el aro no se veía.
             painter.setBrush(Qt.NoBrush)
@@ -206,7 +238,7 @@ class SwitchPill(QPushButton):
         self.update()
 
 
-class CheckPill(QCheckBox):
+class CheckPill(_FocusRing, QCheckBox):
     """Casilla de verificación con la palomita pintada a mano.
 
     Se probó a hacerlo con QSS (``::indicator`` + un SVG en ``image``), pero la
@@ -251,7 +283,7 @@ class CheckPill(QCheckBox):
         if self.isChecked():
             self._draw_check(painter, box)
 
-        if self.hasFocus():
+        if self.focus_ring():
             self._draw_focus(painter, box)
 
         # El texto (y solo el texto) con el color del QSS. ``QCheckBox`` no tiene

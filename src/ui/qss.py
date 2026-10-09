@@ -608,19 +608,24 @@ def build_qss() -> str:
     QDialog QLabel#DialogTitle {{ color: {t.TEXT}; font-size: 15px; font-weight: bold; }}
 
     /* --- Foco de teclado ---
-       Quien navega con Tab tiene que ver dónde está. Los botones propios solo
-       toman el foco con el teclado (``Qt.TabFocus``, en ``buttons.py``), así
-       que el aro no se queda pintado después de un clic: es el equivalente al
+       Quien navega con Tab tiene que ver dónde está, pero solo él: el aro va
+       con ``[focusRing="true"]`` y no con ``:focus``, porque Qt también reparte
+       el foco solo (al abrir la ventana o al esconder el buscador) y con
+       ``:focus`` el botón "Local" y los interruptores salían recuadrados en
+       blanco sin haber tocado el teclado. La propiedad la pone ``_FocusRing``
+       (``buttons.py``) solo si el foco llegó con una tecla: el equivalente al
        ``:focus-visible`` de la web. Va al final para ganar a los estados
        normales; con el ratón encima, manda el realce del hover. */
-    QPushButton#Pill:focus,
-    QPushButton#SideButton:focus,
-    QPushButton#CardButton:focus,
-    QPushButton#IconFlat:focus,
-    QPushButton#StarButton:focus {{ border: 1px solid {t.FOCUS_RING}; }}
+    QPushButton#Pill[focusRing="true"],
+    QPushButton#SideButton[focusRing="true"],
+    QPushButton#CardButton[focusRing="true"],
+    QPushButton#IconFlat[focusRing="true"],
+    QPushButton#StarButton[focusRing="true"] {{
+        border: 1px solid {t.FOCUS_RING};
+    }}
     /* La "i" ya lleva un reborde blanco: con el foco, ese reborde pasa a
        ámbar, que se distingue del blanco y del disco azul. */
-    QPushButton#IconLink:focus {{ border-color: {t.WARNING}; }}
+    QPushButton#IconLink[focusRing="true"] {{ border-color: {t.WARNING}; }}
     QComboBox:focus,
     QLineEdit:focus,
     QPlainTextEdit:focus {{ border: 1px solid {t.ACCENT}; }}

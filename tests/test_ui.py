@@ -5557,12 +5557,48 @@ class KeyboardFocusTests(unittest.TestCase):
         from ui import qss
 
         sheet = qss.build_qss()
-        for selector in ("QPushButton#Pill:focus", "QPushButton#SideButton:focus",
-                         "QPushButton#CardButton:focus",
-                         "QPushButton#IconFlat:focus",
-                         "QPushButton#StarButton:focus",
-                         "QPushButton#IconLink:focus", "QLineEdit:focus"):
+        for selector in ('QPushButton#Pill[focusRing="true"]',
+                         'QPushButton#SideButton[focusRing="true"]',
+                         'QPushButton#CardButton[focusRing="true"]',
+                         'QPushButton#IconFlat[focusRing="true"]',
+                         'QPushButton#StarButton[focusRing="true"]',
+                         'QPushButton#IconLink[focusRing="true"]',
+                         "QLineEdit:focus"):
             self.assertIn(selector, sheet)
+
+    def test_el_aro_solo_sale_con_el_teclado(self):
+        """El foco que Qt reparte solo no enciende el aro; un Tab, sí.
+
+        Al esconder el control enfocado, Qt pasa el foco al siguiente: con
+        ``:focus`` a secas, "Local" y los interruptores salían recuadrados en
+        blanco sin haber tocado el teclado.
+        """
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+        from PySide6.QtWidgets import QLineEdit, QVBoxLayout, QWidget
+
+        window = QWidget()
+        layout = QVBoxLayout(window)
+        field = QLineEdit()
+        layout.addWidget(field)
+        buttons = self._buttons()
+        for button in buttons:
+            layout.addWidget(button)
+        window.show()
+        field.setFocus()
+        field.hide()
+        self.app.processEvents()
+        first = self.app.focusWidget()
+        self.assertIn(first, buttons)
+        self.assertFalse(first.focus_ring())
+
+        QTest.keyClick(first, Qt.Key_Tab)
+        self.app.processEvents()
+        second = self.app.focusWidget()
+        self.assertIsNot(second, first)
+        self.assertTrue(second.focus_ring(), type(second).__name__)
+        self.assertFalse(first.property("focusRing"))
+        window.close()
 
     def test_el_borde_del_foco_no_cambia_las_dianas(self):
         """Estrella 24x24 y botón plano 32x32, con el borde fijo incluido."""
