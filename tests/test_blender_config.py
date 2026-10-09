@@ -120,6 +120,10 @@ class ConfigPathsTest(unittest.TestCase):
         self.assertEqual(bc.python_for_version("4.5.3"), "3.11")
         self.assertEqual(bc.python_for_version("2.79"), "")
 
+    def test_blender_4_0_trae_python_3_10_y_4_1_el_3_11(self):
+        self.assertEqual(bc.python_for_version("4.0.2"), "3.10")
+        self.assertEqual(bc.python_for_version("4.1.1"), "3.11")
+
 
 class BlInfoTest(unittest.TestCase):
     def test_lee_bl_info_literal(self):

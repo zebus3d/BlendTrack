@@ -65,7 +65,9 @@ REASON_UNKNOWN_VERSION = "unknown_version"  # el addon no declara versión míni
 # 5.1/5.2 dan 3.13.
 _PYTHON_BY_SERIES = {
     (3, 6): "3.10",
-    (4, 0): "3.11",
+    # 4.0 sigue con 3.10; el salto a 3.11 llegó en 4.1 (con la plataforma VFX
+    # de 2024). La fila decía (4, 0): "3.11" y avisaba al revés para 4.0.
+    (4, 1): "3.11",
     (4, 2): "3.11",
     (4, 5): "3.11",
     (5, 0): "3.11",
