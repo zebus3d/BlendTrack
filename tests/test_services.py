@@ -186,6 +186,30 @@ class ApiTests(unittest.TestCase):
                              (None, "e"))
 
 
+class GetBuildsTests(unittest.TestCase):
+    """``api.get_builds``: el listado y su caché en disco, sin red."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        patcher = mock.patch.object(api, "cache_dir",
+                                    lambda: Path(self.tmp.name))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.addCleanup(self.tmp.cleanup)
+        self.blender = make_build("5.2.1", "stable", "v52", "blender-5.2.1.tar.xz")
+        self.bfa = Build("5.2.0", "bforartists", "stable", "linux", "x86_64",
+                         "https://cloud.bforartists.de/x", "Bforartists-5.2.0.tar.xz",
+                         fork="bforartists")
+
+    def test_si_no_se_puede_guardar_el_cache_se_devuelve_lo_descargado(self):
+        """Un disco lleno o sin permiso no puede tirar el listado recién bajado."""
+        fresh = [self.blender]
+        with mock.patch.object(api, "fetch_builds", return_value=(fresh, {})), \
+                mock.patch.object(api, "save_cache",
+                                  side_effect=OSError("disco lleno")):
+            self.assertEqual(api.get_builds(force=True), fresh)
+
+
 class ChannelFilterTests(unittest.TestCase):
     """Filtro de canal de la tienda (incluidas las ramas experimentales)."""
 

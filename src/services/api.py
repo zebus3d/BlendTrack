@@ -234,11 +234,20 @@ def get_builds(force: bool = False, forks=()):
     try:
         builds, etags = fetch_builds(etags=load_etags(), cached=stale,
                                      forks=forks)
-        save_cache(builds, etags)
-        return builds
-    except Exception:
+    except Exception as error:
         # Sin conexión: mejor mostrar algo (aunque esté caducado) que nada.
+        # Se apunta el motivo: sin él, "no veo versiones nuevas" no se puede
+        # distinguir de "no hay versiones nuevas" mirando el log.
+        log(f"builds listing unavailable, using the cache: {error}")
         return stale
+    # Guardar va aparte de descargar: si el disco está lleno o la carpeta de
+    # caché no deja escribir, el listado recién bajado sigue siendo bueno y
+    # tirarlo para enseñar el viejo sería castigar al usuario por el disco.
+    try:
+        save_cache(builds, etags)
+    except OSError as error:
+        log(f"could not save the builds cache: {error}")
+    return builds
 
 
 def available_for(builds, platform: str, arch: str):
