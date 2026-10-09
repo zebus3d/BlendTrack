@@ -705,6 +705,30 @@ def read_migration_marker(target: BlenderConfig) -> dict:
         return {}
     return data if isinstance(data, dict) else {}
 
+def _undoable(target: BlenderConfig, raw) -> Path | None:
+    """La ruta del marcador si deshacer puede tocarla, o ``None``.
+
+    ``Path("")`` no es falso: es ``Path(".")``, el directorio actual. Con una
+    entrada vacía en el marcador, deshacer habría borrado **la carpeta desde la
+    que corre la app**. Y un marcador editado a mano (o corrupto) podría
+    apuntar a cualquier sitio del disco. Por eso se exige que la ruta esté
+    *dentro* (y no sea la raíz) de alguna de las carpetas donde copia la
+    migración: ``config``, ``scripts`` o ``extensions`` de esa versión.
+
+    Se compara con ``os.path.abspath`` y no con ``resolve``: un addon enlazado
+    es un symlink que apunta fuera (a la carpeta del proyecto) y lo que se
+    deshace es el enlace, no su destino.
+    """
+    if not raw or not isinstance(raw, str):
+        return None
+    path = Path(os.path.abspath(raw))
+    for root in (target.config_dir, target.scripts_dir, target.extensions_dir):
+        base = Path(os.path.abspath(root))
+        if path != base and path.is_relative_to(base):
+            return path
+    return None
+
+
 def undo_migration(target: BlenderConfig, dry_run: bool = False) -> UndoResult:
     """Deshace la última migración: revierte lo que se guardase como backup.
 
@@ -716,6 +740,11 @@ def undo_migration(target: BlenderConfig, dry_run: bool = False) -> UndoResult:
 
     Al terminar se elimina el marcador, de modo que un segundo "deshacer" no
     restaura nada (evita el clásico doble-clic que deshace de más).
+
+    El marcador es un JSON en disco y no se cree a ciegas: deshacer **borra**
+    carpetas enteras, así que solo se toca lo que cae dentro de las carpetas
+    de esa versión donde copia la migración (ver ``_undoable``). Una entrada
+    vacía o que apunte fuera se salta.
     """
     result = UndoResult(dry_run=dry_run)
     payload = read_migration_marker(target)
@@ -727,15 +756,16 @@ def undo_migration(target: BlenderConfig, dry_run: bool = False) -> UndoResult:
         return result
     # En orden inverso: lo último copiado, lo primero en deshacerse.
     for action in reversed(actions):
-        destination = Path(action.get("path") or "")
-        backup = action.get("backup")
-        if not destination:
+        destination = _undoable(target, action.get("path"))
+        raw_backup = action.get("backup")
+        backup = _undoable(target, raw_backup)
+        if destination is None or (raw_backup and backup is None):
             continue
         try:
-            if backup and Path(backup).exists():
+            if backup is not None and backup.exists():
                 delete_path(destination)
-                Path(backup).rename(destination)
-                result.restored.append((destination, Path(backup)))
+                backup.rename(destination)
+                result.restored.append((destination, backup))
             elif destination.exists():
                 delete_path(destination)
                 result.removed.append(destination)

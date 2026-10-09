@@ -538,6 +538,36 @@ class ApplyMigrationTest(unittest.TestCase):
             self.assertEqual(len(result.removed), 1)
             self.assertFalse(plan.destination.exists())
 
+    def test_undo_no_toca_rutas_vacias_ni_de_fuera(self):
+        """Un marcador con una ruta vacía o ajena no borra nada.
+
+        ``Path("")`` es ``Path(".")``: con una entrada vacía, deshacer borraba
+        el directorio actual. Y un marcador editado a mano podría apuntar a
+        cualquier carpeta del disco.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            target = _config(Path(tmp) / "target")
+            target.root.mkdir(parents=True)
+            ajena = Path(tmp) / "ajena"
+            ajena.mkdir()
+            (ajena / "dato.txt").write_text("x", encoding="utf-8")
+            marker = target.root / bc.MIGRATION_MARKER
+            marker.write_text(json.dumps({
+                "version": target.version,
+                "actions": [{"path": ""}, {"path": str(ajena)},
+                            {"path": str(target.config_dir)},
+                            {"path": str(target.addons_dir / "x"),
+                             "backup": str(ajena)}],
+            }), encoding="utf-8")
+            cwd = Path.cwd()
+            with mock.patch.object(baddons.shutil, "rmtree") as rmtree:
+                result = baddons.undo_migration(target)
+            rmtree.assert_not_called()
+            self.assertEqual(result.removed, [])
+            self.assertEqual(result.restored, [])
+            self.assertTrue((ajena / "dato.txt").is_file())
+            self.assertTrue(cwd.is_dir())
+
     def test_undo_sin_marcador_no_hace_nada(self):
         with tempfile.TemporaryDirectory() as tmp:
             target = _config(Path(tmp) / "target")
