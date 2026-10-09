@@ -136,7 +136,7 @@ class LinkAddonTest(unittest.TestCase):
             entry = _entry(tmp)
             suelto = Path(tmp) / "mi_addon.py"
             suelto.write_text("bl_info = {}\n", encoding="utf-8")
-            with mock.patch("services.addons.shutil.copy2",
+            with mock.patch("services.blender_addons.shutil.copy2",
                             side_effect=PermissionError("sin permiso")):
                 with self.assertRaises(ap.AddonError) as caso:
                     ap.install(entry, suelto, "linux")
@@ -157,6 +157,22 @@ class LinkAddonTest(unittest.TestCase):
             self.assertFalse(result["destination"].exists())
             self.assertTrue(dev.is_dir())
 
+
+    def test_si_el_enlace_falla_vuelve_el_addon_que_habia(self):
+        """Un enlace que no se pudo crear no se lleva el addon instalado."""
+        with tempfile.TemporaryDirectory() as tmp:
+            dev = Path(tmp) / "proyecto" / "mi_addon"
+            dev.mkdir(parents=True)
+            (dev / "__init__.py").write_text("# dev", encoding="utf-8")
+            instalado = _config_dir(tmp) / "scripts" / "addons" / "mi_addon"
+            instalado.mkdir(parents=True)
+            (instalado / "__init__.py").write_text("# mio", encoding="utf-8")
+            with mock.patch.object(Path, "symlink_to",
+                                   side_effect=OSError("sin permiso")):
+                with self.assertRaises(ap.AddonError) as caso:
+                    ap.link(_entry(tmp), dev, "linux", _env(tmp))
+            self.assertEqual(caso.exception.reason, "symlink_failed")
+            self.assertEqual((instalado / "__init__.py").read_text(), "# mio")
 
 class SetEnabledTest(unittest.TestCase):
     def test_activa_y_desactiva(self):

@@ -26,7 +26,7 @@ from services.blender_config import (BACKUP_SUFFIX, BLOCKED, LOCAL_REPO,
                                      PREFERENCE_FILES, REASON_PLATFORM,
                                      REASON_REQUIRES_NEWER, REASON_TOO_NEW,
                                      REASON_UNKNOWN_VERSION, REASON_WHEEL_ABI,
-                                     WARN, BlenderConfig)
+                                     STAGING_SUFFIX, WARN, BlenderConfig)
 
 # Archivos/carpetas del árbol de extensiones que no son repositorios.
 _SKIP_EXTENSION_ENTRIES = {".cache", ".local", ".blender_ext", "__pycache__"}
@@ -475,8 +475,7 @@ def copy_entry(source: Path, destination: Path) -> None:
         shutil.copy2(source, destination)
 
 
-def park_existing(destination: Path, backed_up: list | None = None,
-                  actions: list | None = None) -> None:
+def park_existing(destination: Path) -> Path | None:
     """Aparta lo que ya hay en ``destination`` a su copia de seguridad.
 
     **Una sola copia por destino, reutilizable**: los usuarios migran más de una
@@ -485,18 +484,15 @@ def park_existing(destination: Path, backed_up: list | None = None,
     mismo nombre y se pisa: lo que interesa conservar es el estado
     *inmediatamente anterior* al último cambio, no un histórico.
 
-    ``backed_up`` y ``actions`` (si se pasan) recogen el respaldo hecho, que es
-    lo que permite deshacer. Un enlace simbólico roto no "existe" para
-    ``Path.exists`` pero sí estorba al copiar encima: se quita sin más. No hace
-    nada si no hay nada.
+    Devuelve la ruta del respaldo, o ``None`` si no había nada que apartar. Un
+    enlace simbólico roto no "existe" para ``Path.exists`` pero sí estorba al
+    copiar encima: se quita sin más (no hay nada que respaldar).
     """
     if destination.is_symlink() and not destination.exists():
         delete_path(destination)
-        return
+        return None
     if not destination.exists():
-        return
-    backed_up = backed_up if backed_up is not None else []
-    actions = actions if actions is not None else []
+        return None
     # Quita un sufijo .bak ya existente, para no respaldar el respaldo.
     base = destination.name.split(BACKUP_SUFFIX, 1)[0]
     # Limpia restos de intentos anteriores (y de versiones viejas de la app,
@@ -506,8 +502,66 @@ def park_existing(destination: Path, backed_up: list | None = None,
             delete_path(old)
     backup = destination.with_name(f"{base}{BACKUP_SUFFIX}")
     destination.rename(backup)
+    return backup
+
+
+def replace_with_copy(source: Path, destination: Path) -> Path | None:
+    """Pone una copia de ``source`` en ``destination`` sin dejarlo a medias.
+
+    El orden es lo que importa. Antes se apartaba primero lo que hubiera y
+    luego se copiaba: si la copia fallaba a mitad (disco lleno, un fichero sin
+    permiso de lectura), el destino quedaba con media copia y el original
+    escondido en el ``.bak``. Ahora:
+
+    1. Se copia a un **temporal hermano** (misma carpeta, así que el paso 3 es
+       un simple renombrado y no una copia entre discos). Empieza por punto
+       para que ni Blender ni ``addons_in`` lo tomen por un addon.
+    2. Solo si la copia terminó, se aparta lo que hubiera (``park_existing``).
+    3. Se renombra el temporal a su sitio con ``os.replace``.
+
+    Si falla el paso 1, el destino no se ha tocado; si falla el 3, se devuelve
+    el respaldo a su sitio. En los dos casos se relanza el ``OSError`` para que
+    quien llama lo cuente. Devuelve la ruta del respaldo, o ``None``.
+    """
+    destination = Path(destination)
+    staging = destination.with_name(f".{destination.name}{STAGING_SUFFIX}")
+    # Restos de un intento anterior que se cortó (la app se cerró a medias).
+    delete_path(staging)
+    try:
+        copy_entry(source, staging)
+    except OSError:
+        delete_path(staging)
+        raise
+    backup = park_existing(destination)
+    try:
+        os.replace(staging, destination)
+    except OSError:
+        if backup is not None:
+            try:
+                backup.rename(destination)
+            except OSError:
+                # El original sigue entero en el ``.bak``: no se ha perdido,
+                # solo no se pudo devolver a su sitio. El error que importa es
+                # el de arriba, que es el que se relanza.
+                pass
+        delete_path(staging)
+        raise
+    return backup
+
+
+def _undo_action(destination: Path, backup: Path | None,
+                 backed_up: list) -> dict:
+    """Entrada del marcador para poder deshacer esta copia.
+
+    Con respaldo, deshacer lo devuelve a su sitio; sin él (el destino no
+    existía), deshacer borra la copia. De paso anota el respaldo en
+    ``backed_up``, que es lo que enseña el resumen de la interfaz.
+    """
+    if backup is None:
+        return {"path": str(destination)}
     backed_up.append(backup)
-    actions.append({"path": str(destination), "backup": str(backup)})
+    return {"path": str(destination), "backup": str(backup)}
+
 
 def _write_marker(target: BlenderConfig, actions: list, key: str = "actions") -> Path:
     """Anota en la carpeta destino qué se copió (para poder deshacer).
@@ -542,7 +596,8 @@ def apply_migration(plans, target: BlenderConfig,
 
     Es conservador a propósito: lo que ya exista en destino **no se borra**,
     se aparta como ``.blendermanager-bak`` (por si el usuario tenía su propia
-    versión de ese addon). Con ``dry_run`` no toca el disco.
+    versión de ese addon), y solo cuando la copia nueva ya está completa (ver
+    ``replace_with_copy``). Con ``dry_run`` no toca el disco.
     """
     result = MigrationResult(dry_run=dry_run)
     actions = []
@@ -556,11 +611,10 @@ def apply_migration(plans, target: BlenderConfig,
         try:
             destination = Path(plan.destination)
             destination.parent.mkdir(parents=True, exist_ok=True)
-            park_existing(destination, result.backed_up, actions)
-            copy_entry(plan.addon.path, destination)
+            backup = replace_with_copy(plan.addon.path, destination)
             result.copied.append(plan)
             result.modules.append(plan.enable_module)
-            actions.append({"path": str(destination)})
+            actions.append(_undo_action(destination, backup, result.backed_up))
         except OSError as error:
             result.failed.append((plan, str(error)))
     if not dry_run and actions:
@@ -707,10 +761,9 @@ def copy_preference_files(items, target: BlenderConfig,
         try:
             destination = Path(item.destination)
             destination.parent.mkdir(parents=True, exist_ok=True)
-            park_existing(destination, result.backed_up, actions)
-            shutil.copy2(item.source, destination)
+            backup = replace_with_copy(item.source, destination)
             result.copied.append(item)
-            actions.append({"path": str(destination)})
+            actions.append(_undo_action(destination, backup, result.backed_up))
         except OSError as error:
             result.failed.append((item, str(error)))
     if not dry_run and actions:

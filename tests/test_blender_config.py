@@ -516,6 +516,71 @@ class ApplyMigrationTest(unittest.TestCase):
             self.assertEqual(result.backed_up[0].read_text(encoding="utf-8"),
                              "viejo")
 
+    def test_una_copia_que_falla_a_medias_no_toca_el_destino(self):
+        """Si la copia se corta, el addon que había sigue entero en su sitio.
+
+        Antes se apartaba primero al ``.bak`` y luego se copiaba: un fallo a
+        mitad dejaba media copia en destino y el original escondido.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "addon"
+            source.mkdir()
+            (source / "a.py").write_text("nuevo", encoding="utf-8")
+            target = _config(Path(tmp) / "target")
+            destination = target.addons_dir / "addon"
+            destination.mkdir(parents=True)
+            (destination / "a.py").write_text("viejo", encoding="utf-8")
+
+            def copia_rota(origin, dest, **kwargs):
+                Path(dest).mkdir()
+                (Path(dest) / "medio.py").write_text("x", encoding="utf-8")
+                raise OSError("disco lleno")
+
+            plan = self._plan(self._addon(source), destination)
+            with mock.patch.object(baddons.shutil, "copytree",
+                                   side_effect=copia_rota):
+                result = baddons.apply_migration([plan], target)
+            self.assertEqual(len(result.failed), 1)
+            self.assertEqual(sorted(p.name for p in target.addons_dir.iterdir()),
+                             ["addon"])
+            self.assertEqual((destination / "a.py").read_text(), "viejo")
+            self.assertIsNone(result.marker)
+
+    def test_si_no_se_puede_poner_en_su_sitio_vuelve_el_original(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "addon"
+            source.mkdir()
+            (source / "a.py").write_text("nuevo", encoding="utf-8")
+            target = _config(Path(tmp) / "target")
+            destination = target.addons_dir / "addon"
+            destination.mkdir(parents=True)
+            (destination / "a.py").write_text("viejo", encoding="utf-8")
+            plan = self._plan(self._addon(source), destination)
+            with mock.patch.object(baddons.os, "replace",
+                                   side_effect=OSError("ocupado")):
+                result = baddons.apply_migration([plan], target)
+            self.assertEqual(len(result.failed), 1)
+            self.assertEqual((destination / "a.py").read_text(), "viejo")
+            self.assertEqual(sorted(p.name for p in target.addons_dir.iterdir()),
+                             ["addon"])
+
+    def test_un_fichero_de_preferencias_que_no_se_copia_no_se_pierde(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            origin = _config(Path(tmp) / "origin")
+            target = _config(Path(tmp) / "target")
+            origin.config_dir.mkdir(parents=True)
+            target.config_dir.mkdir(parents=True)
+            (origin.config_dir / "userpref.blend").write_bytes(b"NUEVO")
+            (target.config_dir / "userpref.blend").write_bytes(b"VIEJO")
+            items = baddons.preference_plan(origin, target)
+            with mock.patch.object(baddons.shutil, "copy2",
+                                   side_effect=OSError("sin permiso")):
+                result = baddons.copy_preference_files(items, target)
+            self.assertEqual(len(result.failed), 1)
+            self.assertEqual((target.config_dir / "userpref.blend").read_bytes(),
+                             b"VIEJO")
+            self.assertEqual(result.backed_up, [])
+
     def test_no_copia_los_no_seleccionados(self):
         with tempfile.TemporaryDirectory() as tmp:
             source = Path(tmp) / "addon"

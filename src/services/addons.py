@@ -13,7 +13,6 @@ Es un módulo de ``services/``: **no importa Qt**. Lo que habla con Blender
 en ``blender_config``.
 """
 
-import shutil
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -125,7 +124,7 @@ def install(entry, source, platform: str, env=None) -> dict:
 
     if suffix == ".py":
         destination = config.addons_dir / source.name
-        _install_file(source, destination)
+        _install_copy(source, destination)
         return {"kind": LEGACY, "module": source.stem,
                 "destination": destination}
 
@@ -144,7 +143,7 @@ def install(entry, source, platform: str, env=None) -> dict:
             manifest = baddons.read_manifest(root)
             addon_id = str(manifest.get("id") or root.name)
             destination = config.extensions_dir / bc.LOCAL_REPO / addon_id
-            _install_tree(root, destination)
+            _install_copy(root, destination)
             return {"kind": EXTENSION,
                     "module": f"bl_ext.{bc.LOCAL_REPO}.{addon_id}",
                     "destination": destination}
@@ -153,11 +152,11 @@ def install(entry, source, platform: str, env=None) -> dict:
             single = next(iter(root.glob("*.py")), None)
             if single is not None:
                 destination = config.addons_dir / single.name
-                _install_file(single, destination)
+                _install_copy(single, destination)
                 return {"kind": LEGACY, "module": single.stem,
                         "destination": destination}
         destination = config.addons_dir / root.name
-        _install_tree(root, destination)
+        _install_copy(root, destination)
         return {"kind": LEGACY, "module": root.name,
                 "destination": destination}
 
@@ -186,10 +185,21 @@ def link(entry, folder, platform: str, env=None) -> dict:
         raise AddonError("no_addon", str(folder))
     try:
         destination.parent.mkdir(parents=True, exist_ok=True)
-        baddons.park_existing(destination)
+        backup = baddons.park_existing(destination)
+    except OSError as error:
+        raise AddonError("symlink_failed", str(error)) from error
+    try:
         destination.symlink_to(folder.resolve(), target_is_directory=True)
     except OSError as error:
-        raise AddonError("symlink_failed", str(error))
+        # Sin enlace, lo que había vuelve a su sitio: un enlace fallido (en
+        # Windows, típico por falta de permiso) no puede costarle al usuario el
+        # addon que ya tenía instalado.
+        if backup is not None:
+            try:
+                backup.rename(destination)
+            except OSError:
+                pass
+        raise AddonError("symlink_failed", str(error)) from error
     return {"kind": EXTENSION if module.startswith("bl_ext.") else LEGACY,
             "module": module, "destination": destination}
 
@@ -227,26 +237,18 @@ def _find_addon_root(folder: Path):
     raise AddonError("no_addon", str(folder))
 
 
-def _install_file(source: Path, destination: Path) -> None:
-    """Copia un ``.py`` suelto, apartando lo que hubiera.
+def _install_copy(source: Path, destination: Path) -> None:
+    """Copia un addon (carpeta o ``.py`` suelto) a su sitio, apartando lo que hubiera.
 
-    Los fallos del sistema (sin permiso, disco lleno, ruta imposible) se
-    envuelven en ``AddonError``: la interfaz solo sabe contar esos, y una
-    excepción cruda mataba su hilo sin decir nada y dejaba la vista bloqueada.
+    La copia la hace ``blender_addons.replace_with_copy``: primero a un temporal
+    y solo al final se aparta lo viejo, así que un fallo a mitad no deja el
+    destino a medias. Los fallos del sistema (sin permiso, disco lleno, ruta
+    imposible) se envuelven en ``AddonError``: la interfaz solo sabe contar
+    esos, y una excepción cruda mataba su hilo sin decir nada y dejaba la vista
+    bloqueada.
     """
     try:
         destination.parent.mkdir(parents=True, exist_ok=True)
-        baddons.park_existing(destination)
-        shutil.copy2(source, destination)
+        baddons.replace_with_copy(source, destination)
     except OSError as error:
-        raise AddonError("copy_failed", str(error))
-
-
-def _install_tree(source: Path, destination: Path) -> None:
-    """Copia la carpeta del addon, apartando lo que hubiera (ver ``_install_file``)."""
-    try:
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        baddons.park_existing(destination)
-        shutil.copytree(source, destination, symlinks=True)
-    except OSError as error:
-        raise AddonError("copy_failed", str(error))
+        raise AddonError("copy_failed", str(error)) from error
