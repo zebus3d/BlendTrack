@@ -80,10 +80,6 @@ MIN_WINDOW_WIDTH = 700
 # larga) sin que el contenido se recorte.
 MIN_WINDOW_HEIGHT = 440
 
-# Tooltips de los filtros de canal. Se explican para quien no sabe qué es una
-# LTS o una compilación diaria; las claves de i18n son estos textos en inglés.
-# Los saltos de línea (\n) se ven en el tooltip, así que pueden ser varias
-# líneas.
 # Canales de la barra de filtros, en el orden en que se enseñan. Son
 # excluyentes (solo se ve uno a la vez), así que van en una barra de pestañas
 # y no en pastillas sueltas. Aquí solo viven las **etiquetas**: las claves son
@@ -110,6 +106,10 @@ SECTION_TITLES = {
     "settings": "Settings",
 }
 
+# Tooltips de los filtros de canal. Se explican para quien no sabe qué es una
+# LTS o una compilación diaria; las claves de i18n son estos textos en inglés.
+# Los saltos de línea (\n) se ven en el tooltip, así que pueden ser varias
+# líneas.
 CHANNEL_TOOLTIPS = {
     "all": "Show everything, forks included: stable, LTS, daily and alpha.",
     "lts": "LTS = Long Term Support.\nVersions maintained for years and the "
@@ -122,11 +122,11 @@ CHANNEL_TOOLTIPS = {
                     "not ready for production and the list is usually empty.",
     "bforartists": "Bforartists is a fork of Blender with a redesigned, "
                    "easier-to-read interface.\nIts versions live here, on their "
-                   "own tab (they do not mix with Blender's in All).\n"
+                   "own tab (All shows them too, mixed with Blender's).\n"
                    "Turn it on in Settings > Downloads.",
     "upbge": "UPBGE is the fork that keeps the Blender game engine alive.\n"
-             "Its versions live here, on their own tab (they do not mix with "
-             "Blender's in All).\nTurn it on in Settings > Downloads.",
+             "Its versions live here, on their own tab (All shows them too, "
+             "mixed with Blender's).\nTurn it on in Settings > Downloads.",
     "favorites": "Only the versions you marked with the star.",
 }
 
