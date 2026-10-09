@@ -288,6 +288,14 @@ def fetch_bforartists(timeout: int = 20) -> list:
         match = BFA_VERSION_RE.search(entry["name"])
         if match:
             versions.append((match.group(1), entry))
+    if not versions:
+        # Una raíz sin ninguna versión no es "Bforartists ya no publica nada":
+        # es una respuesta que no es el listado (un 200 con la página de
+        # mantenimiento, un portal cautivo...). Si se siguiera, se guardaría
+        # un caché vacío encima del bueno y el próximo arranque sin red ya no
+        # tendría nada que enseñar.
+        log("bforartists listing has no versions; keeping the cache")
+        return _bfa_builds_from_versions(cached)
 
     fresh = {}
     pending = []

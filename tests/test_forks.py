@@ -178,6 +178,18 @@ class BfaWebDavTests(unittest.TestCase):
         self.assertEqual(sorted(b.filename for b in offline),
                          sorted(b.filename for b in first))
 
+    def test_una_raiz_sin_versiones_no_borra_el_cache(self):
+        """Un 200 con HTML (portal cautivo, página de mantenimiento) no es
+        "Bforartists ya no tiene versiones": se sirve el caché y se conserva."""
+        with mock.patch.object(fk, "_propfind", side_effect=self._propfind):
+            first = fk.fetch_bforartists()
+        saved = fk.bfa_cache_path().read_text(encoding="utf-8")
+        html = b"<html><body>Mantenimiento</body></html>"
+        with mock.patch.object(fk, "_propfind", return_value=html):
+            builds = fk.fetch_bforartists()
+        self.assertEqual(len(builds), len(first))
+        self.assertEqual(fk.bfa_cache_path().read_text(encoding="utf-8"), saved)
+
     def test_xml_roto_no_revienta(self):
         self.assertEqual(fk._parse_multistatus(b"<no xml"), [])
 
