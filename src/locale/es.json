@@ -552,5 +552,6 @@
   "Could not delete the settings saved on {date}. Close any program that is using that folder and try again:\n{path}": "No se pudieron borrar los ajustes guardados el {date}. Cierra cualquier programa que esté usando esa carpeta y vuelve a intentarlo:\n{path}",
   "{count} saved copies could not be deleted. Close any program that is using them and try again.": "No se pudieron borrar {count} copias guardadas. Cierra cualquier programa que las esté usando y vuelve a intentarlo.",
   "Could not save the current settings aside, so nothing was reset:\n{error}": "No se pudieron apartar los ajustes actuales, así que no se ha restablecido nada:\n{error}",
-  "Could not put the saved settings back:\n{error}": "No se pudieron restaurar los ajustes guardados:\n{error}"
+  "Could not put the saved settings back:\n{error}": "No se pudieron restaurar los ajustes guardados:\n{error}",
+  "Copying the add-ons...": "Copiando los addons..."
 }

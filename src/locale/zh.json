@@ -552,5 +552,6 @@
   "Could not delete the settings saved on {date}. Close any program that is using that folder and try again:\n{path}": "无法删除 {date} 保存的设置。请关闭正在使用该文件夹的程序后重试：\n{path}",
   "{count} saved copies could not be deleted. Close any program that is using them and try again.": "有 {count} 份已保存副本无法删除。请关闭正在使用它们的程序后重试。",
   "Could not save the current settings aside, so nothing was reset:\n{error}": "无法将当前设置另存，因此没有进行任何重置：\n{error}",
-  "Could not put the saved settings back:\n{error}": "无法恢复已保存的设置：\n{error}"
+  "Could not put the saved settings back:\n{error}": "无法恢复已保存的设置：\n{error}",
+  "Copying the add-ons...": "正在复制插件..."
 }

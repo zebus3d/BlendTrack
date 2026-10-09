@@ -3565,6 +3565,16 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
 
         return _Immediate()
 
+    def _apply_now(self, view):
+        """``view.apply()`` con la copia en el momento, sin hilo de verdad.
+
+        La copia de addons va en un hilo; en un test, su señal llegaría cuando
+        el test ya terminó (y abriría un diálogo en otro).
+        """
+        with mock.patch("ui.widgets.migrate.addons_tab.threading") as threads:
+            threads.Thread.side_effect = self._run_now
+            view.apply()
+
     @staticmethod
     def _prefs_answer(view, handler_name, payload):
         """Simula que el hilo de lectura/escritura de ajustes responde.
@@ -3700,7 +3710,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
                 self._with_configs(view, {"4.5.0": source, "5.3.0": target},
                                    source="4.5.0", target="5.3.0")
                 view._select_all(True)
-                view.apply()
+                self._apply_now(view)
             self.assertFalse(list(target.addons_dir.iterdir())
                              if target.addons_dir.is_dir() else [])
 
@@ -3722,7 +3732,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
                                    source="4.5.0", target="5.3.0")
                 # Sin lectura del origen, ``was_enabled`` es False, así que no
                 # se activa nada (no se lanza un Blender de verdad en tests).
-                view.apply()
+                self._apply_now(view)
             self.assertTrue((target.addons_dir / "miaddon" / "__init__.py")
                             .is_file())
 
@@ -3787,7 +3797,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
                                 return_value=False):
                 self._with_configs(view, {"4.5.0": source, "5.3.0": target},
                                    source="4.5.0", target="5.3.0")
-                view.apply()
+                self._apply_now(view)
             enable.assert_not_called()
 
     def test_preferencias_copia_userpref_con_backup(self):
@@ -5050,6 +5060,58 @@ class MigrateBackgroundJobTests(SettingsIsolated, unittest.TestCase):
             self.assertEqual(len(threads.targets), 2)
             row = next(iter(view._snapshot_widgets.values()))
             self.assertIn("Analyzing", row.analysis_label.text())
+
+    def test_copiar_addons_comprueba_blender_antes_de_copiar(self):
+        """Con Blender abierto no se copia nada (antes se copiaba y luego
+        avisaba, con los ficheros ya escritos y sin activarlos)."""
+        threads = _CapturedThreads()
+        with tempfile.TemporaryDirectory() as tmp:
+            source = self._config(
+                tmp, "4.5.0",
+                legacy=("miaddon",
+                        'bl_info = {"name": "MiAddon", "version": (1, 0), '
+                        '"blender": (4, 0, 0)}\n'))
+            target = self._config(tmp, "5.3.0")
+            view = self._view()
+            with mock.patch("services.blender_runner.is_running",
+                            return_value=False):
+                self._with_configs(view, {"4.5.0": source, "5.3.0": target},
+                                   source="4.5.0", target="5.3.0")
+            with mock.patch("services.blender_runner.is_running",
+                            return_value=True), \
+                    mock.patch("ui.widgets.dialogs.show_info") as info, \
+                    mock.patch("ui.widgets.migrate.addons_tab.threading",
+                               threads):
+                view.apply()
+            self.assertTrue(info.called)
+            self.assertEqual(threads.targets, [])
+            self.assertFalse((target.addons_dir / "miaddon").exists())
+
+    def test_la_copia_de_addons_va_en_un_hilo(self):
+        """La ventana no se congela copiando: el informe llega por señal."""
+        threads = _CapturedThreads()
+        with tempfile.TemporaryDirectory() as tmp:
+            source = self._config(
+                tmp, "4.5.0",
+                legacy=("miaddon",
+                        'bl_info = {"name": "MiAddon", "version": (1, 0), '
+                        '"blender": (4, 0, 0)}\n'))
+            target = self._config(tmp, "5.3.0")
+            view = self._view()
+            with mock.patch("services.blender_runner.is_running",
+                            return_value=False), \
+                    mock.patch("ui.widgets.migrate.addons_tab.threading",
+                               threads):
+                self._with_configs(view, {"4.5.0": source, "5.3.0": target},
+                                   source="4.5.0", target="5.3.0")
+                view.apply()
+                self.assertEqual(len(threads.targets), 1)
+                self.assertFalse(view.copy_btn.isEnabled())
+                with mock.patch("ui.widgets.dialogs.show_info") as info:
+                    threads.run(0)
+            self.assertTrue(info.called)
+            self.assertTrue(view.copy_btn.isEnabled())
+            self.assertTrue((target.addons_dir / "miaddon").is_dir())
 
     def test_una_senal_sin_ticket_no_abre_nada(self):
         """Una señal pública emitida desde fuera no dispara diálogos."""

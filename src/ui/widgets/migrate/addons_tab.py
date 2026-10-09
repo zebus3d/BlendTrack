@@ -296,24 +296,60 @@ class AddonsTabMixin:
         activados se activan en destino, y los que allí estaban apagados se
         quedan apagados. Así una copia se comporta igual que el original sin
         que el usuario tenga que repasar la lista de addons.
+
+        Antes de copiar se comprueba que no haya ningún Blender abierto: antes
+        se miraba **después**, así que los ficheros ya estaban copiados cuando
+        aparecía el aviso de "cierra Blender" y la activación no se hacía. La
+        copia va en un hilo (un addon con sus *wheels* puede pesar cientos de
+        MB y la ventana se quedaba congelada) y termina en ``_on_addons_copied``.
         """
         selected = [plan for plan in self.plans
                     if plan.selected and not plan.blocked]
         if not selected:
             self.status_message.emit(tr("Nothing selected"))
             return
-        result = baddons.apply_migration(self.plans, self.target_cfg)
+        if self._blocked_by_running():
+            return
+        # Lo que el hilo necesita se toma **ahora**: si el usuario cambia de
+        # versión mientras copia, la respuesta sigue siendo de esta copia.
+        plans, target_cfg = list(self.plans), self.target_cfg
+        executable, version = _entry_info(self.target_entry)
+        ticket = self._copy_job.start(version)
+        self._set_controls_enabled(False)
+        self.status_message.emit(tr("Copying the add-ons..."))
+
+        def worker():
+            payload = {"executable": executable, "version": version,
+                       "ticket": ticket}
+            try:
+                payload["result"] = baddons.apply_migration(plans, target_cfg)
+            except Exception as error:  # noqa: BLE001 - se enseña el motivo
+                payload["error"] = str(error)
+            self.addons_copied.emit(payload)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_addons_copied(self, payload) -> None:
+        """Fin de la copia: informe y activación de los que estaban activos."""
+        if not self._copy_job.finish(payload):
+            return
+        self._set_controls_enabled(bool(self.plans))
+        if payload.get("error"):
+            dialogs.show_error(self, tr("Could not finish"), payload["error"])
+            return
+        result = payload["result"]
         self._finish_copy(
             result, tr("Copied {count} add-ons.", count=len(result.copied)),
             tr("Some add-ons could not be copied:"),
             lambda plan: plan.addon.name)
 
         # Solo se activan los que estaban activos en origen.
-        executable, version = _entry_info(self.target_entry)
+        executable, version = payload["executable"], payload["version"]
         modules = [plan.enable_module for plan in result.copied
                    if plan.was_enabled]
         if not (executable and modules and Path(executable).is_file()):
             return
+        # Se vuelve a mirar: mientras se copiaba, el usuario pudo abrir Blender.
         if self._blocked_by_running():
             return
         self._start_activation(executable, modules, version)

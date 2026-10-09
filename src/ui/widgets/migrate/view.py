@@ -49,6 +49,7 @@ class MigrateView(AddonsTabMixin, PrefsTabMixin, FactoryTabMixin,
 
     status_message = Signal(str)
     activation_done = Signal(object)
+    addons_copied = Signal(object)     # {"result"|"error", "executable", ...}
     prefs_loaded = Signal(object)      # {"user", "factory", "error"}
     prefs_applied = Signal(object)     # {"result", "version"}
     source_read = Signal(object)       # {"version", "enabled", "error"}
@@ -83,6 +84,7 @@ class MigrateView(AddonsTabMixin, PrefsTabMixin, FactoryTabMixin,
         # emitirlas sin que nadie espere, y sin el ticket se abriría un diálogo
         # modal de la nada (le pasó al suite con ``QTest.qWait``).
         self._activation_job = LatestJob()
+        self._copy_job = LatestJob()
         self._prefs_read = LatestJob()
         self._prefs_write = LatestJob()
         self._style_job = LatestJob()
@@ -104,6 +106,7 @@ class MigrateView(AddonsTabMixin, PrefsTabMixin, FactoryTabMixin,
         self.snapshot_keep = 5
         self._build_ui()
         self.activation_done.connect(self._on_activation_done)
+        self.addons_copied.connect(self._on_addons_copied)
         self.prefs_loaded.connect(self._on_prefs_loaded)
         self.prefs_applied.connect(self._on_prefs_applied)
         self.source_read.connect(self._on_source_read)

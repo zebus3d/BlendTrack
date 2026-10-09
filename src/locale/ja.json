@@ -552,5 +552,6 @@
   "Could not delete the settings saved on {date}. Close any program that is using that folder and try again:\n{path}": "{date} に保存した設定を削除できませんでした。そのフォルダーを使っているプログラムを閉じて、もう一度お試しください：\n{path}",
   "{count} saved copies could not be deleted. Close any program that is using them and try again.": "{count} 件の保存済みコピーを削除できませんでした。それらを使っているプログラムを閉じて、もう一度お試しください。",
   "Could not save the current settings aside, so nothing was reset:\n{error}": "現在の設定を退避できなかったため、何もリセットしていません：\n{error}",
-  "Could not put the saved settings back:\n{error}": "保存した設定を元に戻せませんでした：\n{error}"
+  "Could not put the saved settings back:\n{error}": "保存した設定を元に戻せませんでした：\n{error}",
+  "Copying the add-ons...": "アドオンをコピー中..."
 }
