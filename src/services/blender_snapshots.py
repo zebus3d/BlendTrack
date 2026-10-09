@@ -23,6 +23,12 @@ from services.blender_config import (STARTUP_FILE, USERPREF_FILE,
 SNAPSHOT_DIR = ".blendermanager-snapshots"
 SNAPSHOT_PREFIX = "config"
 
+# Ficheros de texto de ``config`` que no son ajustes pero sí datos del usuario:
+# los ficheros recientes y los marcadores del explorador de archivos. Una
+# config sin preferencias guardadas puede tenerlos, y no se tiran.
+RECENT_FILES = "recent-files.txt"
+BOOKMARKS_FILE = "bookmarks.txt"
+
 
 def set_config_aside(target: BlenderConfig, label: str = "",
                     keep: int = 0) -> Path | None:
@@ -78,6 +84,20 @@ def _has_settings(snapshot: Path) -> bool:
     snapshot = Path(snapshot)
     return any((snapshot / name).is_file()
                for name in (USERPREF_FILE, STARTUP_FILE))
+
+def _has_user_data(config_dir: Path) -> bool:
+    """True si esa carpeta guarda algo del usuario: ajustes, recientes o marcadores.
+
+    Es más amplio que ``_has_settings`` a propósito. Para decidir qué guardado
+    se *ofrece restaurar* solo cuentan los ajustes; para decidir si una config
+    se puede *tirar* cuentan también los recientes y los marcadores, que el
+    usuario echaría de menos. Lo que Blender regenera solo
+    (``platform_support.txt``) no cuenta para ninguna de las dos cosas.
+    """
+    config_dir = Path(config_dir)
+    return _has_settings(config_dir) or any(
+        (config_dir / name).is_file() for name in (RECENT_FILES, BOOKMARKS_FILE))
+
 
 def snapshots_with_settings(target: BlenderConfig) -> list:
     """Instantáneas con ajustes de verdad, de la más nueva a la más vieja.
@@ -159,19 +179,23 @@ def restore_snapshot(target: BlenderConfig, snapshot,
     copia y el guardado se queda hasta que el usuario lo borre a mano.
 
     La config que había se aparta como ``factory`` para poder deshacer, pero
-    solo si tenía algo: aparcar una carpeta vacía solo añade ruido. Devuelve ese
-    aparte (o ``None``). ``keep`` > 0 poda las más viejas sin tocar la que se
-    acaba de restaurar.
+    solo si tenía algo del usuario (``_has_user_data``): aparcar una carpeta
+    que Blender regenera sola solo añade ruido. Antes bastaba con que no
+    tuviera ``userpref``/``startup`` para borrarla, y con ella se iban los
+    ficheros recientes y los marcadores que el usuario acumuló mientras probaba
+    la versión de fábrica. Devuelve ese aparte (o ``None``). ``keep`` > 0 poda
+    las más viejas sin tocar la que se acaba de restaurar.
     """
     snapshot = Path(snapshot)
     if not snapshot.is_dir():
         return None
     aside = None
-    if _has_settings(target.config_dir):
+    if _has_user_data(target.config_dir):
         aside = set_config_aside(target, label="factory")
     elif target.config_dir.exists():
-        # Sin ajustes no merece guardado, pero tampoco puede quedarse: restaurar
-        # es **reemplazar** la config, no fundir el guardado con lo que hubiera.
+        # Sin nada del usuario no merece guardado, pero tampoco puede quedarse:
+        # restaurar es **reemplazar** la config, no fundir el guardado con lo
+        # que hubiera.
         shutil.rmtree(target.config_dir)
     target.config_dir.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(snapshot, target.config_dir, symlinks=True)
@@ -191,19 +215,32 @@ def delete_snapshot(snapshot) -> bool:
     return True
 
 def prune_snapshots(target: BlenderConfig, keep: int, protect=None) -> list:
-    """Borra las instantáneas más viejas y deja las ``keep`` más nuevas.
+    """Deja ``keep`` instantáneas y borra el resto, **las vacías primero**.
 
     ``keep`` <= 0 no borra nada. ``protect`` (una ruta) nunca se borra: es la
     que se acaba de restaurar. Nunca se toca la más nueva tampoco: el guardado
     que el usuario acaba de hacer tiene que seguir ahí aunque algo falle.
+
+    El orden de sacrificio importa. Cada restauración aparta la config que
+    hubiera, y muchas veces es una casi vacía (solo recientes) o una de
+    fábrica. Podando solo por fecha, unas cuantas idas y venidas llenaban el
+    cupo con esas y se borraba el guardado **con los ajustes de verdad** del
+    usuario, que era el más viejo. Ahora las que tienen ajustes van delante y,
+    dentro de cada grupo, las más nuevas.
     """
     if keep <= 0:
         return []
     snapshots = all_snapshots(target)      # de la más nueva a la más vieja
+    if not snapshots:
+        return []
     protected = Path(protect) if protect is not None else None
+    # ``sorted`` es estable: dentro de cada grupo se respeta el orden por
+    # fecha que ya trae ``all_snapshots``.
+    ranked = sorted(snapshots, key=lambda item: not _has_settings(item))
+    kept = set(ranked[:keep]) | {snapshots[0]}
     removed = []
-    for index, snapshot in enumerate(snapshots):
-        if index < keep or snapshot == protected:
+    for snapshot in snapshots:
+        if snapshot in kept or snapshot == protected:
             continue
         if delete_snapshot(snapshot):
             removed.append(snapshot)

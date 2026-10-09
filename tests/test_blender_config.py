@@ -847,6 +847,39 @@ class FactoryResetTest(unittest.TestCase):
             # Las que quedan son las dos más nuevas, de nueva a vieja.
             self.assertEqual(bsnap.snapshots_with_settings(config), [snaps[3], snaps[2]])
 
+    def test_restaurar_no_tira_los_recientes_de_la_config_viva(self):
+        """Una config sin ``userpref`` pero con recientes se aparta, no se borra."""
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config_with_prefs(tmp, "5.3")
+            snapshot = bsnap.set_config_aside(config, label="v5.3")
+            config.config_dir.mkdir(parents=True)
+            (config.config_dir / bsnap.RECENT_FILES).write_text(
+                "/proyectos/escena.blend\n", encoding="utf-8")
+            aside = bsnap.restore_snapshot(config, snapshot)
+            self.assertIsNotNone(aside)
+            self.assertEqual((aside / bsnap.RECENT_FILES).read_text(),
+                             "/proyectos/escena.blend\n")
+
+    def test_poda_borra_antes_las_que_no_tienen_ajustes(self):
+        """Las vacías no pueden echar del cupo al guardado con los ajustes."""
+        from datetime import datetime as _datetime
+
+        with tempfile.TemporaryDirectory() as tmp:
+            config = self._config(tmp, "5.3")
+            snaps = []
+            for second in range(4):
+                config.config_dir.mkdir(parents=True, exist_ok=True)
+                # La primera, la más vieja, es la única con ajustes de verdad.
+                name = "userpref.blend" if second == 0 else bsnap.RECENT_FILES
+                (config.config_dir / name).write_bytes(b"x")
+                with mock.patch.object(bsnap, "datetime") as clock:
+                    clock.now.return_value = _datetime(2026, 9, 21, 10, 0,
+                                                       second)
+                    snaps.append(bsnap.set_config_aside(config))
+            bsnap.prune_snapshots(config, 2)
+            # Quedan la de ajustes y la más nueva (que nunca se toca).
+            self.assertEqual(bsnap.all_snapshots(config), [snaps[3], snaps[0]])
+
     def test_poda_sin_limite_no_borra(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config_with_prefs(tmp, "5.3")
