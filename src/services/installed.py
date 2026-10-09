@@ -241,7 +241,11 @@ def _scan_root(root: Path, platform: str):
         # Sin permiso para listar la carpeta: no hay nada que sacar de aquí.
         return results
     for entry in entries:
-        if not _is_dir(entry):
+        # Las carpetas ocultas nunca son una instalación: ahí van los
+        # temporales de la propia aplicación (``.blender-5.2.1.moving``, ver
+        # ``organizer.temporary_path``), que a media copia casarían con
+        # ``VERSION_RE`` y saldrían como una versión más.
+        if entry.name.startswith(".") or not _is_dir(entry):
             continue
         marker = read_marker(entry)
         fork, version = _fork_and_match(entry.name, marker)

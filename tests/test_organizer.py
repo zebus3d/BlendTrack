@@ -217,6 +217,28 @@ class MoveEntreDiscosTest(unittest.TestCase):
         self.assertEqual(list(self.destino.glob("*" + organizer.MOVING_SUFFIX)),
                          [])
 
+    def test_el_temporal_no_sale_como_instalacion_a_media_copia(self):
+        """Un escaneo mientras se copia no puede ver el temporal.
+
+        Si la pestaña de instaladas se refresca a mitad de una copia entre
+        discos, el temporal no puede aparecer como una versión más (con su
+        botón de lanzar, y a medio copiar).
+        """
+        from services import installed
+
+        entrada = _instalar(self.origen, "blender-5.2.1")
+        vistas = []
+        real = organizer._copy_tree
+
+        def copiar_y_escanear(*args, **kwargs):
+            real(*args, **kwargs)
+            vistas.extend(installed.scan_folders([self.destino], "linux"))
+
+        with mock.patch.object(organizer, "_copy_tree",
+                               side_effect=copiar_y_escanear):
+            organizer.move_build(self._move(entrada))
+        self.assertEqual(vistas, [])
+
     def test_un_fallo_a_media_copia_no_toca_el_origen(self):
         """La invariante del módulo, y el único test que la demuestra."""
         entrada = _instalar(self.origen, "blender-5.2.1")

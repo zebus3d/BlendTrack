@@ -23,9 +23,17 @@ from pathlib import Path
 from services import blender_runner, channels
 
 # Sufijo de la carpeta temporal donde se copia antes de dejarla en su sitio.
-# Empieza por punto para que un escaneo a medio camino no la confunda con una
-# instalación (``_scan_root`` mira el nombre, y este no casa con ``VERSION_RE``).
+# El temporal se llama ``.<nombre>.moving``: lo que lo esconde de un escaneo a
+# medio camino es el **punto delante**, porque ``installed._scan_root`` se salta
+# las carpetas ocultas. El sufijo solo no bastaba: ``blender-5.2.1.moving``
+# sigue casando con ``VERSION_RE`` y salía en Instaladas como una versión más,
+# a medio copiar.
 MOVING_SUFFIX = ".moving"
+
+
+def temporary_path(target_root: Path, name: str) -> Path:
+    """Carpeta temporal donde se copia ``name`` antes de dejarla en su sitio."""
+    return Path(target_root) / f".{name}{MOVING_SUFFIX}"
 
 # Margen sobre el tamaño de la build al comprobar el espacio libre. Copiar deja
 # picos (metadatos, bloques a medias) y quedarse sin sitio a mitad es el peor
@@ -214,7 +222,7 @@ def move_build(move: Move, on_progress=None, should_cancel=None) -> Path:
             on_progress(size, size)
         return target
 
-    temporary = target_root / (source.name + MOVING_SUFFIX)
+    temporary = temporary_path(target_root, source.name)
     shutil.rmtree(temporary, ignore_errors=True)
     try:
         _copy_tree(source, temporary, size, on_progress, should_cancel)
