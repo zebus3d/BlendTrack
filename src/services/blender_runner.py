@@ -107,8 +107,14 @@ def _run(executable, args, extra_env=None, timeout=DEFAULT_TIMEOUT):
     _ensure_config_dir(environment)
     command = [str(executable)] + list(args)
     try:
+        # ``stdin=DEVNULL``: sin él, Blender hereda la entrada de la app y un
+        # addon que llame a ``input()`` al registrarse se queda esperando una
+        # tecla que nadie va a pulsar, hasta agotar el tiempo. Con la entrada
+        # cerrada, ``input()`` falla al momento con ``EOFError`` y ese addon
+        # se anota como error, como cualquier otro fallo al registrarse.
         completed = subprocess.run(
             command,
+            stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
             env=environment,
@@ -256,6 +262,13 @@ def enabled_addons(executable, timeout=DEFAULT_TIMEOUT) -> list:
     return [str(name) for name in (payload.get("enabled") or [])]
 
 
+# Nombres del ejecutable de cualquier Blender que gestionamos. UPBGE se llama
+# igual que Blender; Bforartists tiene el suyo. En macOS el binario del bundle
+# va con mayúscula (``Blender.app/Contents/MacOS/Blender``), por eso se compara
+# en minúsculas.
+EXECUTABLE_NAMES = ("blender", "blender.exe", "bforartists", "bforartists.exe")
+
+
 def _looks_like_blender(executable: Path, target: Path | None) -> bool:
     """True si esa ruta es ese Blender (o cualquiera, si ``target`` es None)."""
     if target is not None:
@@ -263,7 +276,58 @@ def _looks_like_blender(executable: Path, target: Path | None) -> bool:
             return executable.resolve() == target
         except OSError:
             return False
-    return executable.name.lower() in ("blender", "blender.exe")
+    return executable.name.lower() in EXECUTABLE_NAMES
+
+
+def _matching_pids(processes, target: Path | None) -> list:
+    """PIDs de ``processes`` (pares ``(pid, ruta del ejecutable)``) que encajan.
+
+    Es la parte pura de ``running_blenders``: cada sistema saca la lista de
+    procesos a su manera y aquí se decide cuáles son el Blender buscado.
+    """
+    return [pid for pid, path in processes
+            if _looks_like_blender(Path(path), target)]
+
+
+def _linux_processes():
+    """``(pid, ejecutable)`` de cada proceso, leyendo ``/proc/<pid>/exe``.
+
+    El enlace apunta al binario de verdad, así que acierta aunque el proceso
+    se haya lanzado con otro nombre o a través de un enlace.
+    """
+    proc = Path("/proc")
+    if not proc.is_dir():
+        return
+    for entry in proc.iterdir():
+        if not entry.name.isdigit():
+            continue
+        try:
+            yield int(entry.name), os.readlink(entry / "exe")
+        except OSError:
+            continue
+
+
+def _macos_processes():
+    """``(pid, ejecutable)`` de cada proceso, con ``ps``.
+
+    En macOS, la columna ``comm`` de ``ps`` trae la **ruta completa** del
+    binario (``/Applications/Blender.app/Contents/MacOS/Blender``). Antes se
+    usaba ``pgrep -x Blender``, que solo veía el nombre: no reconocía
+    Bforartists y, si se preguntaba por una versión concreta, contestaba por
+    cualquier Blender abierto.
+    """
+    try:
+        completed = subprocess.run(["ps", "-axo", "pid=,comm="],
+                                   capture_output=True, text=True, timeout=5,
+                                   stdin=subprocess.DEVNULL, env=clean_env())
+    except (OSError, subprocess.SubprocessError):
+        return []
+    processes = []
+    for line in completed.stdout.splitlines():
+        pid, _, path = line.strip().partition(" ")
+        if pid.isdigit() and path.strip():
+            processes.append((int(pid), path.strip()))
+    return processes
 
 
 def running_blenders(executable=None) -> list:
@@ -271,9 +335,12 @@ def running_blenders(executable=None) -> list:
 
     * **Linux**: se mira a qué apunta ``/proc/<pid>/exe`` (robusto aunque el
       binario se llame distinto).
-    * **macOS**: ``pgrep -x Blender``.
+    * **macOS**: la ruta del binario que da ``ps``.
     * **Windows**: no se intenta (``tasklist`` no da la ruta con fiabilidad);
       se devuelve ``[]`` y quien escribe preferencias avisa igual.
+
+    Sin ``executable`` vale cualquier Blender, Bforartists o UPBGE (ver
+    ``EXECUTABLE_NAMES``); con él, solo ese binario.
 
     Escribir ``userpref.blend`` con Blender abierto es perder el cambio al
     cerrarlo, así que conviene comprobarlo antes de tocar nada.
@@ -285,27 +352,9 @@ def running_blenders(executable=None) -> list:
         except OSError:
             target = None
     if sys.platform.startswith("linux"):
-        pids = []
-        proc = Path("/proc")
-        if proc.is_dir():
-            for entry in proc.iterdir():
-                if not entry.name.isdigit():
-                    continue
-                try:
-                    link = Path(os.readlink(entry / "exe"))
-                except OSError:
-                    continue
-                if _looks_like_blender(link, target):
-                    pids.append(int(entry.name))
-        return pids
+        return _matching_pids(_linux_processes(), target)
     if sys.platform == "darwin":
-        try:
-            completed = subprocess.run(["pgrep", "-x", "Blender"],
-                                       capture_output=True, text=True, timeout=5,
-                                       env=clean_env())
-        except (OSError, subprocess.SubprocessError):
-            return []
-        return [int(value) for value in completed.stdout.split() if value.isdigit()]
+        return _matching_pids(_macos_processes(), target)
     return []
 
 
