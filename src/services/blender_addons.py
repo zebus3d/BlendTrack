@@ -46,7 +46,6 @@ _ARCH_TOKENS = {
 _OS_TOKENS = {"linux": "linux", "windows": "windows", "darwin": "macos"}
 
 
-
 # -------------------------------------------------------------------- addons
 
 # Los dos tipos de addon (``Addon.kind``). La interfaz los usa para agrupar la
@@ -75,7 +74,7 @@ class Addon:
     repo: str = ""
     platforms: tuple = ()
     wheels: tuple = ()
-    has_meta: bool = True   # False si no se pudo leer ni versión ni nombre
+
 
 def read_manifest(folder: Path) -> dict:
     """Lee ``blender_manifest.toml``; si falta o está roto, ``{}``."""
@@ -87,6 +86,7 @@ def read_manifest(folder: Path) -> dict:
             return tomllib.load(handle)
     except (OSError, tomllib.TOMLDecodeError):
         return {}
+
 
 def read_bl_info(init_py: Path) -> dict:
     """Extrae el ``bl_info`` de un addon legacy sin ejecutarlo.
@@ -124,6 +124,7 @@ def read_bl_info(init_py: Path) -> dict:
             return {"blender": [int(n) for n in numbers]}
     return {}
 
+
 def _tuple_text(value) -> str:
     """Convierte ``(4, 5, 0)`` o ``"4.5.0"`` en el texto ``"4.5.0"``."""
     if value in (None, ""):
@@ -134,6 +135,7 @@ def _tuple_text(value) -> str:
         return ".".join(str(part) for part in value)
     return str(value)
 
+
 def addons_in(config: BlenderConfig) -> list[Addon]:
     """Todos los addons y extensiones instalados en una versión.
 
@@ -142,6 +144,7 @@ def addons_in(config: BlenderConfig) -> list[Addon]:
     addons = _legacy_addons(config) + _extensions(config)
     addons.sort(key=lambda item: (item.kind, item.name.lower(), item.module))
     return addons
+
 
 def _legacy_addons(config: BlenderConfig) -> list[Addon]:
     """Addons legacy: ``scripts/addons/<mod>/__init__.py`` (o ``<mod>.py``)."""
@@ -171,9 +174,9 @@ def _legacy_addons(config: BlenderConfig) -> list[Addon]:
             min_version=_tuple_text(info.get("blender")),
             max_version="",
             path=entry,
-            has_meta=bool(info),
         ))
     return result
+
 
 def _extension_repos(config: BlenderConfig) -> dict:
     """Repositorios de extensiones: ``extensions/<repo>/`` -> carpeta.
@@ -190,6 +193,7 @@ def _extension_repos(config: BlenderConfig) -> dict:
         if entry.is_dir() and entry.name not in _SKIP_EXTENSION_ENTRIES:
             repos[entry.name] = entry
     return repos
+
 
 def _extensions(config: BlenderConfig) -> list[Addon]:
     """Extensiones con ``blender_manifest.toml`` en cada repositorio."""
@@ -216,6 +220,7 @@ def _extensions(config: BlenderConfig) -> list[Addon]:
             ))
     return result
 
+
 def _wheels_of(folder: Path, manifest: dict) -> list[str]:
     """Nombres de los wheels de una extensión (los declara o están en disco)."""
     names = [str(item) for item in (manifest.get("wheels") or [])]
@@ -226,7 +231,9 @@ def _wheels_of(folder: Path, manifest: dict) -> list[str]:
         names = [item.name for item in sorted(wheels_dir.glob("*.whl"))]
     return names
 
+
 # ----------------------------------------------------------- compatibilidad
+
 
 def _platform_ok(platforms, target_platform: str, target_arch: str) -> bool:
     """True si el addon declara soporte para este sistema.
@@ -249,6 +256,7 @@ def _platform_ok(platforms, target_platform: str, target_arch: str) -> bool:
             return True
     return False
 
+
 def _python_tag(raw: str) -> str:
     """Normaliza ``"3.13"`` o ``"311"`` a ``"313"`` (mayor + menor a 2 dígitos)."""
     digits = re.sub(r"[^\d]", "", raw or "")
@@ -257,6 +265,7 @@ def _python_tag(raw: str) -> str:
     # ``cp311`` -> mayor 3, menor 11; ``cp39`` -> mayor 3, menor 9.
     major, minor = digits[0], digits[1:]
     return f"{major}{int(minor):02d}"
+
 
 def _wheel_python_tag(wheel_name: str) -> str:
     """Etiqueta de Python de un wheel, o "" si es de Python puro.
@@ -279,6 +288,7 @@ def _wheel_python_tag(wheel_name: str) -> str:
             return _python_tag(match.group(1))
     return ""
 
+
 def _wheel_package(wheel_name: str) -> str:
     """Nombre del paquete de un wheel: lo que va antes del primer guion.
 
@@ -288,6 +298,7 @@ def _wheel_package(wheel_name: str) -> str:
     """
     base = str(wheel_name).replace("\\", "/").split("/")[-1]
     return base.split("-")[0].lower()
+
 
 def wheel_problem(wheels, target_python: str) -> str:
     """Paquete cuyas dependencias no sirven para ``target_python``, o "".
@@ -321,6 +332,7 @@ def wheel_problem(wheels, target_python: str) -> str:
             return package
     return ""
 
+
 def compat_report(addon: Addon, target_version: str, target_platform: str = "",
                   target_arch: str = "", target_python: str = "") -> tuple:
     """Estado de un addon frente a la versión destino.
@@ -347,7 +359,9 @@ def compat_report(addon: Addon, target_version: str, target_platform: str = "",
         return WARN, REASON_UNKNOWN_VERSION
     return OK, ""
 
+
 # ------------------------------------------------------------- plan y copia
+
 
 @dataclass
 class AddonPlan:
@@ -388,6 +402,7 @@ class AddonPlan:
             return f"bl_ext.{LOCAL_REPO}.{addon_id_of(self.addon.module)}"
         return self.addon.module
 
+
 def addon_id_of(module: str) -> str:
     """Id de un addon, sin repositorio ni prefijo.
 
@@ -396,6 +411,7 @@ def addon_id_of(module: str) -> str:
     módulo cambia (el repositorio de origen puede no ser el de destino).
     """
     return (module or "").rsplit(".", 1)[-1]
+
 
 def destination_for(addon: Addon, target: BlenderConfig) -> Path:
     """Dónde quedaría el addon copiado en la versión destino.
@@ -407,6 +423,7 @@ def destination_for(addon: Addon, target: BlenderConfig) -> Path:
     if addon.kind == EXTENSION:
         return target.extensions_dir / LOCAL_REPO / addon_id_of(addon.module)
     return target.addons_dir / addon.path.name
+
 
 def plan_migration(source: BlenderConfig, target: BlenderConfig,
                    target_platform: str = "", target_arch: str = "",
@@ -440,6 +457,7 @@ def plan_migration(source: BlenderConfig, target: BlenderConfig,
         ))
     return plans
 
+
 @dataclass
 class MigrationResult:
     """Resumen de una migración aplicada (o simulada)."""
@@ -451,6 +469,7 @@ class MigrationResult:
     dry_run: bool = False
     marker: Path | None = None
     modules: list = field(default_factory=list)
+
 
 def delete_path(path: Path) -> None:
     """Borra un fichero, un enlace o una carpeta entera; si no está, no hace nada.
@@ -480,6 +499,7 @@ def _discard(path: Path) -> None:
         delete_path(path)
     except OSError:
         pass
+
 
 def copy_entry(source: Path, destination: Path) -> None:
     """Copia un addon, sea una carpeta o un addon legacy de un solo ``.py``.
@@ -679,6 +699,7 @@ def _write_marker(target: BlenderConfig, actions: list, key: str = "actions") ->
         pass
     return path
 
+
 def apply_migration(plans, target: BlenderConfig,
                     dry_run: bool = False) -> MigrationResult:
     """Copia los addons marcados y devuelve el resumen.
@@ -710,6 +731,7 @@ def apply_migration(plans, target: BlenderConfig,
         result.marker = _write_marker(target, actions)
     return result
 
+
 @dataclass
 class UndoResult:
     """Resumen de deshacer la última migración sobre un destino."""
@@ -719,6 +741,7 @@ class UndoResult:
     failed: list = field(default_factory=list)     # (ruta, mensaje)
     marker_found: bool = False
     dry_run: bool = False
+
 
 def read_migration_marker(target: BlenderConfig) -> dict:
     """Lee el marcador de la última migración de esa versión, o ``{}``."""
@@ -730,6 +753,7 @@ def read_migration_marker(target: BlenderConfig) -> dict:
     except (OSError, json.JSONDecodeError):
         return {}
     return data if isinstance(data, dict) else {}
+
 
 def _undoable(target: BlenderConfig, raw) -> Path | None:
     """La ruta del marcador si deshacer puede tocarla, o ``None``.
@@ -804,12 +828,14 @@ def undo_migration(target: BlenderConfig, dry_run: bool = False) -> UndoResult:
             pass
     return result
 
+
 def summary_counts(plans) -> dict:
     """Cuenta addons por estado, para el resumen de la interfaz."""
     counts = {OK: 0, WARN: 0, BLOCKED: 0}
     for plan in plans:
         counts[plan.status] = counts.get(plan.status, 0) + 1
     return counts
+
 
 @dataclass
 class PreferenceItem:
@@ -827,6 +853,7 @@ class PreferenceItem:
     def safe(self) -> bool:
         """True si se puede copiar (está en origen)."""
         return self.exists
+
 
 def preference_plan(source: BlenderConfig, target: BlenderConfig) -> list:
     """Qué ficheros de preferencias se podrían copiar y con qué riesgo.
@@ -851,6 +878,7 @@ def preference_plan(source: BlenderConfig, target: BlenderConfig) -> list:
         ))
     return items
 
+
 @dataclass
 class PreferenceResult:
     """Resumen de una migración de preferencias (aplicada o simulada)."""
@@ -861,8 +889,9 @@ class PreferenceResult:
     dry_run: bool = False
     marker: Path | None = None
 
+
 def copy_preference_files(items, target: BlenderConfig,
-                      dry_run: bool = False) -> PreferenceResult:
+                          dry_run: bool = False) -> PreferenceResult:
     """Copia los ficheros de preferencias marcados, con copia de seguridad.
 
     ``shutil.copy2`` (no ``copy``): conserva los tiempos del fichero, que es lo

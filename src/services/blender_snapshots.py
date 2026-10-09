@@ -29,9 +29,13 @@ SNAPSHOT_PREFIX = "config"
 RECENT_FILES = "recent-files.txt"
 BOOKMARKS_FILE = "bookmarks.txt"
 
+# Nombre de cada guardado: ``config-AAAAMMDD-HHMMSS[-etiqueta]``. Los grupos son
+# la fecha, la hora y la etiqueta (que puede faltar).
+_NAME_RE = re.compile(re.escape(SNAPSHOT_PREFIX) + r"-(\d{8})-(\d{6})(?:-(.*))?$")
+
 
 def set_config_aside(target: BlenderConfig, label: str = "",
-                    keep: int = 0) -> Path | None:
+                     keep: int = 0) -> Path | None:
     """Aparta la carpeta ``config`` de una versión y devuelve dónde quedó.
 
     Es lo que hace a mano quien quiere probar una versión "de fábrica": renombrar
@@ -60,6 +64,7 @@ def set_config_aside(target: BlenderConfig, label: str = "",
         prune_snapshots(target, keep)
     return destination
 
+
 def all_snapshots(target: BlenderConfig) -> list:
     """Todas las instantáneas de ``config`` de esa versión, vacías incluidas.
 
@@ -73,6 +78,7 @@ def all_snapshots(target: BlenderConfig) -> list:
                    if item.is_dir() and item.name.startswith(SNAPSHOT_PREFIX)),
                   key=lambda item: item.name, reverse=True)
 
+
 def _has_settings(snapshot: Path) -> bool:
     """True si guarda preferencias de verdad (``userpref`` o ``startup``).
 
@@ -84,6 +90,7 @@ def _has_settings(snapshot: Path) -> bool:
     snapshot = Path(snapshot)
     return any((snapshot / name).is_file()
                for name in (USERPREF_FILE, STARTUP_FILE))
+
 
 def _has_user_data(config_dir: Path) -> bool:
     """True si esa carpeta guarda algo del usuario: ajustes, recientes o marcadores.
@@ -109,6 +116,7 @@ def snapshots_with_settings(target: BlenderConfig) -> list:
     """
     return [item for item in all_snapshots(target) if _has_settings(item)]
 
+
 def snapshot_date(snapshot) -> str:
     """Fecha legible de una instantánea (``2026-09-18 14:21``), o ``""``.
 
@@ -116,7 +124,7 @@ def snapshot_date(snapshot) -> str:
     fecha, no el nombre de la carpeta: «config-20260918-152704-factory» no dice
     nada a quien lo lee.
     """
-    match = re.match(r"config-(\d{8})-(\d{6})", Path(snapshot).name)
+    match = _NAME_RE.match(Path(snapshot).name)
     if not match:
         return ""
     try:
@@ -126,14 +134,16 @@ def snapshot_date(snapshot) -> str:
         return ""
     return moment.strftime("%Y-%m-%d %H:%M")
 
+
 def snapshot_label(snapshot) -> str:
     """Etiqueta con la que se guardó (``v5.2.0``, ``factory`` o ``""``).
 
     Es lo que distingue un guardado del usuario (los ajustes que se apartaron al
     restablecer) de una config limpia que se aparcó al restaurar.
     """
-    match = re.match(r"config-\d{8}-\d{6}(?:-(.*))?$", Path(snapshot).name)
-    return (match.group(1) or "") if match else ""
+    match = _NAME_RE.match(Path(snapshot).name)
+    return (match.group(3) or "") if match else ""
+
 
 def snapshot_details(snapshot) -> dict:
     """Resumen barato de una instantánea (sin arrancar Blender).
@@ -163,11 +173,12 @@ def snapshot_details(snapshot) -> dict:
     return {
         "files": files,
         "total": sum(files.values()),
-        "has_userpref": "userpref.blend" in files,
-        "has_startup": "startup.blend" in files,
-        "bookmarks": lines("bookmarks.txt"),
-        "recent": lines("recent-files.txt"),
+        "has_userpref": USERPREF_FILE in files,
+        "has_startup": STARTUP_FILE in files,
+        "bookmarks": lines(BOOKMARKS_FILE),
+        "recent": lines(RECENT_FILES),
     }
+
 
 def restore_snapshot(target: BlenderConfig, snapshot,
                      keep: int = 0) -> Path | None:
@@ -203,6 +214,7 @@ def restore_snapshot(target: BlenderConfig, snapshot,
         prune_snapshots(target, keep, protect=snapshot)
     return aside
 
+
 def delete_snapshot(snapshot) -> bool:
     """Borra una instantánea (el usuario decidió que no la quiere)."""
     snapshot = Path(snapshot)
@@ -213,6 +225,7 @@ def delete_snapshot(snapshot) -> bool:
     except OSError:
         return False
     return True
+
 
 def prune_snapshots(target: BlenderConfig, keep: int, protect=None) -> list:
     """Deja ``keep`` instantáneas y borra el resto, **las vacías primero**.
