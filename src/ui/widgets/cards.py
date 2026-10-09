@@ -93,7 +93,7 @@ def _launch_icon():
     En Kivy el icono se pintaba dentro del texto del botón (mezclando fuentes en
     el markup); en Qt hay que pasarlo como QIcon.
     """
-    return _action_icon(icons.LAUNCH, "#22C55E")
+    return _action_icon(icons.LAUNCH, t.LAUNCH_ICON)
 
 
 def _download_icon():
@@ -221,6 +221,15 @@ def _with_opacity(pix: QPixmap, opacity: float) -> QPixmap:
     return result
 
 
+def _dim_unless(label, installed: bool) -> None:
+    """Atenúa el texto de una versión que no tienes (regla ``[dim]`` del QSS).
+
+    La propiedad se pone antes de que el widget se pula por primera vez, así
+    que no hace falta repolir.
+    """
+    label.setProperty("dim", "false" if installed else "true")
+
+
 def _logo_label(size: int, dim: bool, fork: str = FORK_BLENDER) -> QLabel:
     label = QLabel()
     pix = _logo_pixmap(size, dim, fork)
@@ -344,8 +353,7 @@ class BuildCard(BaseBuildCard):
         top.setSpacing(10)
         title = ElidedLabel(self.title_text, Qt.ElideMiddle)
         title.setObjectName("Title")
-        if not installed:
-            title.setStyleSheet("color: rgba(230,230,230,0.6);")
+        _dim_unless(title, installed)
         # ``ElidedLabel`` no pide ancho: en esta fila con ``addStretch`` se
         # quedaba a 0 px y en modo lista solo se veía la insignia ("LTS",
         # "Alfa"), sin la versión. Con factor de estirado **y** tope en su
@@ -359,8 +367,7 @@ class BuildCard(BaseBuildCard):
         text_col.addLayout(top)
         meta = ElidedLabel(self.meta_text, Qt.ElideRight)
         meta.setObjectName("Muted")
-        if not installed:
-            meta.setStyleSheet("color: rgba(152,152,152,0.6);")
+        _dim_unless(meta, installed)
         text_col.addWidget(meta)
         lay.addLayout(text_col, 1)
 
@@ -427,8 +434,7 @@ class GridBuildCard(BaseBuildCard):
         title = ElidedLabel(self.title_text, Qt.ElideMiddle)
         title.setObjectName("Title")
         title.setAlignment(Qt.AlignHCenter)
-        if not installed:
-            title.setStyleSheet("color: rgba(230,230,230,0.6);")
+        _dim_unless(title, installed)
         lay.addWidget(title)
 
         sub = ElidedLabel(f"{self.channel_text}  ·  {self.meta_text}",

@@ -9,16 +9,16 @@ profundidad es la de Blender:
 * los **botones** neutros son gris oscuro, como las pestañas de Blender;
 * los **campos de texto** quedan hundidos (más oscuros que su panel).
 
-Los valores van como cadenas ``#RRGGBB`` (para QSS) y se exponen helpers para
-obtener ``QColor`` cuando hace falta pintar a mano.
+Los valores van como cadenas ``#RRGGBB`` (o ``rgba(...)`` los que llevan
+transparencia): así sirven igual en el QSS que para pintar a mano, con
+``QColor(t.ACCENT)``. Este módulo **no importa Qt**: es solo la paleta, y los
+tests de contraste la leen sin montar ninguna ventana.
 
 Cambio respecto a la era Kivy (medido con la fórmula de contraste WCAG):
 las constantes ``ACCENT``/``DANGER`` se usan para **bordes e indicadores**
 (solo necesitan 3:1), y los **rellenos de botón** usan ``ACCENT_BTN`` /
 ``DANGER_BTN``, que dejan el texto claro por encima de 4,5:1 (AA).
 """
-
-from PySide6.QtGui import QColor
 
 # --- Jerarquía de grises (de más profundo a más elevado) ---
 BG = "#1D1D1D"          # fondo de la ventana (el más oscuro)
@@ -68,8 +68,26 @@ SUCCESS_TEXT = "#6FCF7A"    # verde claro para texto
 INFO_TEXT = "#7AA7E0"       # azul claro para texto
 INFO_DISC = "#45729B"       # disco del icono de información
 
+# Texto atenuado de las versiones que **no** tienes (la tienda): el título y la
+# línea de detalles. Que se lea "no instalada" sin dejar de leerse.
+TEXT_DIM = "rgba(230,230,230,0.6)"
+MUTED_DIM = "rgba(152,152,152,0.6)"
+# Texto de un control deshabilitado (WCAG no exige contraste a lo inactivo,
+# pero tiene que seguir viéndose que está ahí).
+TEXT_DISABLED = "rgba(230,230,230,0.35)"
+
+# Botón "Lanzar": el glifo de "play" en verde y el tinte al pasar el ratón, un
+# azul pizarra lo bastante claro para que se note que es pulsable, sin el salto
+# del ACCENT a plena saturación.
+LAUNCH_ICON = "#22C55E"
+LAUNCH_HOVER = "#2B4A66"
+
 # Colores con alfa (para QSS: rgba)
-OVERLAY = "rgba(0,0,0,0.6)"
+# Borde oscuro y fino de botones, pastillas, tarjetas y filas: separa el
+# control de lo que tiene detrás sin dibujar un contorno marcado.
+EDGE = "rgba(0,0,0,0.35)"
+# Línea entre las filas de una tarjeta de Ajustes.
+SEPARATOR = "rgba(0,0,0,0.18)"
 
 # --- Métricas de la interfaz ---
 # Alto de la fila de filtros (la de las pestañas de canal). Migración y Ajustes

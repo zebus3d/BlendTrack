@@ -12,8 +12,9 @@ sin su glifo (la razón por la que los iconos "no salían").
 from PySide6.QtGui import QFont, QFontDatabase
 
 from paths import ASSETS_DIR
+from ui import theme as t
 
-_ICON_TTF = ASSETS_DIR / "fonts" / "fa-solid-900.ttf"
+_ICON_TTF = ASSETS_DIR / "fonts" / t.ICON_FONT_FILE
 _family: str | None = None
 
 
@@ -64,15 +65,13 @@ def apply_ui_font(app) -> None:
     ...``); Qt se queda con la primera familia instalada y resuelve con su
     *fallback* los glifos que le falten (CJK, cirílico).
     """
-    from ui import theme as t
-
     families = [name.strip() for name in t.FONT_FAMILY.split(",") if name.strip()]
     font = app.font()
     font.setFamilies(families)
     app.setFont(font)
 
 
-def glyph_icon(glyph: str, size: int = 16, color: str = "#989898"):
+def glyph_icon(glyph: str, size: int = 16, color: str = t.MUTED):
     """Renderiza un glifo de la fuente de iconos como ``QIcon``.
 
     Útil para meter iconos dentro de un ``QLineEdit`` (``addAction``), donde no

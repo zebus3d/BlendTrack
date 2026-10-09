@@ -17,6 +17,7 @@ from services import blender_prefs as bprefs
 from services import blender_runner
 from services.downloader import log as download_log
 from ui import icons
+from ui import theme as t
 from ui.fonts import glyph_icon
 from ui.widgets import dialogs
 from ui.widgets.buttons import CardButton
@@ -54,9 +55,6 @@ DETAIL_MIN_ROWS = 2
 # su fecha, su resumen y sus botones), así que con una basta: media tarjeta
 # cortada contra el borde del área se lee como un fallo de pintado.
 SNAPSHOT_MIN_ROWS = 1
-
-# Color del glifo dentro de un botón (sobre el relleno de acento).
-_ICON_ON_ACCENT = "#FFFFFF"
 
 # objectName del QSS y texto del estado de compatibilidad.
 _STATUS = {
@@ -303,7 +301,8 @@ def _accent_button(text: str, tooltip: str, on_click) -> CardButton:
     que pegar el carácter de la flecha ahí salía como un recuadro.
     """
     button = CardButton(text, variant="accent", tooltip=tooltip)
-    button.setIcon(glyph_icon(icons.ARROW_RIGHT, 13, _ICON_ON_ACCENT))
+    # El glifo, en el blanco del texto sobre acento.
+    button.setIcon(glyph_icon(icons.ARROW_RIGHT, 13, t.TEXT_SEL))
     button.clicked.connect(on_click)
     return button
 

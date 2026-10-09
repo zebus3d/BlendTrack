@@ -70,9 +70,9 @@ class ElidedLabel(QLabel):
     def paintEvent(self, event):
         """Se pinta con el estilo, no con un ``QPainter`` a mano.
 
-        Así siguen mandando el color del QSS (``Title``, ``Muted``, ``Info``...) y
-        hasta el ``setStyleSheet`` puntual que llevan algunas tarjetas, que es
-        exactamente lo que hace un ``QLabel`` normal.
+        Así siguen mandando el color del QSS (``Title``, ``Muted``, ``Info``...),
+        también el de sus propiedades dinámicas (el ``[dim]`` de las versiones
+        que no tienes), que es exactamente lo que hace un ``QLabel`` normal.
         """
         painter = QPainter(self)
         self.style().drawItemText(

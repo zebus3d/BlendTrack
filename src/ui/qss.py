@@ -31,10 +31,6 @@ def _volume(color: str, amount: float = 0.09) -> str:
             f"stop:0 {_lighten(color, amount)}, stop:1 {color})")
 
 
-# Tinte del botón "Lanzar" al pasar el ratón: un azul pizarra lo bastante claro
-# para que se note que es pulsable, sin el salto del ACCENT a plena saturación.
-LAUNCH_HOVER = "#2B4A66"
-
 # Alto de la caja de contenido de una pestaña para que el total sea
 # ``CONTROL_HEIGHT`` (el de las pastillas): padding vertical 4+4 y el borde,
 # que en las pestañas "abiertas" (Migración/Ajustes, sin borde inferior) es de
@@ -68,7 +64,7 @@ def build_qss() -> str:
     /* --- Pastillas (filtros de canal, selector de vista) --- */
     QPushButton#Pill {{
         background-color: {t.FILTER};
-        border: 1px solid rgba(0,0,0,0.35);
+        border: 1px solid {t.EDGE};
         border-radius: 6px;
         padding: 4px 9px;
         color: {t.TEXT};
@@ -76,7 +72,7 @@ def build_qss() -> str:
     }}
     QPushButton#Pill:hover {{ background-color: {t.ACCENT_DARK}; color: {t.TEXT_SEL}; }}
     QPushButton#Pill:checked {{ background-color: {t.ACCENT}; color: {t.TEXT_SEL}; }}
-    QPushButton#Pill:disabled {{ color: rgba(230,230,230,0.35); }}
+    QPushButton#Pill:disabled {{ color: {t.TEXT_DISABLED}; }}
 
     /* --- Pestañas (canal, migración y ajustes) ---
        Mismo aspecto en las tres: oscuras, compactas y con el mismo color de
@@ -90,7 +86,7 @@ def build_qss() -> str:
     QTabWidget#MigrateTabs QTabBar::tab,
     QTabWidget#SettingsTabs QTabBar::tab {{
         background-color: {t.FILTER};
-        border: 1px solid rgba(0,0,0,0.35);
+        border: 1px solid {t.EDGE};
         /* Redondeadas arriba y rectas abajo: se leen como pestañas y no como
            botones. */
         border-bottom: none;
@@ -110,7 +106,7 @@ def build_qss() -> str:
        contenido. */
     QTabBar#ChannelTabs::tab {{
         background-color: {t.FILTER};
-        border: 1px solid rgba(0,0,0,0.35);
+        border: 1px solid {t.EDGE};
         /* Un poco cuadradas (no píldoras perfectas) y algo más arriba, para
            que no queden a ras del contenido de debajo. */
         border-radius: 6px;
@@ -133,7 +129,7 @@ def build_qss() -> str:
     /* --- Barra lateral --- */
     QPushButton#SideButton {{
         background-color: {t.BUTTON};
-        border: 1px solid rgba(0,0,0,0.35);
+        border: 1px solid {t.EDGE};
         border-radius: 8px;
         min-width: 50px; max-width: 50px;
         min-height: 50px; max-height: 50px;
@@ -152,7 +148,7 @@ def build_qss() -> str:
        pestañas de Blender, que es el que usa Lanzar. */
     QPushButton#CardButton {{
         background-color: {t.BUTTON};
-        border: 1px solid rgba(0,0,0,0.35);
+        border: 1px solid {t.EDGE};
         border-radius: 5px;
         padding: 6px 14px;
         color: {t.TEXT};
@@ -160,7 +156,7 @@ def build_qss() -> str:
     }}
     QPushButton#CardButton:hover {{ background-color: {t.BUTTON_HOVER}; }}
     QPushButton#CardButton:pressed {{ background-color: {t.ACCENT_DARK}; }}
-    QPushButton#CardButton:disabled {{ color: rgba(230,230,230,0.35); }}
+    QPushButton#CardButton:disabled {{ color: {t.TEXT_DISABLED}; }}
     QPushButton#CardButton[variant="accent"] {{
         background: {_volume(t.ACCENT_BTN)};
     }}
@@ -174,7 +170,7 @@ def build_qss() -> str:
         background: {_volume(t.FILTER)};
     }}
     QPushButton#CardButton[variant="dark"]:hover {{
-        background: {_volume(LAUNCH_HOVER)};
+        background: {_volume(t.LAUNCH_HOVER)};
         border: 1px solid {t.ACCENT};
         color: {t.TEXT_SEL};
     }}
@@ -294,15 +290,17 @@ def build_qss() -> str:
     QFrame#SettingsCard {{
         background-color: {t.SURFACE};
         border-radius: 10px;
-        border: 1px solid rgba(0,0,0,0.35);
+        border: 1px solid {t.EDGE};
     }}
-    /* Filas de addons de la vista de migración. */
+    /* Filas de addons (el tablero de Migración y el gestor de Add-ons). Van
+       DENTRO de una tarjeta SURFACE, así que bajan un escalón (CARD_DIM): con
+       el mismo gris se perderían. El cebreado solo lo usa el tablero. */
     QFrame#AddonRow {{
-        background-color: {t.SURFACE};
+        background-color: {t.CARD_DIM};
         border-radius: 8px;
-        border: 1px solid rgba(0,0,0,0.35);
+        border: 1px solid {t.EDGE};
     }}
-    QFrame#AddonRow[zebra="true"] {{ background-color: {t.ROW_ALT}; }}
+    QFrame#AddonRow[zebra="true"] {{ background-color: {t.CARD_DIM_ALT}; }}
 
     /* --- Biblioteca de carpetas (Ajustes > Carpetas) ---
        Las filas viven DENTRO de una tarjeta SURFACE, así que bajan un escalón
@@ -312,7 +310,7 @@ def build_qss() -> str:
     QFrame#FolderRow {{
         background-color: {t.CARD_DIM};
         border-radius: 8px;
-        border: 1px solid rgba(0,0,0,0.35);
+        border: 1px solid {t.EDGE};
     }}
     QFrame#FolderRow[zebra="true"] {{ background-color: {t.CARD_DIM_ALT}; }}
     QFrame#FolderRow[missing="true"] {{ border: 1px solid {t.WARNING}; }}
@@ -338,7 +336,7 @@ def build_qss() -> str:
     QFrame#SnapshotRow {{
         background-color: {t.CARD_DIM};
         border-radius: 8px;
-        border: 1px solid rgba(0,0,0,0.35);
+        border: 1px solid {t.EDGE};
     }}
     QScrollArea#SnapshotList {{ background: transparent; border: none; }}
     QScrollArea#SnapshotList > QWidget > QWidget {{ background: transparent; }}
@@ -353,7 +351,7 @@ def build_qss() -> str:
     QFrame#RecentRow {{
         background-color: {t.SURFACE};
         border-radius: 8px;
-        border: 1px solid rgba(0,0,0,0.35);
+        border: 1px solid {t.EDGE};
     }}
     QFrame#RecentRow:hover {{ background-color: {t.SURFACE_ALT}; }}
     /* Fichero que ya no está en su ruta: apagado y sin realce (no se puede
@@ -369,11 +367,6 @@ def build_qss() -> str:
 
     /* --- Add-ons: tarjetas con filas dentro (fondo BG, filas CARD_DIM) --- */
     QWidget#AddonsView {{ background-color: {t.BG}; }}
-    QFrame#AddonRow {{
-        background-color: {t.CARD_DIM};
-        border-radius: 8px;
-        border: 1px solid rgba(0,0,0,0.35);
-    }}
     QScrollArea#AddonsScroll {{ background: transparent; border: none; }}
     QScrollArea#AddonsScroll > QWidget > QWidget {{ background: transparent; }}
     QWidget#AddonsBody {{ background: transparent; }}
@@ -421,10 +414,7 @@ def build_qss() -> str:
     QScrollArea#MigrateScroll {{ background: transparent; border: none; }}
     /* Las tarjetas se quedan con el SURFACE de `QFrame#SettingsCard` (el mismo
        gris que las tarjetas de las listas): ahora que la página va oscura, no
-       hace falta subirlas un escalón más. Las filas de addons sí bajan, porque
-       van DENTRO de una tarjeta y con el mismo gris se perderían. */
-    QWidget#MigrateView QFrame#AddonRow {{ background-color: {t.CARD_DIM}; }}
-    QWidget#MigrateView QFrame#AddonRow[zebra="true"] {{ background-color: {t.CARD_DIM_ALT}; }}
+       hace falta subirlas un escalón más. */
 
     /* --- Ajustes: igual que Migración ---
        La página exterior y la tira de pestañas van en SURFACE; el panel de cada
@@ -469,7 +459,7 @@ def build_qss() -> str:
     /* --- Desplegables --- */
     QComboBox {{
         background-color: {t.FILTER};
-        border: 1px solid rgba(0,0,0,0.35);
+        border: 1px solid {t.EDGE};
         border-radius: 5px;
         padding: 4px 8px;
         color: {t.TEXT};
@@ -538,6 +528,11 @@ def build_qss() -> str:
     QLabel#Success {{ color: {t.SUCCESS_TEXT}; font-weight: bold; }}
     QLabel#Danger {{ color: {t.DANGER_EDGE}; font-weight: bold; }}
     QLabel#Title {{ font-size: 16px; font-weight: bold; }}
+    /* Versión que no tienes (tienda): título y detalles atenuados. Va por
+       propiedad dinámica y no con ``setStyleSheet`` en la tarjeta: así el
+       color sale de un token y se ve aquí junto al resto. */
+    QLabel#Title[dim="true"] {{ color: {t.TEXT_DIM}; }}
+    QLabel#Muted[dim="true"] {{ color: {t.MUTED_DIM}; }}
     QLabel#HeaderTitle {{ font-size: 19px; font-weight: bold; }}
     /* La sección actual: un poco más pequeña que la marca, en negrita y azul
        claro (``INFO_TEXT``, 5,4:1 sobre el gris de la cabecera). */
@@ -553,7 +548,7 @@ def build_qss() -> str:
     QLabel#BoardArrow {{ font-size: 28px; }}
 
     /* --- Separadores (filas de ajustes) --- */
-    QFrame#RowSeparator {{ background-color: rgba(0,0,0,0.18); max-height: 1px; }}
+    QFrame#RowSeparator {{ background-color: {t.SEPARATOR}; max-height: 1px; }}
 
     /* --- Scroll --- */
     QScrollArea {{ border: none; }}
