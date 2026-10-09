@@ -5234,5 +5234,34 @@ class FactorySafetyTests(SettingsIsolated, unittest.TestCase):
             self.assertIn("disk full", error.call_args[0][2])
 
 
+
+@unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
+class ProgressDialogTextTests(unittest.TestCase):
+    """El diálogo de progreso cuenta lo que pasa aunque nazca sin mensaje."""
+
+    app = None
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def test_set_text_funciona_sin_mensaje_inicial(self):
+        """Mover carpetas crea el diálogo con ``message=""`` y luego escribe.
+
+        El cuerpo solo existía si había mensaje inicial, así que "Moviendo
+        X..." no se veía nunca.
+        """
+        from ui.widgets.dialogs import ProgressDialog
+
+        dialog = ProgressDialog(None, "Moving versions", "", primary_text="",
+                                secondary_text="Cancel")
+        self.assertTrue(dialog.body_label.isHidden())
+        dialog.set_text("Moving blender-5.2 (1 of 2)")
+        self.assertEqual(dialog.body_label.text(),
+                         "Moving blender-5.2 (1 of 2)")
+        self.assertFalse(dialog.body_label.isHidden())
+        dialog.deleteLater()
+
+
 if __name__ == "__main__":
     unittest.main()

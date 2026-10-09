@@ -55,12 +55,15 @@ class AppDialog(QDialog):
             lay.addWidget(heading)
             self._wrapped.append(heading)
 
-        if message:
-            body = QLabel(message)
-            body.setWordWrap(True)
-            self.body_label = body
-            lay.addWidget(body)
-            self._wrapped.append(body)
+        # El cuerpo existe **siempre**, aunque nazca vacío (y entonces oculto):
+        # hay diálogos que se crean sin mensaje y lo van contando después
+        # (``ProgressDialog.set_text``, "Moviendo X..."). Si solo se creaba con
+        # texto, ese ``set_text`` no tenía dónde escribir y no se veía nada.
+        self.body_label = QLabel(message)
+        self.body_label.setWordWrap(True)
+        self.body_label.setVisible(bool(message))
+        lay.addWidget(self.body_label)
+        self._wrapped.append(self.body_label)
 
         self._buttons = QHBoxLayout()
         self._buttons.setSpacing(8)
@@ -190,8 +193,8 @@ class ProgressDialog(AppDialog):
 
     def set_text(self, text: str) -> None:
         """Cambia el mensaje del diálogo, para ir contando qué pasa."""
-        if hasattr(self, "body_label"):
-            self.body_label.setText(text)
+        self.body_label.setText(text)
+        self.body_label.setVisible(bool(text))
 
 
 def update_available(parent, tag: str, on_update, on_skip=None) -> bool:
