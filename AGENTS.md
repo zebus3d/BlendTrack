@@ -9,16 +9,18 @@ los textos viven en `src/locale/<idioma>.json`.
 
 ```
 src/
-  main.py            # entrada, QApplication, --smoke / --screenshot / --apply-update
+  main.py            # entrada, QApplication, --smoke / --debug / --screenshot
+                     # (y los internos --apply-update / --grant-access)
   version.py         # __version__ (el CI la reescribe desde el tag)
   paths.py           # APP_DIR / RESOURCE_DIR
   i18n.py            # el mecanismo (detectar idioma, cargar, tr())
-  locale/es.json     # los textos en español (la clave es el inglés)
+  locale/*.json      # los textos de cada idioma (la clave es el inglés)
   model/build.py     # modelo de compilación
   services/          # api, channels, downloader, extractor, installed,
                      # organizer, launcher, recent, addons, detector,
                      # settings, autostart, elevate, opener, sources, tls,
-                     # macos_dmg, updater y la familia blender_*:
+                     # net (el User-Agent único), forks (Bforartists y
+                     # UPBGE), macos_dmg, updater y la familia blender_*:
                      #   blender_config    dónde vive la config de cada versión
                      #   blender_addons    migrar addons y ficheros de prefs
                      #   blender_snapshots guardados de "valores de fábrica"
@@ -30,6 +32,7 @@ src/
     qss.py           # stylesheet global (el "look" de toda la app)
     icons.py         # glifos de Font Awesome
     fonts.py         # carga de la fuente de iconos / glyph_icon()
+    single_instance.py # una sola instancia (QLocalServer)
     widgets/
       main_window.py   # la cáscara: cabecera, lateral, pie, navegación, bandeja
       build_lists.py   # Nube y Local: filtros, rejilla, zoom y refiltrado
@@ -48,6 +51,7 @@ src/
       layouts.py       # clear_layout, list_scroll, muted_note, FittedList
       menus.py         # card_menu (menús con el aspecto de la app)
       folders.py       # la fila de una carpeta de la biblioteca
+      busy.py          # barra indeterminada (cargando el listado)
       tray.py          # el icono de la bandeja
 doc/                 # guía de arquitectura en español (para principiantes)
 packaging/           # spec de PyInstaller, scripts de build, inject_version.py
@@ -72,9 +76,9 @@ llevan un `objectName` (o una propiedad dinámica) que el QSS usa como selector.
 `ui/widgets/__init__.py` reexporta todo, así que `from ui.widgets import X`
 sigue funcionando.
 
-`services/`, `model/`, `i18n.py`, `paths.py` y `updater.py` son **independientes
-de la UI** (no importan Qt): es lo que permitió portar la interfaz sin tocarlos
-y lo que hay que preservar al refactorizar.
+`services/` (el updater incluido), `model/`, `i18n.py` y `paths.py` son
+**independientes de la UI** (no importan Qt): es lo que permitió portar la
+interfaz sin tocarlos y lo que hay que preservar al refactorizar.
 
 ## Canales de compilaciones
 
@@ -167,15 +171,18 @@ Lo que **no hay que romper**:
   mezclan entre sí. Si esto se cambia, que sea en los dos lados a la vez
   (`api.filter_builds` y `installed.filter_installed`), o tienda e instaladas
   dirán cosas distintas del mismo canal.
-- **La barra de pestañas lleva botones de scroll y el ancho por defecto está
-  medido para las ocho pestañas.** Con los dos forks activos son ocho canales
-  (Todas, LTS, Estable, Diarias, Experimentales, Bforartists, UPBGE, Favoritos;
-  ~718 px solo las pestañas). Si el ancho no basta, Qt **recorta** la última
-  contra el botón de refrescar ("Bforartists" salía como "Bfor...") y parece que
-  el fork no existe: fue el fallo que hizo pensar que las builds no aparecían.
-  Por eso `DEFAULT_WINDOW_WIDTH` es 1160 y la barra usa
-  `setUsesScrollButtons(True)` como red de seguridad. Lo vigila
-  `test_todas_las_pestanas_de_canal_son_alcanzables`.
+- **La barra de pestañas lleva botones de scroll.** Con los dos forks activos
+  son ocho canales (Todas, LTS, Estable, Diarias, Experimentales, Bforartists,
+  UPBGE, Favoritos; ~718 px solo las pestañas). Sin scroll, si el ancho no
+  basta, Qt **recorta** la última contra el botón de refrescar ("Bforartists"
+  salía como "Bfor...") y parece que el fork no existe: fue el fallo que hizo
+  pensar que las builds no aparecían. Por eso la barra usa
+  `setUsesScrollButtons(True)` (y `ElideNone`): las que no caben se alcanzan
+  desplazando. Con esa red, el ancho de fábrica ya no tiene que dar cabida a
+  las ocho: `DEFAULT_WINDOW_WIDTH` es 940 y `MIN_WINDOW_WIDTH` 700
+  (`ui/widgets/shell.py`). Lo vigila
+  `test_todas_las_pestanas_de_canal_son_alcanzables`, que no se ata a un ancho
+  concreto sino a que, con las ocho visibles, la barra pueda desplazarse.
 - Los `try` de `api.fetch_builds` van **por separado**: un fork caído no tumba
   el listado de Blender. `forks.fetch` ya cae a su caché si falla la red.
 
@@ -248,7 +255,7 @@ Reglas que no hay que romper:
 
 ## Idiomas
 
-Hoy hay **en/es/zh/ru/ja/pt_BR** (545 claves en `src/locale/es.json`). El inglés
+Hoy hay **en/es/zh/ru/ja/pt_BR** (unas 550 claves en `src/locale/es.json`). El inglés
 no tiene fichero: **es la clave**. El español es la referencia de la que se
 extraen las cadenas usadas por `src/`, y los demás idiomas tienen que traer
 **exactamente las mismas claves y los mismos `{placeholders}`** (lo vigilan
@@ -271,6 +278,12 @@ Para **añadir o actualizar un idioma**:
 
 El `.spec` copia `src/locale` entera al binario, así que no hay que tocar nada
 más para el empaquetado.
+
+**Toda clave de i18n tiene que usarse.** Lo comprueba
+`tests/test_i18n.py::test_no_quedan_claves_sin_usar`, que recoge con `ast`
+todas las cadenas literales de `src/` (así valen las de `tr("...")` y las que
+viven en una tabla y se traducen por variable). Había 74 claves muertas y 5
+repetidas —y una repetida pisa a la anterior en silencio— cuando se añadió.
 
 ### Tipografía y glifos (chino, ruso, japonés)
 
@@ -309,6 +322,130 @@ idiomas activos, y un idioma a medias (frases sueltas en inglés) se ve peor que
 no tenerlo.
 
 
+## Reglas generales del código
+
+- **Nada de importar Qt en `services/`, `model/`, `i18n.py` ni `paths.py`.**
+  Esa capa es independiente de la UI (es lo que permitió el port); si necesita
+  avisar de algo, expone funciones puras o callbacks.
+- **El código se lee como material de aprendizaje.** El README lo vende como un
+  proyecto de fin de curso y hay que sostenerlo: docstrings en lo público (que
+  expliquen el *por qué*, no repetir el nombre de la función), comentarios en
+  español contando la decisión, y nada de trucos sin explicar. Si algo necesita
+  un comentario para entenderse, **se escribe el comentario**; si no, se
+  simplifica el código. Las claves de i18n van en inglés, pero los comentarios y
+  los docstrings van en español, con acentos (el resto del proyecto los lleva).
+- **El Python de local NO es el del CI** (aquí 3.14, el CI 3.12), y eso esconde
+  una clase entera de fallos: desde 3.14 las anotaciones son **diferidas**
+  (PEP 649), así que un `-> QMenu` sin importar no se evalúa nunca en local y
+  en 3.12 revienta el import del módulo al definir la función. Pasó al repartir
+  `main_window.py`: `build_lists.py` se quedó usando `QMenu`, `QApplication` y
+  `opener` sin importarlos, la suite pasaba en verde aquí y el CI se caía
+  entero (test + smoke de Linux + bundle de macOS). Lo vigila ahora
+  `tests/test_layout.py::test_ningun_modulo_usa_un_nombre_que_no_importa`, que
+  usa `symtable` (análisis de ámbitos de verdad) y por eso no depende de qué
+  Python lo ejecute. **Al mover código entre módulos, los imports no se
+  deducen leyendo: se comprueban.**
+
+## Interfaz
+
+- **El alto de una lista con asa va FIJO, no negociado con el layout**
+  (`ui/widgets/layouts.py: FittedList`). Dejándoselo negociar, cuando la
+  ventana se queda corta Qt reparte a la baja y encoge la lista hasta su
+  mínimo, arrastrando a su tarjeta: quedaba media fila cortada justo encima de
+  los botones y parecía que se metían dentro del listado. Con el alto fijo la
+  tarjeta mide lo que tiene que medir y lo que no cabe lo resuelve el scroll de
+  la página (por eso las páginas de Migración van dentro de un `QScrollArea`).
+  El suelo son filas **enteras**, medidas sobre una fila de verdad.
+- **Los textos visibles hablan de "versiones de Blender", no de
+  "compilaciones"**: el código interno sigue con `Build`/`InstalledBuild`, que
+  ahí sí es lo que son. "Compilación" se reserva para lo que de verdad lo es
+  (la build de un wheel para una versión de Python).
+- **Una etiqueta con texto que puede ser largo se hace con `ElidedLabel`**
+  (`ui/widgets/labels.py`), nunca con un `QLabel` pelado. Un `QLabel` pide como
+  ancho mínimo el texto **completo**, así que deforma el layout: el nombre de una
+  carpeta instalada medía 483 px y arrastraba su tarjeta a 507 px en la rejilla
+  mientras las de al lado se quedaban en 249 (columnas desiguales), y en lista el
+  meta con la ruta la llevaba a 974 px en una ventana de 900. `ElidedLabel`
+  recorta con `…` al pintar, deja el texto entero en `text()` y en el tooltip
+  (solo cuando no cabe) y no pide ancho. Para nombres de fichero, `ElideMiddle`.
+  **Cuidado con meterlo en un `QHBoxLayout` con un `addStretch`**: como no pide
+  ancho, se queda a 0 px y el texto no se ve (pasó con el nombre de los addons).
+  Hay que añadirlo con factor de estirado (`addWidget(label, 1)`) o en un
+  `QVBoxLayout`, que sí le da el ancho.
+- **Tienda e instaladas comparten medidas de tarjeta.** `GridBuildCard` y
+  `GridInstalledCard` usan el mismo `_grid_height(zoom)` y el mismo logo
+  (`60·zoom`); `BuildCard` e `InstalledCard`, 68 px de alto y logo de 44. Si una
+  crece y la otra no, al cambiar de pestaña las tarjetas bailan de tamaño y el
+  logo cambia. La fila de la etiqueta (insignia "LTS"/"Instalada" en la tienda,
+  aviso de actualización en instaladas) se reserva siempre, aunque vaya vacía.
+  Lo vigila `test_las_instaladas_miden_como_las_de_la_tienda`. Son deliberadamente
+  **compactas** (unos 6 px de holgura sobre el contenido): para verlas grandes
+  está el zoom, no conviene engordarlas.
+- **El "look" va en `ui/qss.py`, no en el código.** Un widget nuevo se estiliza
+  dándole un `objectName` (o una propiedad dinámica, p. ej. `variant` en
+  `CardButton`) y añadiendo la regla al QSS. Ojo con la especificidad: en QSS
+  `#Card[installed="true"]` y `#Card:hover` empatan, y gana la última; por eso
+  los `:hover` van al final del bloque.
+- **La fila de filtros vive con las listas, no es global.** Tienda (Nube) e
+  Instaladas (Local) comparten un contenedor
+  (`build_lists.py: _build_lists_view`) con la fila de filtros encima
+  (`theme.FILTERS_HEIGHT`, 50 px) y un sub-stack debajo; Migración y Ajustes
+  son páginas del stack principal y no llevan filtros. Antes la fila era global
+  y se reservaba ocultando su contenido para que la interfaz no diera un salto
+  al cambiar de vista; ahora desaparece con las listas. Lo vigila
+  `test_los_filtros_viven_con_las_listas`.
+- **Los canales (Todas, LTS, Estable, Diarias, Experimentales, Bforartists,
+  UPBGE, Favoritos) son pestañas, no pastillas.** Son excluyentes, así que van
+  en un `QTabBar` (`#ChannelTabs`); no tiene páginas: al cambiar de pestaña se
+  refiltra la lista de debajo. La lista de canales está en la constante
+  `CHANNELS` de `ui/widgets/shell.py` (y sus claves, en
+  `services.channels.CHANNELS`).
+- **Con QSS, un fondo en una subclase de `QWidget` no se pinta** salvo
+  `setAttribute(Qt.WA_StyledBackground, True)`. `MigrateView` lo necesita para
+  su fondo; sin ello, los huecos que no pinta nadie (p. ej. la fila de pestañas a
+  la derecha de las solapas) dejaban ver el fondo oscuro de detrás. Un `QWidget`
+  *directo* (no subclase) sí pinta el fondo del QSS sin ese atributo.
+
+### La bandeja del sistema
+
+**El icono de la bandeja está siempre visible mientras la app corre**, con la
+ventana abierta o escondida (lo crea `showEvent` → `_ensure_tray`). Antes solo
+se enseñaba mientras la ventana estaba oculta; se cambió a petición de los
+usuarios. Al restaurar desde la bandeja ya **no** se retira el icono
+(`_restore_from_tray` solo hace `showNormal`); sí se retira al cerrar la app de
+verdad, en `closeEvent`. Sin bandeja (`TrayIcon.available()`) no se crea nada y
+`_hide_to_tray` no hace nada, para no esconder la ventana sin poder volver.
+
+**En Wayland, "Minimizar a la bandeja" está desactivado** (el interruptor sale
+gris con su aviso; lo decide `detector.minimize_to_tray_supported()`, que mira
+`detector.session_is_wayland()`). En Wayland el compositor no le dice a la
+aplicación que su ventana se ha minimizado (no existe ese estado en
+`xdg-shell`), así que no hay evento que interceptar. Antes se arrancaba toda la
+app bajo XWayland (`QT_QPA_PLATFORM=xcb`) cuando la opción estaba activa, y eso
+chocaba con los atajos globales de KWin: mientras un cliente X11 tiene un grab
+de teclado (menús, desplegables, diálogos) el compositor inhibe Alt+Tab y
+compañía. Se quitó (commit `3b6377e`): la app corre siempre nativa. "Cerrar a
+la bandeja" y "arrancar minimizado" no dependen de eso y funcionan igual; en
+X11, Windows y macOS no cambia nada. **No volver a forzar XWayland.**
+
+## Instalar versiones de Blender
+
+- **Marcador de instalación**: al extraer una build se escribe
+  `.blendermanager.json` dentro de su carpeta con el hash de la compilación
+  (`src/services/installed.py`). Sin él no se pueden distinguir dos diarias de
+  la misma versión, porque el nombre de la carpeta extraída no lleva el hash.
+- **macOS: el `.dmg` se monta y se instala** (`src/services/macos_dmg.py`). La
+  API solo publica `.dmg`, que no es un comprimido, así que `hdiutil attach
+  -mountpoint` lo monta, se copian los `.app` a la carpeta destino con `ditto`
+  (preserva firma/metadatos del bundle), se les quita la cuarentena con `xattr`
+  (por si el `.dmg` venía marcado) y se desmonta con `detach -force`. Es el
+  patrón de Homebrew Cask/kitty/Zed y el de Blender Launcher V2
+  (`source/threads/extractor.py`). Así la Mac puede **lanzarse desde la app**
+  como cualquier otra: antes solo se revelaba el fichero y no había forma de
+  abrirla. Es un módulo de `services/` (sin Qt) y usa `clean_env()`; si el
+  montaje falla, se cae al plan B (revelar y avisar). Los tests mockean
+  `hdiutil`/`ditto`/`xattr`, así que **no se prueba en el CI** (Ubuntu).
+
 ## Comandos
 
 ```bash
@@ -326,6 +463,19 @@ python3 packaging/inject_version.py 1.2.3   # opcional: fija la versión local
 packaging/build.sh
 packaging/build.sh --appimage
 ```
+
+Dos cosas de la suite que conviene saber:
+
+- **Los tests no escriben en el log del usuario.** `tests/__init__.py` apunta
+  `downloader.cache_dir` a un temporal (se borra al salir), así que
+  `log()` escribe allí desde cualquier módulo. Antes se sustituía el nombre
+  `log` módulo a módulo y se escapaban algunos (forks, sources, macos_dmg...),
+  y el log real acababa con rutas `/tmp/tmpXXXX` y fallos simulados que
+  confundían al diagnosticar a un usuario.
+- **Un `ImportError` de la propia app ya no salta los tests de UI.** Solo la
+  ausencia de PySide6 los salta (`skipUnless(HAVE_QT, ...)` en
+  `tests/test_ui.py`); un import roto dentro de `ui.widgets` falla en rojo, en
+  vez de dejar fuera en silencio dos centenares de tests.
 
 En modo fuente la app **no** comprueba actualizaciones (solo si `sys.frozen`).
 Para verificar la UI sin pantalla se usa el plugin *offscreen* de Qt (ver más
@@ -421,112 +571,35 @@ minor** (`v1.3.0`).
 
 ### Reglas que no hay que romper
 
-- **El alto de una lista con asa va FIJO, no negociado con el layout**
-  (`ui/widgets/layouts.py: FittedList`). Dejándoselo negociar, cuando la
-  ventana se queda corta Qt reparte a la baja y encoge la lista hasta su
-  mínimo, arrastrando a su tarjeta: quedaba media fila cortada justo encima de
-  los botones y parecía que se metían dentro del listado. Con el alto fijo la
-  tarjeta mide lo que tiene que medir y lo que no cabe lo resuelve el scroll de
-  la página (por eso las páginas de Migración van dentro de un `QScrollArea`).
-  El suelo son filas **enteras**, medidas sobre una fila de verdad.
-- **El Python de local NO es el del CI** (aquí 3.14, el CI 3.12), y eso esconde
-  una clase entera de fallos: desde 3.14 las anotaciones son **diferidas**
-  (PEP 649), así que un `-> QMenu` sin importar no se evalúa nunca en local y
-  en 3.12 revienta el import del módulo al definir la función. Pasó al repartir
-  `main_window.py`: `build_lists.py` se quedó usando `QMenu`, `QApplication` y
-  `opener` sin importarlos, la suite pasaba en verde aquí y el CI se caía
-  entero (test + smoke de Linux + bundle de macOS). Lo vigila ahora
-  `tests/test_layout.py::test_ningun_modulo_usa_un_nombre_que_no_importa`, que
-  usa `symtable` (análisis de ámbitos de verdad) y por eso no depende de qué
-  Python lo ejecute. **Al mover código entre módulos, los imports no se
-  deducen leyendo: se comprueban.**
-- **Toda clave de i18n tiene que usarse.** Lo comprueba
-  `tests/test_i18n.py::test_no_quedan_claves_sin_usar`, que recoge con `ast`
-  todas las cadenas literales de `src/` (así valen las de `tr("...")` y las que
-  viven en una tabla y se traducen por variable). Había 74 claves muertas y 5
-  repetidas —y una repetida pisa a la anterior en silencio— cuando se añadió.
-- **Los textos visibles hablan de "versiones de Blender", no de
-  "compilaciones"**: el código interno sigue con `Build`/`InstalledBuild`, que
-  ahí sí es lo que son. "Compilación" se reserva para lo que de verdad lo es
-  (la build de un wheel para una versión de Python).
-- **Una etiqueta con texto que puede ser largo se hace con `ElidedLabel`**
-  (`ui/widgets/labels.py`), nunca con un `QLabel` pelado. Un `QLabel` pide como
-  ancho mínimo el texto **completo**, así que deforma el layout: el nombre de una
-  carpeta instalada medía 483 px y arrastraba su tarjeta a 507 px en la rejilla
-  mientras las de al lado se quedaban en 249 (columnas desiguales), y en lista el
-  meta con la ruta la llevaba a 974 px en una ventana de 900. `ElidedLabel`
-  recorta con `…` al pintar, deja el texto entero en `text()` y en el tooltip
-  (solo cuando no cabe) y no pide ancho. Para nombres de fichero, `ElideMiddle`.
-  **Cuidado con meterlo en un `QHBoxLayout` con un `addStretch`**: como no pide
-  ancho, se queda a 0 px y el texto no se ve (pasó con el nombre de los addons).
-  Hay que añadirlo con factor de estirado (`addWidget(label, 1)`) o en un
-  `QVBoxLayout`, que sí le da el ancho.
-- **Tienda e instaladas comparten medidas de tarjeta.** `GridBuildCard` y
-  `GridInstalledCard` usan el mismo `_grid_height(zoom)` y el mismo logo
-  (`60·zoom`); `BuildCard` e `InstalledCard`, 68 px de alto y logo de 44. Si una
-  crece y la otra no, al cambiar de pestaña las tarjetas bailan de tamaño y el
-  logo cambia. La fila de la etiqueta (insignia "LTS"/"Instalada" en la tienda,
-  aviso de actualización en instaladas) se reserva siempre, aunque vaya vacía.
-  Lo vigila `test_las_instaladas_miden_como_las_de_la_tienda`. Son deliberadamente
-  **compactas** (unos 6 px de holgura sobre el contenido): para verlas grandes
-  está el zoom, no conviene engordarlas.
-- **El "look" va en `ui/qss.py`, no en el código.** Un widget nuevo se estiliza
-  dándole un `objectName` (o una propiedad dinámica, p. ej. `variant` en
-  `CardButton`) y añadiendo la regla al QSS. Ojo con la especificidad: en QSS
-  `#Card[installed="true"]` y `#Card:hover` empatan, y gana la última; por eso
-  los `:hover` van al final del bloque.
-- **La fila de filtros vive con las listas, no es global.** Tienda (Nube) e
-  Instaladas (Local) comparten un contenedor (`build_lists.py: _build_lists_view`) con la fila de
-  44 px encima y un sub-stack debajo; Migración y Ajustes son páginas del stack
-  principal y no llevan filtros. Antes la fila era global y se reservaba ocultando
-  su contenido para que la interfaz no diera un salto de 44 px al cambiar de
-  vista; ahora desaparece con las listas. Lo vigila
-  `test_los_filtros_viven_con_las_listas`.
-- **Los canales (Todas, LTS, Estable, Diarias, Experimentales, Favoritos) son
-  pestañas, no pastillas.** Son excluyentes, así que van en un `QTabBar`
-  (`#ChannelTabs`); no tiene páginas: al cambiar de pestaña se refiltra la lista
-  de debajo. La lista de canales está en la constante `CHANNELS`.
-- **Con QSS, un fondo en una subclase de `QWidget` no se pinta** salvo
-  `setAttribute(Qt.WA_StyledBackground, True)`. `MigrateView` lo necesita para
-  su gris; sin ello, los huecos que no pinta nadie (p. ej. la fila de pestañas a
-  la derecha de las solapas) dejaban ver el fondo oscuro de detrás. Un `QWidget`
-  *directo* (no subclase) sí pinta el fondo del QSS sin ese atributo.
-- **Nada de importar Qt en `services/`, `model/`, `i18n.py` ni `paths.py`.**
-  Esa capa es independiente de la UI (es lo que permitió el port); si necesita
-  avisar de algo, expone funciones puras o callbacks.
-- **El código se lee como material de aprendizaje.** El README lo vende como un
-  proyecto de fin de curso y hay que sostenerlo: docstrings en lo público (que
-  expliquen el *por qué*, no repetir el nombre de la función), comentarios en
-  español contando la decisión, y nada de trucos sin explicar. Si algo necesita
-  un comentario para entenderse, **se escribe el comentario**; si no, se
-  simplifica el código. Las claves de i18n van en inglés, pero los comentarios y
-  los docstrings van en español, con acentos (el resto del proyecto los lleva).
 - **Nombres de asset**: deben coincidir con `ASSET_NAMES` de
   `src/services/updater.py` (`BlenderManager-x86_64.AppImage`,
   `BlenderManager-windows-x86_64.zip`, `BlenderManager-macos.zip`). Si cambian
   en el CI, actualiza también el updater.
 - **`checksums.txt`**: el job `release` lo genera y el updater lo usa para
-  verificar el SHA-256 antes de instalar. No quitar ese paso.
+  verificar el SHA-256 antes de instalar (ver "Auto-update"). No quitar ese
+  paso: sin él, ninguna app instalada puede actualizarse sola.
 - **`src/version.py`**: no editarlo a mano para los releases; el CI lo
   sobrescribe desde el tag con `packaging/inject_version.py` (que además genera
   el recurso de versión de Windows, `packaging/version_info.txt`, ignorado por
   git).
 - Antes de etiquetar, los tests deben pasar (`release` depende de `test`).
-- **Marcador de instalación**: al extraer una build se escribe
-  `.blendermanager.json` dentro de su carpeta con el hash de la compilación
-  (`src/services/installed.py`). Sin él no se pueden distinguir dos diarias de
-  la misma versión, porque el nombre de la carpeta extraída no lleva el hash.
-- **macOS: el `.dmg` se monta y se instala** (`src/services/macos_dmg.py`). La
-  API solo publica `.dmg`, que no es un comprimido, así que `hdiutil attach
-  -mountpoint` lo monta, se copian los `.app` a la carpeta destino con `ditto`
-  (preserva firma/metadatos del bundle), se les quita la cuarentena con `xattr`
-  (por si el `.dmg` venía marcado) y se desmonta con `detach -force`. Es el
-  patrón de Homebrew Cask/kitty/Zed y el de Blender Launcher V2
-  (`source/threads/extractor.py`). Así la Mac puede **lanzarse desde la app**
-  como cualquier otra: antes solo se revelaba el fichero y no había forma de
-  abrirla. Es un módulo de `services/` (sin Qt) y usa `clean_env()`; si el
-  montaje falla, se cae al plan B (revelar y avisar). Los tests mockean
-  `hdiutil`/`ditto`/`xattr`, así que **no se prueba en el CI** (Ubuntu).
+- **El CI corre con permisos mínimos.** `build.yml` declara
+  `permissions: contents: read` para todo el flujo y solo el job `release` pide
+  `contents: write` en su propio bloque (`promote.yml`, que edita la release,
+  también lo pide en el suyo): los jobs de compilar ejecutan pip y
+  PyInstaller (código de terceros) y no deben heredar un token con escritura.
+  Por lo mismo, el secreto `SIGNPATH_API_TOKEN` se pasa **solo** a los pasos que
+  lo usan (comprobar si existe y firmar), no como `env` de todo el job.
+- **La versión viaja por el entorno y se valida.** El job `version` comprueba
+  que sea `X.Y.Z` (solo dígitos y puntos) antes de publicarla como salida, y los
+  pasos que la usan la reciben como `env: VERSION` en vez de interpolar
+  `${{ … }}` dentro del script: es el patrón que recomienda GitHub contra la
+  inyección de órdenes.
+- **`requirements-build.txt` fija versiones exactas** (`PySide6-Essentials==…`,
+  `pyinstaller==…`); `requirements.txt`, rangos. Así dos builds del mismo commit
+  salen iguales y una versión nueva de PySide6 o PyInstaller no rompe el CI de
+  un día para otro. Se suben a mano, probando la GUI empaquetada (el smoke test
+  no basta).
 
 ## Build Linux portable (PySide6)
 
@@ -636,7 +709,7 @@ entorno o el fallo vuelve.
   antivirus heurísticos. Linux/macOS siguen one-folder (arranque instantáneo); el
   updater funciona en ambos layouts (`_apply_windows` busca el `.exe` y copia su
   carpeta, que en onefile es solo el ejecutable).
-- `datas` solo lleva `src/assets` (ya no hay `views/`).
+- `datas` lleva `src/assets` y `src/locale` (ya no hay `views/`).
 - **Iconos**: `packaging/icons/blendermanager.ico` (Windows) y `.icns` (macOS)
   los genera `packaging/make_icons.py` a partir de
   `src/assets/images/app_icon.png`, y se dejan en el repo para no depender de Qt
@@ -717,9 +790,11 @@ lo elegimos a propósito para que no exista `_internal` que borrar (ver arriba).
      versión anterior: si el anterior no está marcado y el nuevo sí, es el
      heurístico del bootloader y toca enviarlo.
 2. **Mantener PyInstaller al día**: cada release recompila el bootloader y suele
-   tardar en estar en las listas negras. `requirements-build.txt` pide `>=6.6`.
-3. **Documentar y verificar**: el README lleva el SHA-256 de cada asset
-   (`checksums.txt`); quien quiera puede confirmar que el fichero es el nuestro.
+   tardar en estar en las listas negras. `requirements-build.txt` la fija
+   (`pyinstaller==…`): subirla es un cambio a mano, probando el binario.
+3. **Documentar y verificar**: cada release publica `checksums.txt` con el
+   SHA-256 de cada asset; quien quiera puede confirmar que el fichero es el
+   nuestro.
 
 Blender Launcher V2 (el proyecto hermano, 700+ estrellas) está **igual**: su zip
 de Windows es un único `.exe` con `--onefile --windowed --noupx`, **sin firmar**,
@@ -750,10 +825,14 @@ SignPath tiene que describir un único fichero PE. Puesta en marcha:
 
 0. Cumplir sus condiciones (<https://signpath.org/terms>): licencia OSI (GPL-3.0),
    sin malware ni componentes propietarios, MFA en GitHub y una sección
-   **"Code signing policy"** en la home y en las páginas de descarga (está en el
-   README y `promote.yml` la añade al cuerpo de la release final). Ojo: exigen
-   "cierta reputación verificable" para programas ejecutables y **aprobación
-   manual por release** para firmar.
+   **"Code signing policy"** en la home y en las páginas de descarga. Ojo:
+   exigen "cierta reputación verificable" para programas ejecutables y
+   **aprobación manual por release** para firmar.
+   **Estado actual: la solicitud fue rechazada**, así que la sección **no se
+   publica** (no se anuncia una firma que no tenemos): en el README está
+   comentada dentro de un `<!-- ... -->` y en `promote.yml` el bloque `POLICY`
+   que la añadía a la release final está comentado (hoy solo se añade el enlace
+   a `PRIVACY.md`). Si SignPath la aprueba, se descomentan las dos.
 1. Pedir el certificado en <https://signpath.org/apply> (vincular el repo de
    GitHub; para OSS es gratis y la clave vive en su HSM, no en el repo).
 2. En SignPath.io: Trusted Build System **GitHub.com** → proyecto → signing
@@ -809,6 +888,16 @@ El AppImage resultante pesa ~70 MB.
   (`check_updates`, `_show_update_available`, `_show_source_update`) y controles
   en `ui/widgets/settings_view.py` (`_settings_updates_card`).
 - Preferencia `auto_update` en `src/services/settings.py` (por defecto activada).
+- **La descarga se verifica con el SHA-256 de `checksums.txt`.** Lo que se baja
+  aquí se **ejecuta** después, así que `_do_update` (`ui/widgets/updates.py`)
+  pide antes, en un hilo, el checksum del asset a `updater.checksum_for` y se
+  lo pasa al `Downloader`, que rechaza el fichero si no cuadra. Si la release no
+  trae `checksums.txt` (o no se puede leer) **no se instala nada**: se avisa
+  ("Checksum error") y se ofrece la página de releases para hacerlo a mano. El
+  port a PySide6 había dejado de pasar el checksum y durante un tiempo las
+  actualizaciones se instalaban sin verificar; lo vigilan
+  `test_sin_checksum_no_se_instala_la_actualizacion` y el que comprueba que el
+  descargador recibe el SHA-256 (`tests/test_ui.py`).
 - **Reintento de conexión** (`services/downloader.py`): el handshake TLS de
   `release-assets.githubusercontent.com` es **intermitente** (el log de un
   usuario de Mac lo enseña: el mismo asset se bajó bien en v1.29.0 y v1.31.0 y
@@ -869,10 +958,11 @@ El AppImage resultante pesa ~70 MB.
   definido se cierra la app sin haber instalado nada — de ahí la validación.
 - Firma de Windows: se firma **best-effort** con un autofirmado (no quita
   SmartScreen; ver "Avisos falsos de antivirus en Windows"). Para quitarlo de
-  verdad, valorar SignPath (gratis para OSS), una CA real o Azure Trusted
-  Signing, y enviar los falsos positivos a WDSI.
+  verdad, valorar SignPath (gratis para OSS; la primera solicitud fue
+  rechazada), una CA real o Azure Trusted Signing, y enviar los falsos
+  positivos a WDSI.
 
-### Una sola instancia (`ui/single_instance.py`)
+## Una sola instancia (`ui/single_instance.py`)
 
 Abrir Blender Manager dos veces no crea una segunda ventana: la primera instancia
 escucha en un `QLocalServer` con nombre (derivado del usuario y de la carpeta de
@@ -880,13 +970,12 @@ config, así el modo portable no choca con la app instalada) y la segunda solo l
 pide que salga al frente y se va. `_restore_from_tray` trae la ventana al frente
 también cuando estaba escondida en la bandeja.
 
-**El icono de la bandeja está siempre visible mientras la app corre**, con la
-ventana abierta o escondida (lo crea `showEvent` → `_ensure_tray`). Antes solo
-se enseñaba mientras la ventana estaba oculta; se cambió a petición de los
-usuarios. Al restaurar desde la bandeja ya **no** se retira el icono
-(`_restore_from_tray` solo hace `showNormal`); sí se retira al cerrar la app de
-verdad, en `closeEvent`. Sin bandeja (`TrayIcon.available()`) no se crea nada y
-`_hide_to_tray` no hace nada, para no esconder la ventana sin poder volver.
+El socket solo lo puede abrir su usuario
+(`QLocalServer.SocketOption.UserAccessOption`): sin eso, en Linux y macOS el
+socket nace con los permisos que dicte la `umask` y otro usuario del grupo
+podría conectarse y sacar nuestra ventana al frente (en Windows la opción
+restringe igual el *named pipe*). El icono de la bandeja y lo de minimizar
+están en "Interfaz → La bandeja del sistema".
 
 - **El relanzamiento del updater lleva `BLENDERMANAGER_RELAUNCH`** en el entorno
   (`updater._relaunch_env`). El binario nuevo arranca **antes** de que el viejo
