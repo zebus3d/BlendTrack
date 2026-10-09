@@ -54,6 +54,17 @@ class EnableAddonsTest(unittest.TestCase):
         self.assertTrue(result["errors"])
 
 
+class WithConstantsTest(unittest.TestCase):
+    def test_el_guion_recibe_las_constantes_definidas(self):
+        """Los marcadores viven en Python y el guion los recibe, no los copia."""
+        guion = blender_runner.with_constants(
+            "print(MARKER + str(LIMIT))", MARKER='a"b=', LIMIT=3)
+        espacio = {}
+        with mock.patch("builtins.print") as fake_print:
+            exec(guion, espacio)  # noqa: S102 - es el guion de prueba
+        fake_print.assert_called_once_with('a"b=3')
+
+
 class RunTest(unittest.TestCase):
     def test_blender_no_hereda_la_entrada_de_la_app(self):
         """Un addon con ``input()`` no puede dejar a Blender esperando."""

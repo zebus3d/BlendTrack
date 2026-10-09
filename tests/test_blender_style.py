@@ -1,6 +1,6 @@
 """Tests del tema/keymap como presets (``services/blender_style``).
 
-Nunca se arranca Blender: se mockea ``blender_runner._run`` y se comprueba que
+Nunca se arranca Blender: se mockea ``blender_runner.run_blender`` y se comprueba que
 se interpretan bien sus salidas y qué entorno se le pasa.
 """
 
@@ -26,7 +26,7 @@ def _completed(payload, code=0):
 class ExportStyleTest(unittest.TestCase):
     def test_exporta_y_parsea(self):
         payload = {"theme": "/t.xml", "keymap": "/k.py", "errors": []}
-        with mock.patch.object(bs.blender_runner, "_run",
+        with mock.patch.object(bs.blender_runner, "run_blender",
                                return_value=_completed(payload)):
             result = bs.export_style("/bin/blender", "/tmp/style")
         self.assertEqual(result["theme"], "/t.xml")
@@ -34,13 +34,13 @@ class ExportStyleTest(unittest.TestCase):
         self.assertEqual(result["errors"], [])
 
     def test_sin_ejecutable_no_arranca(self):
-        with mock.patch.object(bs.blender_runner, "_run") as run:
+        with mock.patch.object(bs.blender_runner, "run_blender") as run:
             result = bs.export_style("", "/tmp/style")
             run.assert_not_called()
         self.assertTrue(result["errors"])
 
     def test_salida_rara(self):
-        with mock.patch.object(bs.blender_runner, "_run",
+        with mock.patch.object(bs.blender_runner, "run_blender",
                                return_value=(0, "ruido\n", "")):
             result = bs.export_style("/bin/blender", "/tmp/style")
         self.assertEqual(result["theme"], "")
@@ -93,14 +93,14 @@ class ExportScriptExecTest(unittest.TestCase):
 class ImportStyleTest(unittest.TestCase):
     def test_instala_y_parsea(self):
         payload = {"applied": ["theme", "keymap"], "errors": []}
-        with mock.patch.object(bs.blender_runner, "_run",
+        with mock.patch.object(bs.blender_runner, "run_blender",
                                return_value=_completed(payload)):
             result = bs.import_style("/bin/blender", "BlenderManager 5.2",
                                      "/t.xml", "/k.py")
         self.assertEqual(result["applied"], ["theme", "keymap"])
 
     def test_pasa_el_nombre_y_las_rutas_por_entorno(self):
-        with mock.patch.object(bs.blender_runner, "_run",
+        with mock.patch.object(bs.blender_runner, "run_blender",
                                return_value=_completed({"applied": [],
                                                         "errors": []})) as run:
             bs.import_style("/bin/blender", "BM 5.2", "/t.xml", "/k.py")
@@ -115,7 +115,7 @@ class CopyStyleTest(unittest.TestCase):
         export = _completed({"theme": "/t.xml", "keymap": "/k.py",
                              "errors": []})
         install = _completed({"applied": ["theme", "keymap"], "errors": []})
-        with mock.patch.object(bs.blender_runner, "_run",
+        with mock.patch.object(bs.blender_runner, "run_blender",
                                side_effect=[export, install]) as run:
             result = bs.copy_style("/bin/src", "/bin/dst", "BM 5.2")
         self.assertEqual(run.call_count, 2)
@@ -126,7 +126,7 @@ class CopyStyleTest(unittest.TestCase):
         export = _completed({"theme": "", "keymap": "/k.py",
                              "errors": ["theme: fallo"]})
         install = _completed({"applied": ["keymap"], "errors": []})
-        with mock.patch.object(bs.blender_runner, "_run",
+        with mock.patch.object(bs.blender_runner, "run_blender",
                                side_effect=[export, install]):
             result = bs.copy_style("/bin/src", "/bin/dst", "BM 5.2")
         self.assertIn("theme: fallo", result["errors"])

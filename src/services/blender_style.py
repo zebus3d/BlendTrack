@@ -19,11 +19,9 @@ Es un módulo de ``services/``: **no importa Qt**. Lo que arranca Blender vive e
 """
 
 import tempfile
-from pathlib import Path
 
 from services import blender_runner
-
-RESULT_MARKER = "BLENDERMANAGER_RESULT="
+from services.blender_runner import RESULT_MARKER
 
 # Prefijo de los presets que dejamos en el destino ("BlenderManager 5.2").
 STYLE_PREFIX = "BlenderManager"
@@ -34,7 +32,7 @@ _TMP_THEME = "BlenderManager_export_tmp"
 
 # --- Guion que exporta tema y keymap (corre en el Blender ORIGEN) ----------
 
-_EXPORT_SCRIPT = r'''
+_EXPORT_SCRIPT = blender_runner.with_constants(r'''
 import bpy
 import json
 import os
@@ -75,13 +73,13 @@ try:
 except Exception as exc:
     errors.append("keymap: " + str(exc))
 
-print("BLENDERMANAGER_RESULT=" + json.dumps(
+print(RESULT_MARKER + json.dumps(
     {"theme": theme_path, "keymap": keymap_path, "errors": errors}))
-'''
+''', RESULT_MARKER=RESULT_MARKER)
 
 # --- Guion que instala los presets (corre en el Blender DESTINO) -----------
 
-_IMPORT_SCRIPT = r'''
+_IMPORT_SCRIPT = blender_runner.with_constants(r'''
 import bpy
 import json
 import os
@@ -121,8 +119,8 @@ try:
 except Exception as exc:
     errors.append("save: " + str(exc))
 
-print("BLENDERMANAGER_RESULT=" + json.dumps({"applied": applied, "errors": errors}))
-'''
+print(RESULT_MARKER + json.dumps({"applied": applied, "errors": errors}))
+''', RESULT_MARKER=RESULT_MARKER)
 
 
 def export_style(executable, dest_dir, timeout: int = 180) -> dict:
@@ -135,7 +133,7 @@ def export_style(executable, dest_dir, timeout: int = 180) -> dict:
     if not executable:
         result["errors"].append("no Blender to run")
         return result
-    code, out, _ = blender_runner._run(
+    code, out, _ = blender_runner.run_blender(
         executable,
         ["--background", "--python-expr", _EXPORT_SCRIPT],
         extra_env={
@@ -147,7 +145,7 @@ def export_style(executable, dest_dir, timeout: int = 180) -> dict:
     if code is None:
         result["errors"].append("Blender did not run")
         return result
-    payload = blender_runner._parse_marker(out, RESULT_MARKER)
+    payload = blender_runner.parse_marker(out, RESULT_MARKER)
     if not isinstance(payload, dict):
         result["errors"].append(f"no result from Blender (exit {code})")
         return result
@@ -168,7 +166,7 @@ def import_style(executable, name: str, theme_path: str = "",
     if not executable:
         result["errors"].append("no Blender to run")
         return result
-    code, out, _ = blender_runner._run(
+    code, out, _ = blender_runner.run_blender(
         executable,
         ["--background", "--python-expr", _IMPORT_SCRIPT],
         extra_env={
@@ -181,7 +179,7 @@ def import_style(executable, name: str, theme_path: str = "",
     if code is None:
         result["errors"].append("Blender did not run")
         return result
-    payload = blender_runner._parse_marker(out, RESULT_MARKER)
+    payload = blender_runner.parse_marker(out, RESULT_MARKER)
     if not isinstance(payload, dict):
         result["errors"].append(f"no result from Blender (exit {code})")
         return result

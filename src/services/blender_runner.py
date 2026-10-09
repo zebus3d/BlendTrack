@@ -28,12 +28,27 @@ RESULT_MARKER = "BLENDERMANAGER_RESULT="
 # segundos; si pasa de aquí, algo va mal (addon colgado) y se mata.
 DEFAULT_TIMEOUT = 180
 
+
+def with_constants(script: str, **constants) -> str:
+    """Antepone al guion una línea ``NOMBRE = valor`` por cada constante.
+
+    Los guiones que corren dentro de Blender son texto: no pueden importar
+    nada de la app. Antes repetían a mano los marcadores
+    (``"BLENDERMANAGER_RESULT="``) y los mensajes de error estables, y bastaba
+    con cambiar uno de los dos lados para que la app dejara de entender a
+    Blender sin que fallase nada visible. Así cada constante vive en un solo
+    sitio (aquí, en Python) y el guion la recibe ya definida. ``repr`` da un
+    literal de Python válido para cadenas y números.
+    """
+    header = "".join(f"{name} = {value!r}\n" for name, value in constants.items())
+    return header + script
+
 # Guion que activa/desactiva los módulos que llegan por entorno y guarda las
 # preferencias. Los módulos van por variable de entorno (no interpolados en el
 # código) para no pelearse con comillas ni con el límite de longitud de los
 # argumentos. ``addon_utils`` ya rechaza las extensiones incompatibles (Blender
 # las marca en su propio chequeo), y ese error se recoge por addon.
-_ADDON_SCRIPT = r'''
+_ADDON_SCRIPT = with_constants(r'''
 import addon_utils
 import bpy
 import json
@@ -79,15 +94,18 @@ try:
 except Exception as exc:
     errors.append({"module": "", "error": "save_userpref: " + str(exc)})
 
-print("BLENDERMANAGER_RESULT=" + json.dumps(
+print(RESULT_MARKER + json.dumps(
     {"enabled": enabled, "disabled": disabled, "errors": errors}))
-'''
+''', RESULT_MARKER=RESULT_MARKER)
 
-def _run(executable, args, extra_env=None, timeout=DEFAULT_TIMEOUT):
+def run_blender(executable, args, extra_env=None, timeout=DEFAULT_TIMEOUT):
     """Arranca Blender y devuelve ``(returncode, stdout, stderr)``.
 
-    ``returncode`` es ``None`` si no se pudo lanzar o si agotó el tiempo (en
-    ese caso se mata el proceso); el motivo viaja en ``stderr``.
+    Es la única puerta para lanzar un Blender en segundo plano: la usan también
+    ``blender_prefs`` y ``blender_style``, y así todos heredan lo mismo
+    (entorno limpio, entrada cerrada, tiempo máximo, carpeta de config
+    asegurada). ``returncode`` es ``None`` si no se pudo lanzar o si agotó el
+    tiempo (en ese caso se mata el proceso); el motivo viaja en ``stderr``.
     """
     environment = clean_env()
     if extra_env:
@@ -139,8 +157,14 @@ def _ensure_config_dir(environment: dict) -> None:
         pass
 
 
-def _parse_marker(output: str, marker: str):
-    """Última línea JSON con ``marker`` del volcado de Blender, o None."""
+def parse_marker(output: str, marker: str):
+    """Última línea JSON con ``marker`` del volcado de Blender, o None.
+
+    Blender escribe mucho en la consola (avisos de addons, de la GPU...); el
+    guion imprime su resultado en una sola línea que empieza por ``marker`` y
+    aquí se busca esa. Se queda con la **última** por si un addon imprimiera
+    algo parecido antes.
+    """
     payload = None
     for line in (output or "").splitlines():
         index = line.find(marker)
@@ -171,7 +195,7 @@ def set_addons(executable, enable=None, disable=None,
     if not executable or not (wanted["enable"] or wanted["disable"]):
         result["errors"].append({"module": "", "error": "no Blender to run"})
         return result
-    code, out, err = _run(
+    code, out, err = run_blender(
         executable,
         ["--background", "--python-expr", _ADDON_SCRIPT],
         extra_env={"BLENDERMANAGER_ADDONS": json.dumps(wanted)},
@@ -181,7 +205,7 @@ def set_addons(executable, enable=None, disable=None,
     if code is None:
         result["errors"].append({"module": "", "error": err})
         return result
-    payload = _parse_marker(out, RESULT_MARKER)
+    payload = parse_marker(out, RESULT_MARKER)
     if payload is None:
         result["errors"].append(
             {"module": "", "error": "no result from Blender (exit "
@@ -203,7 +227,7 @@ def enable_addons(executable, modules, timeout=DEFAULT_TIMEOUT) -> dict:
 # Blender en vez de leer ``userpref.blend``: el estado "enabled" es un dato suyo
 # y el fichero es binario. Se usa para copiar los addons con el mismo estado que
 # tenían en origen (activado/desactivado), que es lo que espera el usuario.
-_ENABLED_SCRIPT = r'''
+_ENABLED_SCRIPT = with_constants(r'''
 import addon_utils
 import json
 
@@ -215,8 +239,8 @@ for mod in addon_utils.modules():
     except Exception:
         continue
 
-print("BLENDERMANAGER_RESULT=" + json.dumps({"enabled": names}))
-'''
+print(RESULT_MARKER + json.dumps({"enabled": names}))
+''', RESULT_MARKER=RESULT_MARKER)
 
 
 def enabled_addons(executable, timeout=DEFAULT_TIMEOUT) -> list:
@@ -228,11 +252,11 @@ def enabled_addons(executable, timeout=DEFAULT_TIMEOUT) -> list:
     """
     if not executable:
         return []
-    code, out, _ = _run(executable, ["--background", "--python-expr",
+    code, out, _ = run_blender(executable, ["--background", "--python-expr",
                                      _ENABLED_SCRIPT], timeout=timeout)
     if code is None:
         return []
-    payload = _parse_marker(out, RESULT_MARKER)
+    payload = parse_marker(out, RESULT_MARKER)
     if not isinstance(payload, dict):
         return []
     return [str(name) for name in (payload.get("enabled") or [])]

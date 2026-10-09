@@ -5,7 +5,7 @@ Tres capas:
 * la parte pura (filtrado, diff, agrupado), que decide **qué** se ofrece;
 * los guiones que corren dentro de Blender, ejecutados de verdad con el ``bpy``
   de mentira de ``tests/fake_bpy.py`` (son Python normal salvo ``bpy``);
-* el contrato de ``read_preferences``/``write_preferences`` con ``_run``
+* el contrato de ``read_preferences``/``write_preferences`` con ``run_blender``
   parcheado: qué argumentos se le pasan a Blender y qué se devuelve cuando
   no contesta.
 """
@@ -208,7 +208,7 @@ class DumpScriptExecTest(unittest.TestCase):
 
     def _dump(self):
         out = _run_script(bp._DUMP_SCRIPT, self.bpy)
-        payload = blender_runner._parse_marker(out, "BLENDERMANAGER_DUMP=")
+        payload = blender_runner.parse_marker(out, bp.DUMP_MARKER)
         self.assertIsNotNone(payload, out)
         return payload
 
@@ -273,7 +273,7 @@ class DumpScriptExecTest(unittest.TestCase):
     def test_si_revienta_todo_el_marcador_sale_igual(self):
         self.bpy.context.preferences = None
         out = _run_script(bp._DUMP_SCRIPT, self.bpy)
-        payload = blender_runner._parse_marker(out, "BLENDERMANAGER_DUMP=")
+        payload = blender_runner.parse_marker(out, bp.DUMP_MARKER)
         self.assertIsNotNone(payload)
         self.assertIn("error", payload)
 
@@ -294,7 +294,7 @@ class ApplyScriptExecTest(unittest.TestCase):
         env = {"BLENDERMANAGER_PREFS_FILE": pairs_file,
                "BLENDERMANAGER_ENABLE_ADDONS": enable}
         out = _run_script(bp._APPLY_SCRIPT, self.bpy, addon_utils, env)
-        payload = blender_runner._parse_marker(out, "BLENDERMANAGER_RESULT=")
+        payload = blender_runner.parse_marker(out, blender_runner.RESULT_MARKER)
         self.assertIsNotNone(payload, out)
         return payload
 
@@ -355,10 +355,10 @@ class ApplyScriptExecTest(unittest.TestCase):
 
 
 class ReadPreferencesTest(unittest.TestCase):
-    """El contrato con ``blender_runner._run``: argumentos y fallos."""
+    """El contrato con ``blender_runner.run_blender``: argumentos y fallos."""
 
     def _patch_run(self, returns):
-        patcher = mock.patch.object(bp.blender_runner, "_run", return_value=returns)
+        patcher = mock.patch.object(bp.blender_runner, "run_blender", return_value=returns)
         self.addCleanup(patcher.stop)
         return patcher.start()
 
@@ -459,7 +459,7 @@ class WritePreferencesTest(unittest.TestCase):
 
         muchas = [bp.Preference(f"view.clave_{index}", "x" * 100)
                   for index in range(400)]
-        with mock.patch.object(bp.blender_runner, "_run", side_effect=run):
+        with mock.patch.object(bp.blender_runner, "run_blender", side_effect=run):
             result = bp.write_preferences(
                 "/opt/blender", [bp.Preference("view.ui_scale", 2.0)] + muchas,
                 enable_addons=True)
@@ -474,13 +474,13 @@ class WritePreferencesTest(unittest.TestCase):
             recibido["env"]["BLENDERMANAGER_PREFS_FILE"]))
 
     def test_sin_nada_que_escribir_no_arranca_blender(self):
-        with mock.patch.object(bp.blender_runner, "_run") as run:
+        with mock.patch.object(bp.blender_runner, "run_blender") as run:
             result = bp.write_preferences("/opt/blender", [])
         run.assert_not_called()
         self.assertTrue(result["errors"])
 
     def test_si_blender_no_contesta_lo_dice(self):
-        with mock.patch.object(bp.blender_runner, "_run",
+        with mock.patch.object(bp.blender_runner, "run_blender",
                                return_value=(1, "", "boom")):
             result = bp.write_preferences(
                 "/opt/blender", [("view.ui_scale", 2.0)])

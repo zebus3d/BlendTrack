@@ -91,6 +91,10 @@ ADDON_NOT_ENABLED = "add-on not enabled in the destination"
 # viejo (solo el diccionario de valores) y se admite igual.
 DUMP_FORMAT = 2
 
+# Prefijo de la línea con el volcado en la salida de Blender (ver
+# ``blender_runner.parse_marker``). Escribir usa el ``RESULT_MARKER`` común.
+DUMP_MARKER = "BLENDERMANAGER_DUMP="
+
 # --- Guion que corre dentro de Blender ------------------------------------
 #
 # Recorre el árbol de preferencias por las propiedades RNA y vuelca las hojas
@@ -105,7 +109,7 @@ DUMP_FORMAT = 2
 # entero y la interfaz decía "no se pudieron leer los ajustes" sin motivo.
 # Y el marcador se imprime SIEMPRE, aunque falle todo, con el error dentro.
 
-_DUMP_SCRIPT = r'''
+_DUMP_SCRIPT = blender_runner.with_constants(r'''
 import bpy
 import json
 
@@ -221,8 +225,8 @@ def walk(obj, prefix, depth=0, only_changed=False):
             SKIPPED.append({"path": path, "reason": str(exc)})
 
 
-payload = {"format": 2, "values": VALUES, "meta": META, "skipped": SKIPPED,
-           "addons": ADDONS}
+payload = {"format": DUMP_FORMAT, "values": VALUES, "meta": META,
+           "skipped": SKIPPED, "addons": ADDONS}
 try:
     walk(bpy.context.preferences, "")
     # Preferencias de los addons ACTIVOS. No son atributos de ``preferences``
@@ -243,8 +247,8 @@ try:
 except Exception as exc:
     payload["error"] = str(exc)
 
-print("BLENDERMANAGER_DUMP=" + json.dumps(payload))
-'''
+print(DUMP_MARKER + json.dumps(payload))
+''', DUMP_MARKER=DUMP_MARKER, DUMP_FORMAT=DUMP_FORMAT)
 
 # --- Guion que escribe las claves elegidas ---------------------------------
 #
@@ -263,7 +267,7 @@ print("BLENDERMANAGER_DUMP=" + json.dumps(payload))
 # arranque, un solo ``save_userpref``); si no se puede, la clave falla con
 # ``ADDON_NOT_ENABLED`` y la interfaz explica que hay que copiar el addon.
 
-_APPLY_SCRIPT = r'''
+_APPLY_SCRIPT = blender_runner.with_constants(r'''
 import bpy
 import json
 import os
@@ -278,7 +282,6 @@ applied = []
 errors = []
 addons_enabled = []
 prefs = bpy.context.preferences
-ADDON_NOT_ENABLED = "add-on not enabled in the destination"
 
 # Igual que al habilitar addons: `save_userpref` no crea la carpeta de config,
 # y sin ella el guardado falla en silencio en `--background`.
@@ -379,9 +382,10 @@ if applied:
     except Exception as exc:
         errors.append({"path": "", "error": "save_userpref: " + str(exc)})
 
-print("BLENDERMANAGER_RESULT=" + json.dumps(
+print(RESULT_MARKER + json.dumps(
     {"applied": applied, "errors": errors, "addons_enabled": addons_enabled}))
-'''
+''', RESULT_MARKER=blender_runner.RESULT_MARKER,
+    ADDON_NOT_ENABLED=ADDON_NOT_ENABLED)
 
 
 @dataclass
@@ -582,11 +586,12 @@ def read_preferences(executable, factory: bool = False, timeout: int = 180,
     extra_env = None
     if config_dir:
         extra_env = {"BLENDER_USER_CONFIG": str(config_dir)}
-    code, out, err = blender_runner._run(executable, args, extra_env=extra_env,
-                                         timeout=timeout)
+    code, out, err = blender_runner.run_blender(executable, args,
+                                                extra_env=extra_env,
+                                                timeout=timeout)
     if code is None:
         return PreferenceDump(error=err or "could not run Blender")
-    payload = blender_runner._parse_marker(out, "BLENDERMANAGER_DUMP=")
+    payload = blender_runner.parse_marker(out, DUMP_MARKER)
     if payload is None:
         tail = (err or "").strip()[-400:]
         if code != 0:
@@ -649,7 +654,7 @@ def write_preferences(executable, preferences, timeout: int = 180,
     with tempfile.TemporaryDirectory(prefix="blendermanager-prefs-") as tmp:
         pairs_file = Path(tmp) / "preferences.json"
         pairs_file.write_text(json.dumps(pairs), encoding="utf-8")
-        code, out, err = blender_runner._run(
+        code, out, err = blender_runner.run_blender(
             executable,
             ["--background", "--python-expr", _APPLY_SCRIPT],
             extra_env={"BLENDERMANAGER_PREFS_FILE": str(pairs_file),
@@ -661,7 +666,7 @@ def write_preferences(executable, preferences, timeout: int = 180,
     if code is None:
         result["errors"].append({"path": "", "error": err})
         return result
-    payload = blender_runner._parse_marker(out, "BLENDERMANAGER_RESULT=")
+    payload = blender_runner.parse_marker(out, blender_runner.RESULT_MARKER)
     if payload is None:
         result["errors"].append(
             {"path": "", "error": f"no result from Blender (exit {code})"})
