@@ -46,6 +46,21 @@ class RecentGroup:
     fork: str = FORK_BLENDER
 
 
+def _is_file(path: Path) -> bool:
+    """``Path.is_file`` que no lanza: un error del disco es "no está".
+
+    En Python 3.12 ``is_file()`` **lanza** ``PermissionError`` cuando falta
+    permiso para recorrer la ruta (solo se traga "no existe"). La lista de
+    recientes puede apuntar a un disco de otro usuario o a un montaje FUSE que
+    no deja ni mirar, y un solo fichero así tumbaba la pestaña entera. Es la
+    misma idea que ``installed._is_file``.
+    """
+    try:
+        return path.is_file()
+    except OSError:
+        return False
+
+
 def recent_files(config) -> list:
     """``RecentFile`` de esa config, el más nuevo primero.
 
@@ -64,7 +79,7 @@ def recent_files(config) -> list:
         if not entry or entry.startswith("//"):
             continue
         candidate = Path(entry)
-        files.append(RecentFile(candidate, missing=not candidate.is_file()))
+        files.append(RecentFile(candidate, missing=not _is_file(candidate)))
     return files
 
 

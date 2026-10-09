@@ -7,6 +7,7 @@ comprueba qué se lee y cómo se agrupa. No se arranca Blender.
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from model.build import InstalledBuild
 from services import blender_config as bc
@@ -39,6 +40,22 @@ class RecentServiceTest(unittest.TestCase):
             self.assertEqual([f.path for f in files],
                              [good, Path("/base/que/no/existe.blend")])
             self.assertEqual([f.missing for f in files], [False, True])
+
+    def test_una_ruta_sin_permiso_cuenta_como_desaparecida(self):
+        """En Python 3.12, ``is_file()`` **lanza** ``PermissionError`` si no se
+        puede recorrer la ruta (un disco de otro usuario, un montaje FUSE).
+        Un reciente así no puede tumbar la pestaña entera."""
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            config = bc.BlenderConfig("5.2", base, "linux", base / "config",
+                                      base / "scripts", base / "extensions")
+            config.config_dir.mkdir(parents=True)
+            (config.config_dir / rp.RECENT_FILE).write_text(
+                "/media/ajeno/escena.blend\n", encoding="utf-8")
+            with mock.patch.object(Path, "is_file",
+                                   side_effect=PermissionError("sin permiso")):
+                files = rp.recent_files(config)
+            self.assertEqual([f.missing for f in files], [True])
 
     def test_sin_fichero_no_falla(self):
         with tempfile.TemporaryDirectory() as tmp:
