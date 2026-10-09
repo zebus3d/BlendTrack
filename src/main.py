@@ -310,6 +310,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--grant-access", metavar="FOLDER",
                         help="Internal: create the folder and grant write "
                              "access to it (Windows, through UAC)")
+    parser.add_argument("--for-user", metavar="ACCOUNT",
+                        help="Internal: account that asked for --grant-access")
     return parser
 
 
@@ -322,7 +324,8 @@ def main() -> None:
         # interfaz (lo lanza services.elevate desde la app normal).
         from services import elevate
 
-        sys.exit(0 if elevate.grant_write(args.grant_access) else 1)
+        sys.exit(0 if elevate.grant_write(args.grant_access,
+                                          args.for_user) else 1)
 
     if args.apply_update:
         updater.apply_update(args.apply_update[0], args.apply_update[1])

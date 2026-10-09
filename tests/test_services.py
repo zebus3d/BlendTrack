@@ -1487,11 +1487,12 @@ class ElevateTests(unittest.TestCase):
             self.assertEqual(
                 elevate._command(["--grant-access", "C:\\x"]),
                 [elevate.sys.executable, "--grant-access", "C:\\x"])
-        # En modo fuente va también el main.py.
-        self.assertEqual(
-            elevate._command(["--grant-access", "C:\\x"]),
-            [elevate.sys.executable, elevate.sys.argv[0],
-             "--grant-access", "C:\\x"])
+        # En modo fuente va también el main.py (con ruta absoluta).
+        comando = elevate._command(["--grant-access", "C:\\x"])
+        self.assertEqual(comando[0], elevate.sys.executable)
+        self.assertTrue(Path(comando[1]).is_absolute())
+        self.assertEqual(Path(comando[1]).name, "main.py")
+        self.assertEqual(comando[2:], ["--grant-access", "C:\\x"])
 
     def test_grant_write_usa_icacls(self):
         with tempfile.TemporaryDirectory() as tmp:
