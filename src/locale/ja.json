@@ -553,5 +553,11 @@
   "Could not put the saved settings back:\n{error}": "保存した設定を元に戻せませんでした：\n{error}",
   "Copying the add-ons...": "アドオンをコピー中...",
   "Delete the {count} saved copies of {program} {version} for good? You will not be able to restore them.": "{program} {version} の保存済みコピー {count} 件を完全に削除しますか？元に戻すことはできません。",
-  "Nothing is deleted: you can put your settings back from this screen.": "何も削除されません。この画面から設定を元に戻せます。"
+  "Nothing is deleted: you can put your settings back from this screen.": "何も削除されません。この画面から設定を元に戻せます。",
+  "It was made for Blender {version}, before the big Python API change of 2.80.": "これは Blender {version} 向けで、2.80 の大きな Python API 変更より前のものです。",
+  "It imports the {module} module, which Blender removed in {version}.": "{module} モジュールをインポートしていますが、Blender は {version} でこのモジュールを削除しました。",
+  "{file} is compiled for another Python; the destination version uses Python {python}.": "{file} は別の Python 向けにコンパイルされています。移行先のバージョンは Python {python} を使います。",
+  "{file} is compiled for a different Python than the destination version.": "{file} は移行先のバージョンとは異なる Python 向けにコンパイルされています。",
+  "Add-ons from before 2.80 almost never work in current versions. Look for an updated release from its author; if you copy it, leave it disabled if it fails.": "2.80 より前のアドオンは、現在のバージョンではほとんど動作しません。作者の更新版を探してください。コピーする場合、失敗したら無効のままにしてください。",
+  "Copy it and enable it in the destination version. If it fails to load, ask its author for a version updated for this Blender.": "コピーして移行先のバージョンで有効にしてください。読み込めない場合は、この Blender 向けの更新版を作者に依頼してください。"
 }

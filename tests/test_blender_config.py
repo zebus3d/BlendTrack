@@ -12,6 +12,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from services import addon_checks
 from services import blender_config as bc
 from services import blender_addons as baddons
 from services import blender_snapshots as bsnap
@@ -306,6 +307,95 @@ class WheelTest(unittest.TestCase):
         self.assertEqual(plan.reason, bc.REASON_WHEEL_ABI)
         self.assertEqual(plan.detail, "numpy")
         self.assertEqual(plan.target_python, "3.13")
+
+
+class AddonChecksTest(unittest.TestCase):
+    """Lo que se deduce de los ficheros del addon (``services.addon_checks``)."""
+
+    def _addon(self, **kwargs):
+        base = dict(kind="extension", module="bl_ext.user_default.x",
+                    name="X", version="1.0.0", min_version="4.2.0",
+                    max_version="", path=Path("/tmp/x"))
+        base.update(kwargs)
+        return baddons.Addon(**base)
+
+    def test_escanea_bgl_y_compilados(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "draw.py").write_text("import os, bgl\n", encoding="utf-8")
+            (root / "core.cpython-311-x86_64-linux-gnu.so").write_bytes(b"")
+            (root / "stable.abi3.so").write_bytes(b"")
+            (root / "libsin_etiqueta.so").write_bytes(b"")
+            # Lo de ``wheels/`` lo instala Blender: no se cuenta como suelto.
+            (root / "wheels").mkdir()
+            (root / "wheels" / "x.cpython-311-x86_64-linux-gnu.so").write_bytes(b"")
+            natives, removed = addon_checks.scan(root)
+        self.assertEqual(natives, ("core.cpython-311-x86_64-linux-gnu.so",))
+        self.assertEqual(removed, ("bgl",))
+
+    def test_import_de_bgl_en_todas_sus_formas(self):
+        for source in ("import bgl", "    from bgl import glEnable",
+                       "import gpu, bgl as gl"):
+            with tempfile.TemporaryDirectory() as tmp:
+                (Path(tmp) / "a.py").write_text(source + "\n", encoding="utf-8")
+                self.assertEqual(addon_checks.scan(tmp)[1], ("bgl",), source)
+        for source in ("import bgl_utils", "# usaba bgl", "x = 'import bgl'"):
+            with tempfile.TemporaryDirectory() as tmp:
+                (Path(tmp) / "a.py").write_text(source + "\n", encoding="utf-8")
+                self.assertEqual(addon_checks.scan(tmp)[1], (), source)
+
+    def test_bgl_solo_avisa_desde_5_0(self):
+        """Medido: ``import bgl`` va en 4.5.14 y falla en 5.0.0 y 5.2.2."""
+        addon = self._addon(removed_imports=("bgl",))
+        self.assertEqual(baddons.compat_report(addon, "4.5.14"), (bc.OK, ""))
+        self.assertEqual(baddons.compat_report(addon, "5.0.0"),
+                         (bc.WARN, bc.REASON_REMOVED_API))
+
+    def test_compilado_de_otro_python(self):
+        addon = self._addon(natives=("core.cpython-311-x86_64-linux-gnu.so",))
+        self.assertEqual(baddons.compat_report(addon, "5.0.1", target_python="3.11"),
+                         (bc.OK, ""))
+        self.assertEqual(baddons.compat_report(addon, "5.1.0", target_python="3.13"),
+                         (bc.WARN, bc.REASON_NATIVE_ABI))
+
+    def test_un_modulo_compilado_para_varios_python_no_choca(self):
+        natives = ("core.cpython-311-x86_64-linux-gnu.so",
+                   "core.cp313-win_amd64.pyd")
+        self.assertEqual(addon_checks.native_problem(natives, "3.13"), "")
+        self.assertEqual(addon_checks.native_problem(natives, "3.10"),
+                         "core.cp313-win_amd64.pyd")
+
+    def test_legacy_de_antes_de_2_80(self):
+        old = self._addon(kind=baddons.LEGACY, module="viejo",
+                          min_version="2.79.0")
+        self.assertEqual(baddons.compat_report(old, "5.2.0"),
+                         (bc.WARN, bc.REASON_PRE_280))
+        recent = self._addon(kind=baddons.LEGACY, module="nuevo",
+                             min_version="2.80.0")
+        self.assertEqual(baddons.compat_report(recent, "5.2.0"), (bc.OK, ""))
+
+    def test_el_plan_nombra_el_fichero_y_el_modulo(self):
+        with tempfile.TemporaryDirectory() as source_tmp, \
+                tempfile.TemporaryDirectory() as target_tmp:
+            source = _config(source_tmp, "5.0")
+            target = _config(target_tmp, "5.2")
+            folder = _legacy_addon(source, "dibujo",
+                                   'bl_info = {"name": "Dibujo", '
+                                   '"blender": (4, 2, 0)}\nimport bgl\n')
+            ext = _extension(source, "user_default", "solver",
+                             'id = "solver"\nname = "Solver"\n'
+                             'version = "1.0.0"\nblender_version_min = "4.2.0"\n')
+            (ext / "solver.cpython-311-x86_64-linux-gnu.so").write_bytes(b"")
+            self.assertTrue(folder.is_dir())
+            plans = {plan.addon.name: plan for plan in baddons.plan_migration(
+                source, target, "linux", "x86_64", "3.13")}
+        self.assertEqual((plans["Dibujo"].reason, plans["Dibujo"].detail),
+                         (bc.REASON_REMOVED_API, "bgl"))
+        self.assertEqual((plans["Solver"].reason, plans["Solver"].detail),
+                         (bc.REASON_NATIVE_ABI,
+                          "solver.cpython-311-x86_64-linux-gnu.so"))
+        # Avisos, no bloqueos: llegan marcados para copiar.
+        self.assertTrue(plans["Dibujo"].selected and plans["Solver"].selected)
 
 
 class PlanMigrationTest(unittest.TestCase):

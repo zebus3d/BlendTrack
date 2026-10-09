@@ -2,7 +2,7 @@
 
 Qué add-ons tiene una versión (``addons_in``), si cada uno es compatible con la
 de destino (``compat_report``, mirando versión mínima, plataforma y los wheels
-que trae), dónde caería (``destination_for``) y la copia en sí, con respaldo de
+que trae, más lo que ``addon_checks`` deduce de sus ficheros), dónde caería (``destination_for``) y la copia en sí, con respaldo de
 lo que pise y un marcador para poder deshacer.
 
 Dónde vive la configuración de cada versión está en ``blender_config``; los
@@ -22,12 +22,15 @@ from datetime import datetime
 from pathlib import Path
 
 from model.build import version_tuple
+from services import addon_checks
 from services.blender_config import (BACKUP_SUFFIX, BLOCKED, LOCAL_REPO,
                                      MANIFEST_NAME, MIGRATION_MARKER, OK,
-                                     PREFERENCE_FILES, REASON_PLATFORM,
-                                     REASON_REQUIRES_NEWER, REASON_TOO_NEW,
-                                     REASON_UNKNOWN_VERSION, REASON_WHEEL_ABI,
-                                     STAGING_SUFFIX, WARN, BlenderConfig)
+                                     PREFERENCE_FILES, REASON_NATIVE_ABI,
+                                     REASON_PLATFORM, REASON_PRE_280,
+                                     REASON_REMOVED_API, REASON_REQUIRES_NEWER,
+                                     REASON_TOO_NEW, REASON_UNKNOWN_VERSION,
+                                     REASON_WHEEL_ABI, STAGING_SUFFIX, WARN,
+                                     BlenderConfig)
 
 # Archivos/carpetas del árbol de extensiones que no son repositorios.
 _SKIP_EXTENSION_ENTRIES = {".cache", ".local", ".blender_ext", "__pycache__"}
@@ -74,6 +77,10 @@ class Addon:
     repo: str = ""
     platforms: tuple = ()
     wheels: tuple = ()
+    # Lo que ``addon_checks.scan`` encontró en sus ficheros: módulos compilados
+    # con etiqueta de Python y módulos de Blender ya retirados que importa.
+    natives: tuple = ()
+    removed_imports: tuple = ()
 
 
 def read_manifest(folder: Path) -> dict:
@@ -142,6 +149,8 @@ def addons_in(config: BlenderConfig) -> list[Addon]:
     No toca red ni ejecuta nada del addon: solo lee ficheros de metadatos.
     """
     addons = _legacy_addons(config) + _extensions(config)
+    for addon in addons:
+        addon.natives, addon.removed_imports = addon_checks.scan(addon.path)
     addons.sort(key=lambda item: (item.kind, item.name.lower(), item.module))
     return addons
 
@@ -351,6 +360,16 @@ def compat_report(addon: Addon, target_version: str, target_platform: str = "",
     if addon.platforms and not _platform_ok(
             addon.platforms, target_platform, target_arch):
         return BLOCKED, REASON_PLATFORM
+    # Lo deducido de los ficheros va antes que los wheels: un addon de antes
+    # de 2.80 o que importa ``bgl`` falla al activarse, pase lo que pase con
+    # sus dependencias.
+    if addon.kind == LEGACY and addon_checks.predates_api_break(minimum, target):
+        return WARN, REASON_PRE_280
+    if addon_checks.removed_module(addon.removed_imports, target):
+        return WARN, REASON_REMOVED_API
+    if addon.natives and target_python and addon_checks.native_problem(
+            addon.natives, target_python):
+        return WARN, REASON_NATIVE_ABI
     if addon.wheels and target_python and wheel_problem(
             addon.wheels, target_python):
         return WARN, REASON_WHEEL_ABI
@@ -377,8 +396,9 @@ class AddonPlan:
     # estaba apagado, se queda apagado, que es lo que el usuario espera.
     was_enabled: bool = False
     # Dato suelto que acompaña al motivo, para que la interfaz pueda ser
-    # concreta en vez de genérica. Hoy solo lo usa ``REASON_WHEEL_ABI``, donde
-    # lleva el **nombre del paquete** que no encaja: decir "numpy no trae una
+    # concreta en vez de genérica: el paquete con ``REASON_WHEEL_ABI``, el
+    # fichero compilado con ``REASON_NATIVE_ABI`` y el módulo retirado con
+    # ``REASON_REMOVED_API``. En los wheels lleva el **nombre del paquete**: decir "numpy no trae una
     # compilación para Python 3.13" se puede accionar; "sus dependencias son de
     # otro Python" no.
     detail: str = ""
@@ -440,10 +460,7 @@ def plan_migration(source: BlenderConfig, target: BlenderConfig,
     for addon in addons_in(source):
         status, reason = compat_report(addon, target.version, target_platform,
                                        target_arch, target_python)
-        # El paquete concreto solo se calcula cuando el motivo es el de los
-        # wheels; para el resto no hay nada que detallar.
-        detail = (wheel_problem(addon.wheels, target_python)
-                  if reason == REASON_WHEEL_ABI else "")
+        detail = _reason_detail(addon, reason, target.version, target_python)
         plans.append(AddonPlan(
             addon=addon,
             status=status,
@@ -456,6 +473,19 @@ def plan_migration(source: BlenderConfig, target: BlenderConfig,
             was_enabled=addon_id_of(addon.module) in enabled,
         ))
     return plans
+
+
+def _reason_detail(addon: Addon, reason: str, target_version: str,
+                   target_python: str) -> str:
+    """El dato concreto que nombra el aviso (paquete, fichero o módulo)."""
+    if reason == REASON_WHEEL_ABI:
+        return wheel_problem(addon.wheels, target_python)
+    if reason == REASON_NATIVE_ABI:
+        return addon_checks.native_problem(addon.natives, target_python)
+    if reason == REASON_REMOVED_API:
+        return addon_checks.removed_module(addon.removed_imports,
+                                           version_tuple(target_version))
+    return ""
 
 
 @dataclass

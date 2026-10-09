@@ -553,5 +553,11 @@
   "Could not put the saved settings back:\n{error}": "No se pudieron restaurar los ajustes guardados:\n{error}",
   "Copying the add-ons...": "Copiando los addons...",
   "Delete the {count} saved copies of {program} {version} for good? You will not be able to restore them.": "¿Borrar para siempre las {count} copias guardadas de {program} {version}? No podrás recuperarlas.",
-  "Nothing is deleted: you can put your settings back from this screen.": "No se borra nada: podrás devolver tus ajustes desde esta pantalla."
+  "Nothing is deleted: you can put your settings back from this screen.": "No se borra nada: podrás devolver tus ajustes desde esta pantalla.",
+  "It was made for Blender {version}, before the big Python API change of 2.80.": "Se hizo para Blender {version}, antes del gran cambio de la API de Python de la 2.80.",
+  "It imports the {module} module, which Blender removed in {version}.": "Importa el módulo {module}, que Blender quitó en la {version}.",
+  "{file} is compiled for another Python; the destination version uses Python {python}.": "{file} está compilado para otro Python; la versión de destino usa Python {python}.",
+  "{file} is compiled for a different Python than the destination version.": "{file} está compilado para un Python distinto del de la versión de destino.",
+  "Add-ons from before 2.80 almost never work in current versions. Look for an updated release from its author; if you copy it, leave it disabled if it fails.": "Los addons de antes de la 2.80 casi nunca funcionan en las versiones actuales. Busca una versión actualizada de su autor; si lo copias, déjalo desactivado si falla.",
+  "Copy it and enable it in the destination version. If it fails to load, ask its author for a version updated for this Blender.": "Cópialo y actívalo en la versión de destino. Si no carga, pide a su autor una versión actualizada para este Blender."
 }

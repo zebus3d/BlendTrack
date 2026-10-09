@@ -11,6 +11,7 @@ from PySide6.QtWidgets import QScrollArea
 
 from i18n import tr
 from model.build import fork_label, fork_series, version_tuple
+from services import addon_checks
 from services import blender_config as bc
 from services import blender_prefs as bprefs
 from services import blender_runner
@@ -243,6 +244,22 @@ def _reason_text(plan) -> str:
                   "version.", package=plan.detail)
     if plan.reason == bc.REASON_UNKNOWN_VERSION:
         return tr("It does not state a minimum version.")
+    if plan.reason == bc.REASON_PRE_280:
+        return tr("It was made for Blender {version}, before the big Python "
+                  "API change of 2.80.", version=addon.min_version)
+    if plan.reason == bc.REASON_REMOVED_API:
+        module = plan.detail or "bgl"
+        return tr("It imports the {module} module, which Blender removed in "
+                  "{version}.", module=module,
+                  version=addon_checks.removed_since(module))
+    if plan.reason == bc.REASON_NATIVE_ABI:
+        # Se nombra el fichero: es lo que el usuario puede buscar en la carpeta.
+        if plan.target_python:
+            return tr("{file} is compiled for another Python; the destination "
+                      "version uses Python {python}.",
+                      file=plan.detail, python=plan.target_python)
+        return tr("{file} is compiled for a different Python than the "
+                  "destination version.", file=plan.detail)
     return ""
 
 
@@ -260,6 +277,15 @@ def _review_advice(plan) -> str:
             "The add-on does not say which Blender it works with. Copy it and "
             "test its panel or operators in the destination version; if they "
             "fail, leave it disabled.")
+    if plan.reason == bc.REASON_PRE_280:
+        return tr(
+            "Add-ons from before 2.80 almost never work in current versions. "
+            "Look for an updated release from its author; if you copy it, "
+            "leave it disabled if it fails.")
+    if plan.reason in (bc.REASON_REMOVED_API, bc.REASON_NATIVE_ABI):
+        return tr(
+            "Copy it and enable it in the destination version. If it fails to "
+            "load, ask its author for a version updated for this Blender.")
     # Aviso sin causa concreta (no debería pasar, pero mejor dar algo que nada).
     return tr("Copy it and test it in the destination version before relying "
               "on it.")

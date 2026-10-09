@@ -553,5 +553,11 @@
   "Could not put the saved settings back:\n{error}": "无法恢复已保存的设置：\n{error}",
   "Copying the add-ons...": "正在复制插件...",
   "Delete the {count} saved copies of {program} {version} for good? You will not be able to restore them.": "要永久删除 {program} {version} 的 {count} 份已保存副本吗？删除后将无法恢复。",
-  "Nothing is deleted: you can put your settings back from this screen.": "不会删除任何内容：你可以在此界面恢复你的设置。"
+  "Nothing is deleted: you can put your settings back from this screen.": "不会删除任何内容：你可以在此界面恢复你的设置。",
+  "It was made for Blender {version}, before the big Python API change of 2.80.": "它是为 Blender {version} 制作的，早于 2.80 的 Python API 重大变更。",
+  "It imports the {module} module, which Blender removed in {version}.": "它导入了 {module} 模块，而 Blender 已在 {version} 中移除该模块。",
+  "{file} is compiled for another Python; the destination version uses Python {python}.": "{file} 是为其他 Python 编译的；目标版本使用 Python {python}。",
+  "{file} is compiled for a different Python than the destination version.": "{file} 的编译所用 Python 与目标版本不同。",
+  "Add-ons from before 2.80 almost never work in current versions. Look for an updated release from its author; if you copy it, leave it disabled if it fails.": "2.80 之前的插件在当前版本中几乎无法运行。请向作者寻找更新版本；如果仍要复制，出错时请保持停用。",
+  "Copy it and enable it in the destination version. If it fails to load, ask its author for a version updated for this Blender.": "复制后在目标版本中启用它。如果无法加载，请向作者索取适配此 Blender 的更新版本。"
 }

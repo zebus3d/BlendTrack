@@ -59,6 +59,11 @@ REASON_TOO_NEW = "too_new"                 # el addon no soporta esta versión a
 REASON_PLATFORM = "platform"               # no está publicado para este sistema
 REASON_WHEEL_ABI = "wheel_abi"             # sus wheels no son para este Python
 REASON_UNKNOWN_VERSION = "unknown_version"  # el addon no declara versión mínima
+# Deducciones a partir de los ficheros del addon (``services.addon_checks``):
+# siempre avisos, nunca bloqueos.
+REASON_PRE_280 = "pre_280"           # declara un Blender de antes de 2.80
+REASON_REMOVED_API = "removed_api"   # importa un módulo que Blender ya no trae
+REASON_NATIVE_ABI = "native_abi"     # trae compilados para otro Python
 
 
 # Versión de Python que embebe cada serie de Blender. Solo se usa para avisar

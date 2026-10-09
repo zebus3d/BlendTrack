@@ -553,5 +553,11 @@
   "Could not put the saved settings back:\n{error}": "Не удалось вернуть сохранённые настройки:\n{error}",
   "Copying the add-ons...": "Копирование аддонов...",
   "Delete the {count} saved copies of {program} {version} for good? You will not be able to restore them.": "Удалить навсегда сохранённые копии {program} {version} ({count})? Восстановить их будет нельзя.",
-  "Nothing is deleted: you can put your settings back from this screen.": "Ничего не удаляется: настройки можно вернуть на этом же экране."
+  "Nothing is deleted: you can put your settings back from this screen.": "Ничего не удаляется: настройки можно вернуть на этом же экране.",
+  "It was made for Blender {version}, before the big Python API change of 2.80.": "Он создан для Blender {version}, до большого изменения Python API в 2.80.",
+  "It imports the {module} module, which Blender removed in {version}.": "Он импортирует модуль {module}, который Blender удалил в {version}.",
+  "{file} is compiled for another Python; the destination version uses Python {python}.": "{file} скомпилирован для другого Python; целевая версия использует Python {python}.",
+  "{file} is compiled for a different Python than the destination version.": "{file} скомпилирован для Python, отличного от Python целевой версии.",
+  "Add-ons from before 2.80 almost never work in current versions. Look for an updated release from its author; if you copy it, leave it disabled if it fails.": "Дополнения, созданные до 2.80, почти никогда не работают в современных версиях. Поищите обновлённую версию у автора; если всё же скопируете, оставьте его выключенным при ошибке.",
+  "Copy it and enable it in the destination version. If it fails to load, ask its author for a version updated for this Blender.": "Скопируйте его и включите в целевой версии. Если он не загрузится, попросите автора о версии, обновлённой для этого Blender."
 }

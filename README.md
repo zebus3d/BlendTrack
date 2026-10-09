@@ -65,7 +65,9 @@ locked folder is only scanned.</sub>
 
 - **Migrate your setup to another version.** A transfer board shows the add-ons
   of one installed version and where each one lands, with a compatibility check
-  (Blender version and Python wheels) before anything is copied. The enabled
+  before anything is copied: Blender version, platform, Python wheels and
+  compiled modules, Blender modules that no longer exist (such as `bgl` in 5.0)
+  and add-ons written before the 2.80 API change. The enabled
   state is carried over, the last migration can be undone, and preferences can
   be copied whole or key by key: the app compares them against Blender's
   defaults and lists only what you changed, using Blender's own names.
