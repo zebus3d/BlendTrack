@@ -24,7 +24,9 @@ las constantes ``ACCENT``/``DANGER`` se usan para **bordes e indicadores**
 BG = "#1D1D1D"          # fondo de la ventana (el más oscuro)
 FIELD = "#171717"       # campos de texto (hundidos)
 BUTTON = "#585858"      # botones neutros
-BUTTON_HOVER = "#6A6A6A"  # botones neutros con texto, al pasar el ratón
+# Botones neutros con texto, al pasar el ratón. Un pelo más oscuro que el
+# #6A6A6A de antes: con aquel, TEXT quedaba en 4,33:1 (por debajo de AA).
+BUTTON_HOVER = "#666666"
 FILTER = "#1D1D1D"      # botones de filtro
 SURFACE = "#303030"     # paneles y tarjetas
 CHROME = "#303030"      # cabecera, barra lateral y de estado
@@ -43,7 +45,14 @@ SURFACE_HIGH = "#3D3D3D"
 
 # --- Texto ---
 TEXT = "#E6E6E6"
-MUTED = "#989898"
+# Texto secundario. Tiene que pasar 4,5:1 también sobre el gris del hover
+# (SURFACE_ALT), que es donde peor queda: con el #989898 de antes, una tarjeta
+# con el ratón encima dejaba su línea de detalles en 3,77:1.
+MUTED = "#A8A8A8"
+# Glifo apagado (la estrella sin marcar). Es un icono, no texto: le basta 3:1,
+# y se queda en el gris de siempre para que el ámbar del realce siga
+# distinguiéndose de él (con MUTED la diferencia bajaba de 1,5:1).
+ICON_MUTED = "#989898"
 # Texto de ejemplo (placeholder) de los campos. Más apagado que MUTED a
 # propósito: tiene que leerse como "esto es una pista", no como lo que hay
 # escrito. Sobre FIELD queda en 3,5:1, por encima del 3:1 de un elemento no
@@ -52,12 +61,30 @@ PLACEHOLDER = "#6E6E6E"
 TEXT_SEL = "#FFFFFF"
 
 # --- Acentos y estados ---
-ACCENT = "#5085B1"          # azul de selección/resaltado (bordes e indicadores)
-ACCENT_DARK = "#3F6F96"     # hover
-ACCENT_BTN = "#356089"      # relleno de botón primario (TEXT = 5,28:1, AA)
+# Los rellenos con texto encima se miden en su **peor punto**: los botones
+# llevan un degradado con un 9 % de blanco arriba (``qss._volume``), así que el
+# texto se compara con ese extremo, el más claro. Lo vigila ``ContrastTests``.
+#
+# Azul de los bordes e indicadores (casilla marcada, interruptor, barras):
+# solo necesita 3:1 contra lo que tiene alrededor (3,4:1 sobre SURFACE).
+ACCENT = "#5085B1"
+# El mismo azul, un punto más oscuro, cuando lleva **texto** encima: pestaña o
+# pastilla elegida, elemento resaltado de un menú, texto seleccionado. Con
+# blanco, 4,6:1; con ACCENT se quedaba en 3,94:1 (13 px en negrita no cuenta
+# como texto grande).
+ACCENT_SELECTED = "#487AA3"
+ACCENT_DARK = "#3A6890"     # hover de pestañas, pastillas y casillas
+ACCENT_BTN = "#325B82"      # relleno de botón primario (TEXT = 4,6:1 arriba)
+# Botón primario al pasar el ratón: más claro que el normal y con el texto en
+# blanco puro, que es lo que deja aclarar el fondo sin bajar de 4,5:1.
+ACCENT_BTN_HOVER = "#3D6C93"
+# Pulsado: más oscuro, como un botón que se hunde (antes se aclaraba y el texto
+# bajaba a 2,72:1).
+ACCENT_BTN_PRESSED = "#2A4D6E"
 DANGER = "#B84A4A"          # rojo para bordes/indicadores
-DANGER_DARK = "#9C3C3C"     # hover
-DANGER_BTN = "#9C3C3C"      # relleno del botón borrar (TEXT = 5,38:1, AA)
+DANGER_BTN = "#983A3A"      # relleno del botón borrar (TEXT = 4,6:1 arriba)
+DANGER_BTN_HOVER = "#B24545"  # al pasar el ratón (texto blanco, 4,6:1)
+DANGER_DARK = "#873232"     # pulsado
 DANGER_EDGE = "#F0A0A0"     # borde claro del realce de la papelera: sobre el
                             # rojo vivo (#B84A4A) el borde oscuro no se veía
 DANGER_ICON = "#FFC0C0"     # glifo de la papelera al pasar por encima: blanco
@@ -65,13 +92,14 @@ DANGER_ICON = "#FFC0C0"     # glifo de la papelera al pasar por encima: blanco
                             # (sobre DANGER = 3,3:1, suficiente para un icono)
 WARNING = "#FFAF23"         # naranja (LTS)
 SUCCESS_TEXT = "#6FCF7A"    # verde claro para texto
-INFO_TEXT = "#7AA7E0"       # azul claro para texto
+INFO_TEXT = "#80ACE2"       # azul claro para texto (4,5:1 sobre el hover)
 INFO_DISC = "#45729B"       # disco del icono de información
 
-# Texto atenuado de las versiones que **no** tienes (la tienda): el título y la
-# línea de detalles. Que se lea "no instalada" sin dejar de leerse.
-TEXT_DIM = "rgba(230,230,230,0.6)"
-MUTED_DIM = "rgba(152,152,152,0.6)"
+# Título de una versión que **no** tienes (la tienda): más apagado que TEXT
+# para que se lea "no instalada", pero opaco y por encima de 4,5:1. Antes era
+# TEXT al 60 % de opacidad, y su línea de detalles MUTED al 60 %: 2,8:1. Lo que
+# se atenúa de verdad es el logo; los detalles van en MUTED, como en las demás.
+TEXT_DIM = "#B4B4B4"
 # Texto de un control deshabilitado (WCAG no exige contraste a lo inactivo,
 # pero tiene que seguir viéndose que está ahí).
 TEXT_DISABLED = "rgba(230,230,230,0.35)"

@@ -20,7 +20,21 @@ def _lighten(color: str, amount: float) -> str:
     return "#%02X%02X%02X" % tuple(mixed)
 
 
-def _volume(color: str, amount: float = 0.09) -> str:
+# Cuánto blanco lleva arriba el degradado de los botones de color.
+VOLUME = 0.09
+
+
+def gradient_top(color: str) -> str:
+    """El extremo más claro del degradado de un botón: donde peor se lee el texto.
+
+    Es el color contra el que hay que medir el contraste del texto de un botón
+    con volumen; medirlo contra el color base engaña (daba 4,6:1 donde arriba
+    había 3,56:1).
+    """
+    return _lighten(color, VOLUME)
+
+
+def _volume(color: str) -> str:
     """Degradado vertical que da volumen a un botón, sobre su color base.
 
     Es el ``GRADIENT_TOP`` de la versión Kivy: una capa blanca del 9 % arriba
@@ -28,7 +42,7 @@ def _volume(color: str, amount: float = 0.09) -> str:
     el 9 % de blanco se mezcla en el color del extremo superior.
     """
     return ("qlineargradient(x1:0, y1:0, x2:0, y2:1, "
-            f"stop:0 {_lighten(color, amount)}, stop:1 {color})")
+            f"stop:0 {gradient_top(color)}, stop:1 {color})")
 
 
 # Alto de la caja de contenido de una pestaña para que el total sea
@@ -71,7 +85,7 @@ def build_qss() -> str:
         font-weight: bold;
     }}
     QPushButton#Pill:hover {{ background-color: {t.ACCENT_DARK}; color: {t.TEXT_SEL}; }}
-    QPushButton#Pill:checked {{ background-color: {t.ACCENT}; color: {t.TEXT_SEL}; }}
+    QPushButton#Pill:checked {{ background-color: {t.ACCENT_SELECTED}; color: {t.TEXT_SEL}; }}
     QPushButton#Pill:disabled {{ color: {t.TEXT_DISABLED}; }}
 
     /* --- Pestañas (canal, migración y ajustes) ---
@@ -124,7 +138,7 @@ def build_qss() -> str:
     QTabWidget#SettingsTabs QTabBar::tab:hover {{ background-color: {t.ACCENT_DARK}; color: {t.TEXT_SEL}; }}
     QTabBar#ChannelTabs::tab:selected,
     QTabWidget#MigrateTabs QTabBar::tab:selected,
-    QTabWidget#SettingsTabs QTabBar::tab:selected {{ background-color: {t.ACCENT}; color: {t.TEXT_SEL}; }}
+    QTabWidget#SettingsTabs QTabBar::tab:selected {{ background-color: {t.ACCENT_SELECTED}; color: {t.TEXT_SEL}; }}
 
     /* --- Barra lateral --- */
     QPushButton#SideButton {{
@@ -140,7 +154,7 @@ def build_qss() -> str:
         font-size: 20px;
     }}
     QPushButton#SideButton:hover {{ background-color: {t.ACCENT_DARK}; color: {t.TEXT_SEL}; }}
-    QPushButton#SideButton:checked {{ background-color: {t.ACCENT}; color: {t.TEXT_SEL}; }}
+    QPushButton#SideButton:checked {{ background-color: {t.ACCENT_SELECTED}; color: {t.TEXT_SEL}; }}
 
     /* --- Botón de tarjeta / acción (relleno + degradado + borde) ---
        El degradado (blanco 9 % arriba) solo va en los botones de color, como en
@@ -155,16 +169,21 @@ def build_qss() -> str:
         font-weight: bold;
     }}
     QPushButton#CardButton:hover {{ background-color: {t.BUTTON_HOVER}; }}
-    QPushButton#CardButton:pressed {{ background-color: {t.ACCENT_DARK}; }}
+    QPushButton#CardButton:pressed {{
+        background-color: {t.ACCENT_DARK};
+        color: {t.TEXT_SEL};
+    }}
     QPushButton#CardButton:disabled {{ color: {t.TEXT_DISABLED}; }}
     QPushButton#CardButton[variant="accent"] {{
         background: {_volume(t.ACCENT_BTN)};
     }}
     QPushButton#CardButton[variant="accent"]:hover {{
-        background: {_volume(t.ACCENT_DARK)};
+        background: {_volume(t.ACCENT_BTN_HOVER)};
+        color: {t.TEXT_SEL};
     }}
     QPushButton#CardButton[variant="accent"]:pressed {{
-        background: {_volume(t.ACCENT)};
+        background: {_volume(t.ACCENT_BTN_PRESSED)};
+        color: {t.TEXT_SEL};
     }}
     QPushButton#CardButton[variant="dark"] {{
         background: {_volume(t.FILTER)};
@@ -175,7 +194,7 @@ def build_qss() -> str:
         color: {t.TEXT_SEL};
     }}
     QPushButton#CardButton[variant="dark"]:pressed {{
-        background: {_volume(t.ACCENT)};
+        background: {_volume(t.ACCENT_BTN_PRESSED)};
         border: 1px solid {t.ACCENT};
         color: {t.TEXT_SEL};
     }}
@@ -183,7 +202,7 @@ def build_qss() -> str:
         background: {_volume(t.DANGER_BTN)};
     }}
     QPushButton#CardButton[variant="danger"]:hover {{
-        background: {_volume(t.DANGER)};
+        background: {_volume(t.DANGER_BTN_HOVER)};
         border: 1px solid {t.DANGER_EDGE};
         color: {t.TEXT_SEL};
     }}
@@ -232,7 +251,7 @@ def build_qss() -> str:
     QPushButton#StarButton {{
         background: transparent;
         border: none;
-        color: {t.MUTED};
+        color: {t.ICON_MUTED};
         /* El glifo de la estrella aprovecha menos su caja que la "i", así que a
            13 px (el tamaño global) se veía más pequeña que el disco de info.
            Medido con tightBoundingRect: 16 px le da 18x17 px de tinta, a la par
@@ -431,7 +450,8 @@ def build_qss() -> str:
         border-radius: 8px;
         padding: 6px 12px;
         color: {t.TEXT};
-        selection-background-color: {t.ACCENT};
+        selection-background-color: {t.ACCENT_SELECTED};
+        selection-color: {t.TEXT_SEL};
         /* El color del texto de ejemplo va por aquí: ``QLineEdit::placeholder``
            no existe en Qt Style Sheets y la regla se ignoraba en silencio. */
         placeholder-text-color: {t.PLACEHOLDER};
@@ -444,7 +464,8 @@ def build_qss() -> str:
         border-radius: 8px;
         padding: 6px 12px;
         color: {t.TEXT};
-        selection-background-color: {t.ACCENT};
+        selection-background-color: {t.ACCENT_SELECTED};
+        selection-color: {t.TEXT_SEL};
         placeholder-text-color: {t.PLACEHOLDER};
     }}
     /* Campo de renombrado en línea (doble clic en una instalada): compacto y
@@ -470,12 +491,13 @@ def build_qss() -> str:
         padding: 3px 8px;
         min-height: 20px;
     }}
-    QComboBox:hover {{ background-color: {t.ACCENT_DARK}; }}
+    QComboBox:hover {{ background-color: {t.ACCENT_DARK}; color: {t.TEXT_SEL}; }}
     QComboBox::drop-down {{ border: none; width: 18px; }}
     QComboBox QAbstractItemView {{
         background-color: {t.SURFACE};
         color: {t.TEXT};
-        selection-background-color: {t.ACCENT};
+        selection-background-color: {t.ACCENT_SELECTED};
+        selection-color: {t.TEXT_SEL};
         border: 1px solid {t.SURFACE_ALT};
         outline: none;
     }}
@@ -532,10 +554,9 @@ def build_qss() -> str:
        propiedad dinámica y no con ``setStyleSheet`` en la tarjeta: así el
        color sale de un token y se ve aquí junto al resto. */
     QLabel#Title[dim="true"] {{ color: {t.TEXT_DIM}; }}
-    QLabel#Muted[dim="true"] {{ color: {t.MUTED_DIM}; }}
     QLabel#HeaderTitle {{ font-size: 19px; font-weight: bold; }}
     /* La sección actual: un poco más pequeña que la marca, en negrita y azul
-       claro (``INFO_TEXT``, 5,4:1 sobre el gris de la cabecera). */
+       claro (``INFO_TEXT``, 5,9:1 sobre el gris de la cabecera). */
     QLabel#HeaderSection {{
         font-size: 17px;
         font-weight: bold;
@@ -581,7 +602,7 @@ def build_qss() -> str:
         border-radius: 4px;
     }}
     QMenu#TrayMenu::item:selected, QMenu#CardMenu::item:selected {{
-        background-color: {t.ACCENT};
+        background-color: {t.ACCENT_SELECTED};
         color: {t.TEXT_SEL};
     }}
     QMenu#TrayMenu::separator, QMenu#CardMenu::separator {{

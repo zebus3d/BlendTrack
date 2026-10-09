@@ -222,10 +222,12 @@ def _with_opacity(pix: QPixmap, opacity: float) -> QPixmap:
 
 
 def _dim_unless(label, installed: bool) -> None:
-    """Atenúa el texto de una versión que no tienes (regla ``[dim]`` del QSS).
+    """Atenúa el título de una versión que no tienes (regla ``[dim]`` del QSS).
 
-    La propiedad se pone antes de que el widget se pula por primera vez, así
-    que no hace falta repolir.
+    Solo el título, y a un gris opaco que sigue pasando 4,5:1 (``TEXT_DIM``):
+    lo que dice "no la tienes" es sobre todo el logo apagado. La propiedad se
+    pone antes de que el widget se pula por primera vez, así que no hace falta
+    repolir.
     """
     label.setProperty("dim", "false" if installed else "true")
 
@@ -367,7 +369,6 @@ class BuildCard(BaseBuildCard):
         text_col.addLayout(top)
         meta = ElidedLabel(self.meta_text, Qt.ElideRight)
         meta.setObjectName("Muted")
-        _dim_unless(meta, installed)
         text_col.addWidget(meta)
         lay.addLayout(text_col, 1)
 

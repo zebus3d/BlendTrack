@@ -1402,7 +1402,7 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         # Los tres realces se distinguen del estado normal (>= 1,5:1 es lo que
         # separa dos grises contiguos de la escala; la estrella y la "i" van
         # mucho más allá).
-        self.assertGreaterEqual(t.contrast(t.WARNING, t.MUTED), 1.5)
+        self.assertGreaterEqual(t.contrast(t.WARNING, t.ICON_MUTED), 1.5)
         self.assertGreaterEqual(t.contrast(t.BUTTON, t.SURFACE_ALT), 1.5)
         self.assertGreaterEqual(t.contrast(t.ACCENT, t.INFO_DISC), 1.1)
 
@@ -5495,6 +5495,54 @@ class CornerGripTests(unittest.TestCase):
                                         QPointF(5, 5)))
             grip.leaveEvent(QEvent(QEvent.Leave))
         self.assertEqual(update.call_count, 2)
+
+
+
+class ContrastTests(unittest.TestCase):
+    """Contraste WCAG del tema, medido en el **peor punto** de cada relleno.
+
+    Texto normal >= 4,5:1 y controles (bordes, indicadores) >= 3:1. Los botones
+    llevan un degradado con blanco arriba, así que su texto se mide contra ese
+    extremo (``qss.gradient_top``), no contra el color base: medirlo contra la
+    base daba por buenos botones que arriba se quedaban en 2,7:1.
+    """
+
+    def test_texto_sobre_rellenos(self):
+        from ui import qss
+        from ui import theme as t
+
+        top = qss.gradient_top
+        cases = {
+            "pestaña/pastilla elegida": (t.TEXT_SEL, t.ACCENT_SELECTED),
+            "pestaña/pastilla con el ratón": (t.TEXT_SEL, t.ACCENT_DARK),
+            "botón primario": (t.TEXT, top(t.ACCENT_BTN)),
+            "botón primario, hover": (t.TEXT_SEL, top(t.ACCENT_BTN_HOVER)),
+            "botón primario, pulsado": (t.TEXT_SEL, top(t.ACCENT_BTN_PRESSED)),
+            "botón neutro": (t.TEXT, t.BUTTON),
+            "botón neutro, hover": (t.TEXT, t.BUTTON_HOVER),
+            "botón neutro, pulsado": (t.TEXT_SEL, t.ACCENT_DARK),
+            "Lanzar": (t.TEXT, top(t.FILTER)),
+            "Lanzar, hover": (t.TEXT_SEL, top(t.LAUNCH_HOVER)),
+            "botón rojo": (t.TEXT, top(t.DANGER_BTN)),
+            "botón rojo, hover": (t.TEXT_SEL, top(t.DANGER_BTN_HOVER)),
+            "botón rojo, pulsado": (t.TEXT_SEL, top(t.DANGER_DARK)),
+            "texto secundario en hover": (t.MUTED, t.SURFACE_ALT),
+            "texto azul en hover": (t.INFO_TEXT, t.SURFACE_ALT),
+            "versión que no tienes": (t.TEXT_DIM, t.CARD_DIM),
+            "versión que no tienes, hover": (t.TEXT_DIM, t.SURFACE_ALT),
+        }
+        for name, (text, fill) in cases.items():
+            with self.subTest(name):
+                self.assertGreaterEqual(t.contrast(text, fill), 4.5)
+
+    def test_controles_sin_marcar_se_distinguen(self):
+        """Casilla sin marcar e interruptor apagado: su borde, >= 3:1."""
+        from ui import theme as t
+
+        for background in (t.SURFACE, t.CARD_DIM, t.FIELD):
+            self.assertGreaterEqual(t.contrast(t.MUTED, background), 3.0)
+        # El indicador de acento (casilla marcada, interruptor encendido).
+        self.assertGreaterEqual(t.contrast(t.ACCENT, t.SURFACE), 3.0)
 
 
 if __name__ == "__main__":

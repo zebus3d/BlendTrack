@@ -143,12 +143,23 @@ class SwitchPill(QPushButton):
             return QColor(t.ACCENT_DARK if self.underMouse() else t.ACCENT)
         return QColor(t.BUTTON if self.underMouse() else t.SURFACE_ALT)
 
+    def _edge_color(self) -> str:
+        """Borde de la pista: lo que dibuja el interruptor sin encender.
+
+        Sin encender, la pista gris (SURFACE_ALT) apenas se distingue de la
+        tarjeta (1,2:1), y un control tiene que destacar 3:1 de su fondo (WCAG
+        1.4.11). El borde en MUTED lo dibuja con 4,5:1 sin cambiar el relleno.
+        """
+        if self.isEnabled() and not self.isChecked():
+            return t.MUTED
+        return t.BORDER
+
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
         radius = rect.height() / 2
-        painter.setPen(QPen(QColor(t.BORDER), 1))
+        painter.setPen(QPen(QColor(self._edge_color()), 1))
         painter.setBrush(self._track_color())
         painter.drawRoundedRect(rect, radius, radius)
 
@@ -206,8 +217,11 @@ class CheckPill(QCheckBox):
         elif not self.isEnabled():
             fill, edge = QColor(t.FIELD), QColor(t.BORDER)
         else:
+            # Sin marcar, el borde es lo único que dibuja la casilla: en BORDER
+            # se quedaba en 1,2:1 sobre la tarjeta y la casilla "desaparecía".
+            # En MUTED pasa los 3:1 de un control (WCAG 1.4.11).
             fill = QColor(t.FIELD)
-            edge = QColor(t.ACCENT if self.underMouse() else t.BORDER)
+            edge = QColor(t.ACCENT if self.underMouse() else t.MUTED)
         painter.setPen(QPen(edge, 1))
         painter.setBrush(fill)
         painter.drawRoundedRect(box, self.RADIUS, self.RADIUS)
