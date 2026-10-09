@@ -164,6 +164,20 @@ class BfaWebDavTests(unittest.TestCase):
         self.assertTrue(builds)
         self.assertTrue(all(b.fork == FORK_BFORARTISTS for b in builds))
 
+    def test_sin_red_en_la_raiz_se_sirve_el_cache_entero(self):
+        """Con la red caída del todo, la pestaña enseña lo de la última vez.
+
+        El caché se guarda por versión (``versions``); antes, al caer la raíz,
+        se buscaba una clave ``builds`` que no existía y salía vacía.
+        """
+        with mock.patch.object(fk, "_propfind", side_effect=self._propfind):
+            first = fk.fetch_bforartists()
+        self.assertTrue(first)
+        with mock.patch.object(fk, "_propfind", side_effect=OSError("sin red")):
+            offline = fk.fetch_bforartists()
+        self.assertEqual(sorted(b.filename for b in offline),
+                         sorted(b.filename for b in first))
+
     def test_xml_roto_no_revienta(self):
         self.assertEqual(fk._parse_multistatus(b"<no xml"), [])
 

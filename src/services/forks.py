@@ -239,6 +239,33 @@ def _builds_from_cache(items) -> list:
     return builds
 
 
+def _bfa_cached_versions(cache: dict) -> dict:
+    """Las versiones guardadas en el caché de Bforartists (``{}`` si no hay).
+
+    El caché tiene la forma ``{"versions": {"5.2.0": {"modified": ...,
+    "assets": [...]}}}``: se guarda **por versión** para poder reutilizar
+    cada una mientras su fecha no cambie.
+    """
+    versions = cache.get("versions")
+    return versions if isinstance(versions, dict) else {}
+
+
+def _bfa_builds_from_versions(versions: dict) -> list:
+    """Aplana las versiones guardadas en una lista de ``Build``.
+
+    Es el único sitio que sabe leer la forma del caché, y lo usan los dos
+    caminos: el normal (versiones recién consultadas o reutilizadas) y el de
+    emergencia (la raíz no contesta y se sirve todo lo guardado). Antes el de
+    emergencia buscaba una clave ``builds`` que este caché nunca tuvo, así que
+    sin red la pestaña de Bforartists salía vacía.
+    """
+    builds = []
+    for saved in versions.values():
+        if isinstance(saved, dict):
+            builds.extend(_builds_from_cache(saved.get("assets")))
+    return builds
+
+
 def fetch_bforartists(timeout: int = 20) -> list:
     """Listado de Bforartists: versiones y ficheros, con caché por fecha.
 
@@ -246,11 +273,13 @@ def fetch_bforartists(timeout: int = 20) -> list:
     cambiaron** desde la última vez. Las que no, se sirven del caché en disco.
     Si algo falla, se cae al caché entero antes que dejar la pestaña vacía.
     """
+    cache = _load_cache(bfa_cache_path())
+    cached = _bfa_cached_versions(cache)
     try:
         root_entries = _parse_multistatus(_propfind(BFA_WEBDAV_URL + "/", timeout))
     except Exception as error:
         log(f"bforartists listing unavailable: {error}")
-        return _builds_from_cache(_load_cache(bfa_cache_path()).get("builds"))
+        return _bfa_builds_from_versions(cached)
 
     versions = []
     for entry in root_entries:
@@ -260,8 +289,6 @@ def fetch_bforartists(timeout: int = 20) -> list:
         if match:
             versions.append((match.group(1), entry))
 
-    cache = _load_cache(bfa_cache_path())
-    cached = cache.get("versions") if isinstance(cache.get("versions"), dict) else {}
     fresh = {}
     pending = []
     for version, entry in versions:
@@ -292,11 +319,11 @@ def fetch_bforartists(timeout: int = 20) -> list:
                 if saved is not None:
                     fresh[version] = saved
 
-    builds = []
-    for version, _entry in versions:
-        saved = fresh.get(version)
-        if saved:
-            builds.extend(_builds_from_cache(saved.get("assets")))
+    # Se recorre en el orden de la raíz, no en el de los hilos, para que el
+    # listado salga siempre igual.
+    builds = _bfa_builds_from_versions(
+        {version: fresh[version] for version, _entry in versions
+         if version in fresh})
     try:
         write_json_atomic(bfa_cache_path(),
                           {"saved_at": int(time.time()), "versions": fresh})
