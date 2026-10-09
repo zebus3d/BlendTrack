@@ -15,6 +15,7 @@ from ui import icons
 from ui.fonts import icon_font
 from ui.widgets.buttons import CardButton, CheckPill
 from ui.widgets.labels import ElidedLabel
+from ui.widgets.layouts import repolish
 
 # Etiqueta de cada tipo. Las cuatro de Blender ya existían traducidas para las
 # pestañas de canal, así que se reutilizan tal cual (mismo nombre en los dos
@@ -97,10 +98,9 @@ class WriteToggle(CardButton):
         writable = self.isChecked()
         self.setText(icons.LOCK_OPEN if writable else icons.LOCK)
         self.setToolTip(tr(WRITABLE_TIP if writable else READ_ONLY_TIP))
-        # La propiedad la lee el QSS; hay que repintar a mano al cambiarla.
+        # La propiedad la lee el QSS; hay que repolir al cambiarla.
         self.setProperty("writable", "true" if writable else "false")
-        self.style().unpolish(self)
-        self.style().polish(self)
+        repolish(self)
 
 
 class FolderRow(QFrame):

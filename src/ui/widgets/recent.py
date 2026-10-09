@@ -149,8 +149,9 @@ class RecentView(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # Fila de cabecera de 44 px (como la de filtros de las listas): así esta
-        # vista empieza a la misma altura que las demás al cambiar de pantalla.
+        # Fila de cabecera del alto de la de filtros de las listas
+        # (``FILTERS_HEIGHT``): así esta vista empieza a la misma altura que las
+        # demás al cambiar de pantalla.
         header = QFrame()
         header.setObjectName("Chrome")
         header.setFixedHeight(t.FILTERS_HEIGHT)

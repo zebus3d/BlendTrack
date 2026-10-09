@@ -20,7 +20,7 @@ from ui import theme as t
 from ui.fonts import glyph_icon
 from ui.widgets import dialogs
 from ui.widgets.buttons import CardButton
-from ui.widgets.layouts import list_scroll
+from ui.widgets.layouts import list_scroll, repolish
 
 
 # Alto fijo de una fila: las dos columnas tienen que cuadrar una con otra.
@@ -38,7 +38,7 @@ DETAIL_SCROLL_HEIGHT = 260
 SNAPSHOT_SCROLL_HEIGHT = 280
 
 # Alto de los paneles con lista: el del contenido, con estos topes. El usuario
-# los estira desde la esquinita de la tarjeta (``_CornerGrip``).
+# los estira desde la esquinita de la tarjeta (``layouts.CornerGrip``).
 DETAIL_MIN_HEIGHT = 60
 SNAPSHOT_MIN_HEIGHT = 60
 
@@ -245,6 +245,7 @@ def _reason_text(plan) -> str:
         return tr("It does not state a minimum version.")
     return ""
 
+
 # Qué hacer con un addon marcado "Review" (el motivo solo no basta: el usuario
 # necesita saber cómo comprobarlo). Se elige la recomendación según la causa.
 def _review_advice(plan) -> str:
@@ -263,6 +264,7 @@ def _review_advice(plan) -> str:
     return tr("Copy it and test it in the destination version before relying "
               "on it.")
 
+
 def _status_tooltip(plan) -> str:
     """Tooltip del estado de una fila: motivo y, si toca, qué hacer.
 
@@ -279,6 +281,7 @@ def _status_tooltip(plan) -> str:
     # BLOCKED: el motivo de por qué no se puede copiar (ya viene en el texto).
     return reason
 
+
 def _meta_text(addon) -> str:
     """Línea secundaria de una fila (versión, mínimo declarado y tipo)."""
     parts = []
@@ -289,6 +292,7 @@ def _meta_text(addon) -> str:
     parts.append(tr("Extension") if addon.kind == "extension"
                  else tr("Legacy add-on"))
     return "  ·  ".join(parts)
+
 
 def _destination_text(plan) -> str:
     """Carpeta donde quedará el addon (``user_default/<id>``, ``addons/<x>``).
@@ -302,6 +306,7 @@ def _destination_text(plan) -> str:
         return tr("(not copied)")
     return "/".join(Path(plan.destination).parts[-2:])
 
+
 def _accent_button(text: str, tooltip: str, on_click) -> CardButton:
     """Botón primario con la flecha de la migración como icono.
 
@@ -314,6 +319,7 @@ def _accent_button(text: str, tooltip: str, on_click) -> CardButton:
     button.clicked.connect(on_click)
     return button
 
+
 def _entry_info(entry) -> tuple:
     """``(executable, version)`` de una instalada, aguantando ``None``.
 
@@ -324,6 +330,7 @@ def _entry_info(entry) -> tuple:
     if entry is None:
         return None, ""
     return getattr(entry, "executable", None), getattr(entry, "version", "")
+
 
 def _failure_block(title: str, lines, limit: int = 10) -> list:
     """Bloque "título + viñetas" de un diálogo de resultado, recortado.
@@ -339,6 +346,7 @@ def _failure_block(title: str, lines, limit: int = 10) -> list:
     if len(lines) > limit:
         block.append(tr("… and {count} more.", count=len(lines) - limit))
     return block
+
 
 def _report_lines(summary: str, backed_up: bool, failed, failure_title: str,
                   failure_label) -> list:
@@ -358,6 +366,7 @@ def _report_lines(summary: str, backed_up: bool, failed, failure_title: str,
                         for item, message in failed)))
     return lines
 
+
 def _section_names(paths) -> list:
     """Nombres legibles de las secciones a las que pertenecen esas rutas RNA."""
     order = {key: index for index, (key, _) in enumerate(bprefs.SECTIONS)}
@@ -367,6 +376,7 @@ def _section_names(paths) -> list:
         positions.setdefault(key, order.get(key, 99))
     ordered = sorted(positions, key=lambda key: (positions[key], key))
     return [tr(bprefs.section_label(key)) for key in ordered]
+
 
 def _make_scroll(object_name: str, cap: int, minimum: int) -> QScrollArea:
     """Área de lista, con su alto de partida entre ``minimum`` y ``cap``.
@@ -380,6 +390,7 @@ def _make_scroll(object_name: str, cap: int, minimum: int) -> QScrollArea:
     scroll.setMaximumHeight(cap)
     _sunken_when_scrolling(scroll)
     return scroll
+
 
 def _sunken_when_scrolling(scroll: QScrollArea) -> None:
     """Hunde el fondo del lienzo mientras la lista no quepa entera.
@@ -399,9 +410,7 @@ def _sunken_when_scrolling(scroll: QScrollArea) -> None:
             if widget is None or widget.property("scrolling") == value:
                 continue
             widget.setProperty("scrolling", value)
-            # Una propiedad dinámica no repinta sola: hay que repolir.
-            widget.style().unpolish(widget)
-            widget.style().polish(widget)
+            repolish(widget)
 
     bar.rangeChanged.connect(sync)
     sync()

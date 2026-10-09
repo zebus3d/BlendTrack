@@ -6,7 +6,8 @@ esquinas redondeadas, ``qlineargradient`` para el degradado superior de los
 botones y los pseudo-estados ``:hover``/``:pressed``/``:checked``/``:disabled``.
 
 Los widgets se distinguen por ``objectName`` (o por una propiedad dinámica para
-las variantes de color), igual que en el PoC.
+las variantes de color): el código solo pone el nombre y aquí se decide el
+aspecto.
 """
 
 from ui import theme as t

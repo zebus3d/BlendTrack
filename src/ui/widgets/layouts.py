@@ -13,6 +13,18 @@ from PySide6.QtWidgets import QFrame, QLabel, QScrollArea, QVBoxLayout, QWidget
 from ui import theme as t
 
 
+def repolish(widget) -> None:
+    """Hace que el QSS vuelva a leer las propiedades dinámicas del widget.
+
+    Qt aplica el QSS al *pulir* el widget y no se entera de que una propiedad
+    (``hover``, ``variant``, ``writable``...) ha cambiado después: hay que
+    despulirlo y volver a pulirlo. Antes de pulirlo la primera vez (en el
+    constructor) no hace falta, basta con poner la propiedad.
+    """
+    widget.style().unpolish(widget)
+    widget.style().polish(widget)
+
+
 def clear_layout(layout, keep_stretch: bool = False) -> None:
     """Vacía un layout de widgets de verdad.
 

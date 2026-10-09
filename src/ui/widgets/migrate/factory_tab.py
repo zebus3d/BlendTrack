@@ -26,7 +26,7 @@ from ui.widgets.cards import settings_card
 from ui.widgets import dialogs
 from ui.widgets.labels import ElidedLabel
 from ui.widgets.layouts import (CornerGrip, FittedList, clear_layout,
-                                list_scroll)
+                                list_scroll, muted_note)
 from ui.widgets.migrate.common import (SNAPSHOT_MIN_HEIGHT,
                                        SNAPSHOT_MIN_ROWS,
                                        SNAPSHOT_SCROLL_HEIGHT, _entry_info,
@@ -50,6 +50,7 @@ def _snapshot_origin(snapshot, program: str = "Blender") -> str:
                   program=program, version=label[1:])
     return tr("Saved settings")
 
+
 def _snapshot_files_text(details) -> str:
     """Qué trae el guardado, además de su userpref (barato, sin arrancar nada)."""
     parts = []
@@ -64,6 +65,7 @@ def _snapshot_files_text(details) -> str:
     if details.get("total"):
         parts.append(human_size(int(details["total"])))
     return "  ·  ".join(parts) or tr("Empty")
+
 
 class _SnapshotRow(QFrame):
     """Fila del gestor de guardados: qué es, qué trae y qué hacer con él.
@@ -167,6 +169,7 @@ class _SnapshotRow(QFrame):
             text += "  ·  " + " · ".join(sections)
         self.analysis_label.setText(text)
 
+
 def _show_snapshot_details(parent, snapshot, preferences) -> None:
     """Diálogo con los ajustes que cambia ese guardado, uno por línea.
 
@@ -174,16 +177,16 @@ def _show_snapshot_details(parent, snapshot, preferences) -> None:
     puede crecer hasta salirse de la pantalla.
     """
     date = bsnap.snapshot_date(snapshot) or Path(snapshot).name
-    dialog = dialogs.AppDialog(parent, tr("Saved settings of {date}", date=date),
-                       tr("These are the settings this copy changes from "
-                          "Blender's defaults."))
+    dialog = dialogs.AppDialog(
+        parent, tr("Saved settings of {date}", date=date),
+        tr("These are the settings this copy changes from Blender's "
+           "defaults."))
     scroll, body_lay = list_scroll("SnapshotDetails", "SnapshotDetailsBody",
                                    align_top=False)
     scroll.setMaximumHeight(360)
     if not preferences:
-        empty = QLabel(tr("No settings changed from Blender's defaults"))
-        empty.setObjectName("Muted")
-        body_lay.addWidget(empty)
+        body_lay.addWidget(
+            muted_note(tr("No settings changed from Blender's defaults")))
     else:
         rows = []
         for section, items in bprefs.group_by_section(preferences):
@@ -379,19 +382,20 @@ class FactoryTabMixin:
             tooltip=tr("Drag the corner to make the saved copies list taller "
                        "or shorter."))
         card.set_grip(self.snapshot_grip)
-
-        self._fill_factory()
+        # Estado de partida, sin versión elegida: nada que borrar ni enseñar.
+        # Lo rellena ``_fill_factory`` en cuanto llegan las instaladas.
+        self.factory_empty.setVisible(False)
+        self.delete_all_btn.setEnabled(False)
         return card
 
     def set_snapshot_keep(self, value: int) -> None:
         """Fija cuántas copias se conservan (lo llama MainWindow con el ajuste)."""
         self.snapshot_keep = int(value)
-        if hasattr(self, "snapshot_keep_combo"):
-            index = self.snapshot_keep_combo.findData(self.snapshot_keep)
-            if index >= 0:
-                self.snapshot_keep_combo.blockSignals(True)
-                self.snapshot_keep_combo.setCurrentIndex(index)
-                self.snapshot_keep_combo.blockSignals(False)
+        index = self.snapshot_keep_combo.findData(self.snapshot_keep)
+        if index >= 0:
+            self.snapshot_keep_combo.blockSignals(True)
+            self.snapshot_keep_combo.setCurrentIndex(index)
+            self.snapshot_keep_combo.blockSignals(False)
 
     def _on_snapshot_keep_changed(self, index: int) -> None:
         """El usuario cambió la retención: se guarda y se poda ya.
@@ -494,8 +498,6 @@ class FactoryTabMixin:
 
     def _fill_factory(self) -> None:
         """Repinta la tarjeta de fábrica: estado, lista de guardados y análisis."""
-        if not hasattr(self, "factory_status"):
-            return
         config = self._factory_config()
         self._clear_snapshot_rows()
         if config is None:
@@ -536,8 +538,6 @@ class FactoryTabMixin:
         por versión: cada guardado cuesta un arranque de Blender, así que no se
         repite mientras no cambie la versión ni los guardados.
         """
-        if not hasattr(self, "tabs"):
-            return      # aún se está montando la vista
         if self._page_of(self.tabs.currentWidget()) is not self.factory_page:
             return
         if self._snapshot_job.running or self._analyzed_for:
@@ -629,8 +629,9 @@ class FactoryTabMixin:
         row = self._snapshot_widgets.get(Path(snapshot))
         preferences = row.analysis if row is not None else None
         if preferences is None:
-            dialogs.show_info(self, tr("Saved settings"),
-                      tr("Still reading this copy. Try again in a moment."))
+            dialogs.show_info(
+                self, tr("Saved settings"),
+                tr("Still reading this copy. Try again in a moment."))
             return
         _show_snapshot_details(self, snapshot, preferences)
 

@@ -31,7 +31,8 @@ from ui.widgets.buttons import CardButton, CheckPill
 from ui.widgets.cards import settings_card
 from ui.widgets import dialogs
 from ui.widgets.labels import ElidedLabel
-from ui.widgets.layouts import CornerGrip, FittedList, clear_layout
+from ui.widgets.layouts import (CornerGrip, FittedList, clear_layout,
+                                muted_note)
 from ui.widgets.migrate.common import (DETAIL_MIN_HEIGHT, DETAIL_MIN_ROWS,
                                        DETAIL_SCROLL_HEIGHT, _accent_button,
                                        _entry_info, _entry_key,
@@ -338,9 +339,8 @@ class PrefsTabMixin:
             self.pref_rows.addWidget(check)
             self.pref_checks[item.key] = check
         if none:
-            empty = QLabel(tr("No preferences found in the source version."))
-            empty.setObjectName("Muted")
-            self.pref_rows.addWidget(empty)
+            self.pref_rows.addWidget(
+                muted_note(tr("No preferences found in the source version.")))
         self.copy_prefs_btn.setEnabled(not none)
 
     def copy_preference_files(self) -> None:
@@ -475,8 +475,7 @@ class PrefsTabMixin:
         clear_layout(self.detail_rows)
         # Sin filas no se enseña el área: un hueco vacío con su barra (y su
         # esquinita) quedaría raro cuando aún no se ha leído nada.
-        if hasattr(self, "detail_scroll"):
-            self.detail_scroll.setVisible(False)
+        self.detail_scroll.setVisible(False)
 
     def _resize_detail(self, delta: int) -> None:
         """Arrastró el asa de la lista de claves (ver ``FittedList``)."""
@@ -571,7 +570,7 @@ class PrefsTabMixin:
             "{changed} settings changed from Blender's defaults · {active} "
             "add-ons enabled in the source.",
             changed=len(self.detail_prefs), active=active)
-        skipped = getattr(self, "_detail_skipped", 0)
+        skipped = self._detail_skipped
         if skipped:
             # Propiedades que el volcado no pudo leer: el detalle está en el
             # tooltip del estado (lo pone ``_on_prefs_loaded``).
@@ -676,7 +675,7 @@ class PrefsTabMixin:
     def _select_detail(self, checked: bool) -> None:
         for pref in self.detail_prefs:
             pref.selected = checked
-        for row in getattr(self, "detail_checks", []):
+        for row in self.detail_checks:
             row.set_checked(checked)
 
     def write_detail_prefs(self) -> None:

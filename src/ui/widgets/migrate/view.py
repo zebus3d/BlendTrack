@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (QComboBox, QFrame, QHBoxLayout, QLabel,
                                QScrollArea,
                                QSizePolicy, QTabWidget, QVBoxLayout, QWidget)
 
+
 from i18n import tr
 from model.build import fork_label
 from services import blender_config as bc
@@ -51,8 +52,9 @@ class MigrateView(AddonsTabMixin, PrefsTabMixin, FactoryTabMixin,
     status_message = Signal(str)
     activation_done = Signal(object)
     addons_copied = Signal(object)     # {"result"|"error", "executable", ...}
+    # Las señales de los hilos llevan, además, el ``ticket`` de su LatestJob.
     prefs_loaded = Signal(object)      # {"user", "factory", "error"}
-    prefs_applied = Signal(object)     # {"result", "version"}
+    prefs_applied = Signal(object)     # {"result", "version", "program"}
     source_read = Signal(object)       # {"version", "enabled", "error"}
     snapshots_analyzed = Signal(object)  # {"version", "results", "live"}
     snapshot_keep_changed = Signal(int)  # cuántas copias guardadas conservar
@@ -95,9 +97,10 @@ class MigrateView(AddonsTabMixin, PrefsTabMixin, FactoryTabMixin,
         self.source_enabled = set()
         self.detail_prefs = []
         self.detail_checks = []
-        # Alto elegido a mano con el asa (None = el del contenido, con tope).
-        # Gestor de guardados: filas por instantánea, análisis cacheado y
-        # bandera de "ya se está analizando" (un arranque de Blender por fila).
+        # Cuántas claves no se pudieron leer en la última lectura del origen.
+        self._detail_skipped = 0
+        # Gestor de guardados: filas por instantánea, análisis cacheado y el
+        # trabajo que lo calcula (un arranque de Blender por guardado).
         self._snapshot_widgets = {}
         self._snapshot_job = LatestJob()
         self._forget_analysis()
@@ -136,10 +139,13 @@ class MigrateView(AddonsTabMixin, PrefsTabMixin, FactoryTabMixin,
         * **Factory settings**: una versión, que se restablece o se recupera.
         """
         root = QVBoxLayout(self)
-        # Sin margen: las pestañas van **a sangre** (el canvas llega hasta la
-        # barra lateral, el borde derecho y la barra de estado). El padding va
-        # dentro de cada pestaña, no aquí.
-        root.setContentsMargins(0, 0, 0, 0)
+        # Sin margen a los lados ni abajo: las pestañas van **a sangre** (el
+        # lienzo llega hasta la barra lateral, el borde derecho y la barra de
+        # estado); el padding va dentro de cada pestaña. Arriba sí: las
+        # pestañas se alinean por **arriba** con la barra lateral y con los
+        # tags de canal (``TABS_TOP``). Las tres filas no miden lo mismo, así
+        # que alinearlas por abajo las dejaba a distinta altura.
+        root.setContentsMargins(0, t.TABS_TOP, 0, 0)
         root.setSpacing(0)
 
         self.header = self._build_header()
@@ -159,10 +165,6 @@ class MigrateView(AddonsTabMixin, PrefsTabMixin, FactoryTabMixin,
                 tr("Start a version as if it were freshly installed, keeping "
                    "your current settings saved aside."))):
             self.tabs.setTabToolTip(index, tip)
-        # Las pestañas se alinean por **arriba** con la barra lateral y con los
-        # tags de canal (``TABS_TOP``): las tres filas no miden lo mismo, así
-        # que alinear por abajo las dejaba a distinta altura.
-        root.setContentsMargins(0, t.TABS_TOP, 0, 0)
         root.addWidget(self.tabs, 1)
 
         self.tabs.currentChanged.connect(self._show_header)
@@ -190,8 +192,6 @@ class MigrateView(AddonsTabMixin, PrefsTabMixin, FactoryTabMixin,
         self.warning.setVisible(False)
         lay.addWidget(self.warning)
         return header
-
-
 
     def _show_header(self, index: int) -> None:
         """Mueve a la pestaña visible la tarjeta de versiones que le toca.
@@ -308,12 +308,6 @@ class MigrateView(AddonsTabMixin, PrefsTabMixin, FactoryTabMixin,
         lay.addLayout(bar)
         return card
 
-
-
-
-
-
-
     def _version_combo(self, tooltip: str) -> QComboBox:
         """Desplegable de versión instalada (en la barra superior)."""
         combo = QComboBox()
@@ -322,45 +316,6 @@ class MigrateView(AddonsTabMixin, PrefsTabMixin, FactoryTabMixin,
         combo.setToolTip(tooltip)
         combo.currentIndexChanged.connect(lambda _: self._fill_from_installed())
         return combo
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     def set_system(self, platform: str, arch: str) -> None:
         """Fija el SO/arquitectura de este equipo (para la compatibilidad)."""
@@ -459,7 +414,6 @@ class MigrateView(AddonsTabMixin, PrefsTabMixin, FactoryTabMixin,
         self.target_cfg = bc.config_for(target.version, self.platform,
                                         fork=getattr(target, "fork", ""))
         self._fill_preference_files()
-        self._refresh_undo()
         self._fill_factory()
         self.source_path_label.setText(str(self.source_cfg.root))
         self.target_path_label.setText(str(self.target_cfg.root))
@@ -469,7 +423,6 @@ class MigrateView(AddonsTabMixin, PrefsTabMixin, FactoryTabMixin,
         # Lectura automática del origen (addons activos + preferencias). Si esa
         # versión ya se leyó, no vuelve a arrancar Blender.
         self._read_source_blender()
-
 
     def _check_running(self, entry, warning=None) -> None:
         """Avisa (en la tarjeta) si ese Blender está abierto.
@@ -497,9 +450,6 @@ class MigrateView(AddonsTabMixin, PrefsTabMixin, FactoryTabMixin,
         """True si hay cualquier Blender abierto (ver ``blocked_by_running``)."""
         return blocked_by_running(self)
 
-
-
-
     def _set_controls_enabled(self, enabled: bool) -> None:
         for widget in (self.copy_btn, self.select_all_btn,
                        self.select_none_btn):
@@ -513,9 +463,3 @@ class MigrateView(AddonsTabMixin, PrefsTabMixin, FactoryTabMixin,
         """Pinta el aviso en la etiqueta que le pasen (cada pestaña tiene una)."""
         label.setText(text)
         label.setVisible(bool(text))
-
-
-
-
-
-

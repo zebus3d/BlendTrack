@@ -55,6 +55,7 @@ class _BoardRow(QFrame):
         lay.setSpacing(8)
         self.row_layout = lay
 
+
 class _SourceRow(_BoardRow):
     """Fila del origen: casilla, nombre, versión y veredicto."""
 
@@ -103,6 +104,7 @@ class _SourceRow(_BoardRow):
     def set_checked(self, checked: bool) -> None:
         """Marca o desmarca respetando las bloqueadas."""
         self.check.setChecked(bool(checked) and not self.plan.blocked)
+
 
 class _DestRow(_BoardRow):
     """Fila del destino: dónde caerá ese addon."""
@@ -400,7 +402,7 @@ class AddonsTabMixin:
 
     def _refresh_undo(self) -> None:
         """Enseña el botón de deshacer solo si el destino tiene marcador."""
-        if self.target_cfg is None or not hasattr(self, "undo_btn"):
+        if self.target_cfg is None:
             return
         self.undo_btn.setVisible(
             bool(baddons.read_migration_marker(self.target_cfg)))

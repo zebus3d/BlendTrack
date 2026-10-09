@@ -17,6 +17,7 @@ from PySide6.QtWidgets import QCheckBox, QPushButton, QToolTip
 
 from ui import icons
 from ui import theme as t
+from ui.widgets.layouts import repolish
 
 
 def _keyboard_focus(widget) -> None:
@@ -70,8 +71,7 @@ class CardButton(QPushButton):
     def set_variant(self, variant: str) -> None:
         """Cambia el color del botón y lo repinta."""
         self.setProperty("variant", variant)
-        self.style().unpolish(self)
-        self.style().polish(self)
+        repolish(self)
 
 
 class IconLinkButton(QPushButton):

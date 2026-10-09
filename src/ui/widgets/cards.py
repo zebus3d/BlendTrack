@@ -24,6 +24,7 @@ from ui import theme as t
 from ui.fonts import device_ratio, glyph_icon, icon_font
 from ui.widgets.buttons import CardButton, IconLinkButton, StarButton
 from ui.widgets.labels import EditableLabel, ElidedLabel
+from ui.widgets.layouts import repolish
 
 # Un logo por fork. El de Blender está en el centro; Bforartists y UPBGE traen
 # el suyo, porque son programas distintos y la tarjeta tiene que decir cuál es
@@ -75,7 +76,7 @@ def _logo_pixmap(size: int, dim: bool, fork: str = FORK_BLENDER) -> QPixmap:
     _logo_cache[key] = scaled
     return scaled
 
-# Ancho minimo de un boton que solo lleva un icono (la papelera de la rejilla):
+# Ancho mínimo de un botón que solo lleva un icono (la papelera de la rejilla):
 # con el padding corto del QSS ([iconOnly]) el glifo de 13 px necesita ~21 px.
 MIN_ICON_BUTTON_WIDTH = 26
 
@@ -128,12 +129,12 @@ def _drop_shadow(widget, blur: float, offset: float, alpha: int):
 def logo_shadow(widget, size: int):
     """Sombra negra suave bajo el logo: el `drop-shadow` de CSS, versión Qt.
 
-    Qt repinta el widget a un pixmap y lo difumina (efecto de software), asi que
+    Qt repinta el widget a un pixmap y lo difumina (efecto de software), así que
     se paga al pintar. Medido: con los logos de las tarjetas (40-120 px) la
     rejilla completa sube ~1 ms, nada al lado de lo que cuesta reconstruirla.
 
     El radio y el desplazamiento escalan con el tamaño para que la sombra no se
-    coma el icono cuando el zoom es bajo ni quede ridicula cuando es alto. Va
+    coma el icono cuando el zoom es bajo ni quede ridícula cuando es alto. Va
     desplazada abajo a la derecha y con poco contraste: solo busca despegar el
     logo del fondo, no dibujar un contorno marcado.
     """
@@ -207,9 +208,9 @@ def _with_opacity(pix: QPixmap, opacity: float) -> QPixmap:
     """Devuelve el pixmap con esa opacidad.
 
     En Qt el ``opacity`` del QSS **no hace nada** sobre un QLabel con pixmap
-    (comprobado: el canal alfa sale igual), asi que el atenuado de las builds
-    que no tienes instaladas -que en la version Kivy si se veia- hay que
-    pintarlo aqui.
+    (comprobado: el canal alfa sale igual), así que el atenuado de las
+    versiones que no tienes (que en la versión Kivy sí se veía) hay que
+    pintarlo aquí.
     """
     result = QPixmap(pix.size())
     # Mismo ratio que el original: si no, el resultado se pintaría al doble de
@@ -295,8 +296,7 @@ class _HoverCard:
 
     def _set_hover(self, on: bool) -> None:
         self.setProperty("hover", "true" if on else "false")
-        self.style().unpolish(self)
-        self.style().polish(self)
+        repolish(self)
 
 
 class BaseBuildCard(_HoverCard, QFrame):
@@ -701,9 +701,9 @@ class GridInstalledCard(_HoverCard, QFrame):
         delete = CardButton(icons.DELETE, variant="danger",
                             tooltip=tr("Remove this installed version"))
         _icon_only(delete)
-        # El ancho acompana al zoom, pero nunca por debajo de lo que necesita el
-        # glifo: a 0.6 salia un recuadro rojo vacio (el icono no cabia). El
-        # tamano del icono no se puede escalar con setFont: el `font-size` del
+        # El ancho acompaña al zoom, pero nunca por debajo de lo que necesita el
+        # glifo: a 0.6 salía un recuadro rojo vacío (el icono no cabía). El
+        # tamaño del icono no se puede escalar con setFont: el `font-size` del
         # QSS global (13 px) pisa lo que ponga el widget, y da igual, porque el
         # resto del texto de la tarjeta tampoco escala.
         delete.setFont(icon_font())

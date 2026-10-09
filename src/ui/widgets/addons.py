@@ -36,10 +36,11 @@ from ui.widgets.buttons import CardButton, IconFlatButton, SwitchPill
 from ui.widgets.cards import settings_card
 from ui.widgets.dialogs import confirm, show_error
 from ui.widgets.labels import ElidedLabel
-from ui.widgets.layouts import clear_layout, list_scroll
+from ui.widgets.layouts import clear_layout, list_scroll, muted_note
 from ui.widgets.menus import card_menu
 from ui.widgets.migrate.common import (_entry_key, blocked_by_running,
                                        choice_label, newest_per_series)
+
 
 # Filtros de tipo de la barra: (clave, etiqueta).
 _TYPE_FILTERS = (
@@ -235,7 +236,6 @@ class AddonsView(QWidget):
 
         self._set_enabled_controls(False)
 
-
     def _set_enabled_controls(self, enabled: bool) -> None:
         for widget in (self.install_btn, self.link_btn, self.reload_btn):
             widget.setEnabled(enabled)
@@ -334,10 +334,7 @@ class AddonsView(QWidget):
                  and (not query or query in state.name.lower()
                       or query in state.module.lower())]
         if not shown:
-            empty = QLabel(tr("No add-ons found."))
-            empty.setObjectName("Muted")
-            empty.setAlignment(Qt.AlignHCenter)
-            self.rows.addWidget(empty)
+            self.rows.addWidget(muted_note(tr("No add-ons found.")))
             return
         for state in shown:
             row = _AddonRow(state, self._toggle, self._open, self._delete)

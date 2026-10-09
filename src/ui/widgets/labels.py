@@ -108,8 +108,9 @@ class EditableLabel(ElidedLabel):
 
     def __init__(self, text: str = "", mode=Qt.ElideRight, parent=None):
         # Antes de ``super().__init__``: el constructor base ya llama a
-        # ``_update_tooltip``, que lo consulta.
+        # ``_update_tooltip``, que los consulta.
         self._editable = True
+        self._reason = ""
         super().__init__(text, mode, parent)
         self._editor = None
 
@@ -129,7 +130,7 @@ class EditableLabel(ElidedLabel):
         if self._editable:
             hint = tr("Double-click to rename")
         else:
-            hint = getattr(self, "_reason", "")
+            hint = self._reason
         full = self.text() if self.is_elided() else ""
         self.setToolTip("\n".join(part for part in (full, hint) if part))
 
