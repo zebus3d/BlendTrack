@@ -85,6 +85,14 @@ class TipoDeInstalacionTest(unittest.TestCase):
         self.assertEqual(ch.type_from_marker("v51", "5.1.2", "blender-5.1.2"),
                          ch.TYPE_STABLE)
 
+    def test_una_rama_que_solo_empieza_por_v_es_experimental(self):
+        """``vulkan`` empieza por "v" pero no es una rama de versión (``v52``)."""
+        for branch in ("vulkan", "vse-rework", "v"):
+            with self.subTest(branch=branch):
+                self.assertEqual(
+                    ch.type_from_marker(branch, "5.2.0", "blender-5.2.0"),
+                    ch.TYPE_EXPERIMENTAL)
+
     def test_sin_rama_el_nombre_delata_la_diaria(self):
         """Instalaciones de antes del marcador: solo queda el nombre."""
         self.assertEqual(ch.type_from_marker("", "5.3.0", "blender-5.3.0-alpha"),

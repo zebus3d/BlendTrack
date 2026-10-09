@@ -15,6 +15,7 @@ funciones puras que se prueban con datos de mentira.
 """
 
 import os
+import re
 from pathlib import Path
 
 from model.build import (FORK_BFORARTISTS, FORK_UPBGE, LTS_MINORS,
@@ -43,6 +44,11 @@ FORK_TYPES = {FORK_BFORARTISTS: TYPE_BFORARTISTS, FORK_UPBGE: TYPE_UPBGE}
 # etiquetas traducidas son cosa de la interfaz.
 CHANNELS = ("all", "lts", "stable", "daily", "experimental", "bforartists",
             "upbge", "favorites")
+
+# Las ramas de versión de Blender se llaman ``v`` + dígitos (``v45``, ``v52``).
+# Basta con mirar si empieza por "v" no: ``vulkan`` o ``vse-rework`` son ramas
+# de funciones nuevas que también empiezan así.
+RELEASE_BRANCH_RE = re.compile(r"v\d+")
 
 
 def type_of_build(build) -> str:
@@ -92,7 +98,8 @@ def type_from_marker(branch: str, version: str, name: str = "",
     if fork_type:
         return fork_type
     branch = (branch or "").strip()
-    if branch and branch != "main" and not branch.startswith("v"):
+    if (branch and branch != "main"
+            and not RELEASE_BRANCH_RE.fullmatch(branch)):
         return TYPE_EXPERIMENTAL
     if risk and risk != "stable":
         return TYPE_DAILY
