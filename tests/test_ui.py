@@ -339,13 +339,15 @@ class ForkUiTests(SettingsIsolated, unittest.TestCase):
         self.addCleanup(i18n.set_language, "en")
 
     def _window(self):
-        from PySide6.QtTest import QTest
-
         from ui.widgets.main_window import MainWindow
 
         with mock.patch("ui.widgets.downloads.api.get_builds", return_value=[]):
             window = MainWindow()
-            QTest.qWait(150)
+            # La carga inicial va por temporizador + hilo: se espera a que
+            # termine de verdad, no un tiempo fijo (con 150 ms a secas, a veces
+            # aún no había llegado y la barra seguía visible).
+            _wait_until(lambda: window._refresh_request > 0
+                        and window.busy_bar.isHidden())
         return window
 
     def _fork_builds(self):
@@ -465,7 +467,8 @@ class ForkUiTests(SettingsIsolated, unittest.TestCase):
         window = self._window()
         self.assertTrue(window.busy_bar.isHidden())
 
-        window.refresh()
+        with mock.patch("ui.widgets.downloads.api.get_builds", return_value=[]):
+            window.refresh()
         # ``isVisible`` sería False con la ventana sin enseñar (el padre
         # esconde a los hijos): lo que importa es que no esté oculta a
         # propósito.
@@ -474,6 +477,27 @@ class ForkUiTests(SettingsIsolated, unittest.TestCase):
         # Cuando llega el listado, se esconde.
         window._on_builds_loaded([])
         self.assertTrue(window.busy_bar.isHidden())
+
+    def test_una_respuesta_vieja_del_listado_no_pisa_la_nueva(self):
+        """Dos cargas en vuelo: solo cuenta la última que se pidió.
+
+        Pasaba al encender un fork con la carga inicial aún en marcha: si la
+        primera respuesta (sin el fork) llegaba la última, la pestaña del fork
+        salía vacía hasta refrescar a mano.
+        """
+        window = self._window()
+        nueva = self._fork_builds()
+        # Sin hilos de verdad: las respuestas se entregan a mano, en el orden
+        # malo (primero la nueva, después la vieja).
+        with mock.patch("ui.widgets.build_lists.threading.Thread"):
+            window.refresh()
+            vieja = window._refresh_request
+            window.refresh()
+        window._on_refresh_result(window._refresh_request, ["bforartists"],
+                                  nueva)
+        window._on_refresh_result(vieja, [], [])
+        self.assertEqual(window.builds, nueva)
+        self.assertEqual(window._builds_forks, ["bforartists"])
 
     def test_las_casillas_de_fork_solo_salen_con_el_fork_activo(self):
         from services import channels

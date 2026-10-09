@@ -373,25 +373,37 @@ class BuildListsMixin:
         # Mientras se pide a internet, la barra del pie dice que sigue en ello
         # (no se sabe cuánto tarda: es indeterminada, no un porcentaje).
         self.busy_bar.setVisible(True)
+        # Cada petición lleva su número y los forks con los que se hizo. Si el
+        # usuario enciende un fork mientras otra carga sigue en vuelo, pueden
+        # llegar dos respuestas en cualquier orden: solo vale la última pedida.
+        self._refresh_request += 1
+        request = self._refresh_request
+        forks = list(self.settings.enabled_forks())
 
         def worker():
             try:
-                builds = api.get_builds(force=force,
-                                        forks=self.settings.enabled_forks())
+                builds = api.get_builds(force=force, forks=forks)
             except Exception as error:  # red, JSON roto...
                 download_log(f"refresh failed: {error}")
                 builds = []
-            self.builds_loaded.emit(builds)
+            self.builds_loaded.emit(request, forks, builds)
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def _on_builds_loaded(self, builds) -> None:
+    def _on_refresh_result(self, request: int, forks, builds) -> None:
+        """Llega un listado: se pinta solo si es el de la última petición."""
+        if request != self._refresh_request:
+            return
+        self._on_builds_loaded(builds, forks)
+
+    def _on_builds_loaded(self, builds, forks=None) -> None:
         self.builds = builds
         self.busy_bar.setVisible(False)
         # Con qué forks se cargó este listado. Al cambiar un interruptor de fork
         # hay que volver a pedirlo (el listado anterior no traía sus builds), y
         # así se sabe aunque el cambio se haga con Ajustes delante.
-        self._builds_forks = list(self.settings.enabled_forks())
+        self._builds_forks = list(self.settings.enabled_forks()
+                                  if forks is None else forks)
         self._recompute_updates()
         self._rebuild_store()
         # Las instaladas también llevan el aviso de parche, y ese aviso depende

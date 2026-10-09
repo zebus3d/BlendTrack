@@ -65,7 +65,7 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
 
     # Señales para marshar el resultado de los hilos al hilo de la interfaz.
     # (QTimer.singleShot desde un hilo de Python NO es fiable para esto.)
-    builds_loaded = Signal(object)
+    builds_loaded = Signal(int, object, object)   # petición, forks, builds
     download_error = Signal(str)
     extract_done = Signal(str)
     dmg_manual = Signal(str)   # macOS: no se pudo instalar, se revela a mano
@@ -165,6 +165,8 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
         # ``build_lists._on_builds_loaded``). Sirve para saber si, al encender o
         # apagar un fork, lo que hay ya no vale y hay que volver a pedirlo.
         self._builds_forks = []
+        # Número de la última petición del listado (ver ``refresh``).
+        self._refresh_request = 0
         self.installed = installed_service.scan_folders(self.settings.library_roots(),
                                                         self.platform)
         self.view = "installed" if self.installed else "store"
@@ -216,7 +218,7 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
         self._focus_refresh.setInterval(2000)
 
         # Conectamos las señales de los hilos ANTES de montar la UI.
-        self.builds_loaded.connect(self._on_builds_loaded)
+        self.builds_loaded.connect(self._on_refresh_result)
         self.download_error.connect(self._on_download_error)
         self.extract_done.connect(self._on_extract_done)
         self.dmg_manual.connect(self._on_dmg_manual)
