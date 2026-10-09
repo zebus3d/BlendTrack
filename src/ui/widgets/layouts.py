@@ -77,9 +77,15 @@ class CornerGrip(QWidget):
     Vive flotando sobre la tarjeta (``GripCard.set_grip`` la coloca) y solo
     manda el desplazamiento vertical; el ancho lo fija el layout. La usan las
     listas que se pueden estirar a mano: las de Migración y la de Carpetas.
+
+    El widget mide 24×24 aunque las rayitas ocupen menos: es la diana mínima
+    de WCAG 2.5.8 (con 14×14 había que apuntar con precisión de cirujano). El
+    dibujo va en la esquina de abajo a la derecha, con ``INSET`` de aire para
+    no pisar el borde redondeado de la tarjeta.
     """
 
-    SIZE = 14
+    SIZE = 24
+    INSET = 4
 
     def __init__(self, on_resize, tooltip: str = "", parent=None):
         super().__init__(parent)
@@ -97,10 +103,20 @@ class CornerGrip(QWidget):
         painter.setRenderHint(QPainter.Antialiasing)
         color = QColor(t.ACCENT if self.underMouse() else t.MUTED)
         painter.setPen(QPen(color, 1.4, Qt.SolidLine, Qt.RoundCap))
-        edge = self.SIZE - 1
+        edge = self.SIZE - 1 - self.INSET
         for offset in (4, 7, 10):
             painter.drawLine(edge - offset, edge, edge, edge - offset)
         painter.end()
+
+    def enterEvent(self, event) -> None:
+        # ``paintEvent`` mira ``underMouse()``, pero Qt no repinta solo al
+        # entrar o salir el ratón: sin ``update()`` el realce no se veía.
+        super().enterEvent(event)
+        self.update()
+
+    def leaveEvent(self, event) -> None:
+        super().leaveEvent(event)
+        self.update()
 
     def mousePressEvent(self, event) -> None:
         self._last = event.globalPosition().y()

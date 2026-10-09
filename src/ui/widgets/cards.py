@@ -677,9 +677,13 @@ class GripCard(QFrame):
     el panel gris entero sin que haya dos sitios decidiendo el mismo alto.
     """
 
-    # Separación del asa respecto a los bordes de la tarjeta: lo justo para que
-    # no se coma el borde redondeado.
-    GRIP_MARGIN = 4
+    # Separación del asa respecto a los bordes de la tarjeta. Es 0 porque el
+    # aire para no pisar el borde redondeado ya va dentro del asa
+    # (``CornerGrip.INSET``): así su diana de 24 px llega hasta la esquina.
+    GRIP_MARGIN = 0
+    # Hueco mínimo entre el contenido y el asa, para que ningún botón quede
+    # pegado a las rayitas.
+    GRIP_GAP = 2
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -699,7 +703,8 @@ class GripCard(QFrame):
             # acento pasaría justo por debajo de las rayitas.
             lay.setContentsMargins(
                 margins.left(), margins.top(), margins.right(),
-                max(margins.bottom(), grip.height() + self.GRIP_MARGIN * 2))
+                max(margins.bottom(),
+                    grip.height() + self.GRIP_MARGIN + self.GRIP_GAP))
         self._place_grip()
 
     def resizeEvent(self, event) -> None:

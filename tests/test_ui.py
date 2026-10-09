@@ -5464,5 +5464,38 @@ class IconSizeTests(unittest.TestCase):
             self.assertIn("Font Awesome", widget.font().family())
 
 
+
+@unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
+class CornerGripTests(unittest.TestCase):
+    """El asa de estirar se ve al pasar el ratón y se puede acertar."""
+
+    app = None
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def test_diana_de_24_px(self):
+        from ui.widgets.layouts import CornerGrip
+
+        grip = CornerGrip(lambda delta: None)
+        self.assertGreaterEqual(grip.width(), 24)
+        self.assertGreaterEqual(grip.height(), 24)
+
+    def test_entrar_y_salir_repinta(self):
+        """``paintEvent`` mira ``underMouse()``: hay que pedir el repintado."""
+        from PySide6.QtCore import QEvent, QPointF
+        from PySide6.QtGui import QEnterEvent
+
+        from ui.widgets.layouts import CornerGrip
+
+        grip = CornerGrip(lambda delta: None)
+        with mock.patch.object(grip, "update") as update:
+            grip.enterEvent(QEnterEvent(QPointF(5, 5), QPointF(5, 5),
+                                        QPointF(5, 5)))
+            grip.leaveEvent(QEvent(QEvent.Leave))
+        self.assertEqual(update.call_count, 2)
+
+
 if __name__ == "__main__":
     unittest.main()
