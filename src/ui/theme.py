@@ -59,6 +59,9 @@ ICON_MUTED = "#989898"
 # esencial, pero muy por debajo del texto real.
 PLACEHOLDER = "#6E6E6E"
 TEXT_SEL = "#FFFFFF"
+# Aro de foco de teclado de los botones: blanco, que destaca sobre cualquier
+# relleno de la app (grises, azules y rojos) por encima de 3:1.
+FOCUS_RING = "#FFFFFF"
 
 # --- Acentos y estados ---
 # Los rellenos con texto encima se miden en su **peor punto**: los botones

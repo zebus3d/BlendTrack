@@ -5545,5 +5545,73 @@ class ContrastTests(unittest.TestCase):
         self.assertGreaterEqual(t.contrast(t.ACCENT, t.SURFACE), 3.0)
 
 
+
+@unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
+class KeyboardFocusTests(unittest.TestCase):
+    """Se ve dónde está el foco de teclado, y el aro no mueve nada."""
+
+    app = None
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+        from ui import fonts, qss
+
+        fonts.load()
+        cls.app.setStyleSheet(qss.build_qss())
+
+    def _buttons(self):
+        from ui import icons
+        from ui.widgets.buttons import (CardButton, CheckPill, IconFlatButton,
+                                        IconLinkButton, Pill, SideButton,
+                                        StarButton, SwitchPill)
+
+        return [Pill("LTS"), SideButton(icons.SETTINGS), CardButton("Go"),
+                IconLinkButton(icons.INFO), StarButton(),
+                IconFlatButton(icons.REFRESH), SwitchPill(), CheckPill("x")]
+
+    def test_los_botones_toman_el_foco_solo_con_el_teclado(self):
+        """Con foco por clic, el aro se quedaría en el último botón pulsado."""
+        from PySide6.QtCore import Qt
+
+        for button in self._buttons():
+            self.assertEqual(button.focusPolicy(), Qt.TabFocus,
+                             type(button).__name__)
+
+    def test_cada_boton_tiene_su_aro_de_foco(self):
+        from ui import qss
+
+        sheet = qss.build_qss()
+        for selector in ("QPushButton#Pill:focus", "QPushButton#SideButton:focus",
+                         "QPushButton#CardButton:focus",
+                         "QPushButton#IconFlat:focus",
+                         "QPushButton#StarButton:focus",
+                         "QPushButton#IconLink:focus", "QLineEdit:focus"):
+            self.assertIn(selector, sheet)
+
+    def test_el_borde_del_foco_no_cambia_las_dianas(self):
+        """Estrella 24x24 y botón plano 32x32, con el borde fijo incluido."""
+        from ui import icons
+        from ui.widgets.buttons import IconFlatButton, StarButton
+
+        for button, size in ((StarButton(), 24),
+                             (IconFlatButton(icons.REFRESH), 32)):
+            button.ensurePolished()
+            hint = button.sizeHint()
+            self.assertEqual((hint.width(), hint.height()), (size, size))
+
+    def test_los_estados_pulsado_y_deshabilitado_existen(self):
+        from ui import qss
+
+        sheet = qss.build_qss()
+        for selector in ("QPushButton#Pill:pressed",
+                         "QPushButton#SideButton:pressed",
+                         "QPushButton#IconFlat:pressed",
+                         "QPushButton#IconLink:pressed",
+                         "QPushButton#StarButton:pressed",
+                         "QPushButton#IconFlat:disabled"):
+            self.assertIn(selector, sheet)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -4,6 +4,11 @@ El aspecto vive en ``ui/qss.py``; aquí está solo el comportamiento y los
 puntos de enganche (``objectName`` y propiedades dinámicas) que el QSS usa. Un
 botón nuevo se estiliza dándole un ``objectName`` y añadiendo su regla al QSS,
 nunca con ``setStyleSheet`` en el código.
+
+Todos los botones de aquí toman el foco **solo con el teclado**
+(``Qt.TabFocus``, ver ``_keyboard_focus``): el QSS les pinta un aro mientras
+tienen el foco, y con el foco por clic ese aro se quedaría encendido en el
+último botón pulsado, que es justo lo que la web evita con ``:focus-visible``.
 """
 
 from PySide6.QtCore import QRectF, Qt
@@ -14,12 +19,18 @@ from ui import icons
 from ui import theme as t
 
 
+def _keyboard_focus(widget) -> None:
+    """El widget toma el foco con Tab, no al hacer clic (ver el docstring)."""
+    widget.setFocusPolicy(Qt.TabFocus)
+
+
 class Pill(QPushButton):
     """Botón con forma de pastilla para filtros y selector de vista."""
 
     def __init__(self, text: str = "", tooltip: str = "", parent=None):
         super().__init__(text, parent)
         self.setObjectName("Pill")
+        _keyboard_focus(self)
         self.setCheckable(True)
         self.setCursor(Qt.PointingHandCursor)
         if tooltip:
@@ -32,6 +43,7 @@ class SideButton(QPushButton):
     def __init__(self, glyph: str = "", tooltip: str = "", parent=None):
         super().__init__(glyph, parent)
         self.setObjectName("SideButton")
+        _keyboard_focus(self)
         self.setCheckable(True)
         self.setCursor(Qt.PointingHandCursor)
         if tooltip:
@@ -49,6 +61,7 @@ class CardButton(QPushButton):
                  tooltip: str = "", parent=None):
         super().__init__(text, parent)
         self.setObjectName("CardButton")
+        _keyboard_focus(self)
         self.setProperty("variant", variant)
         self.setCursor(Qt.PointingHandCursor)
         if tooltip:
@@ -70,6 +83,7 @@ class IconLinkButton(QPushButton):
     def __init__(self, glyph: str, tooltip: str = "", parent=None):
         super().__init__(glyph, parent)
         self.setObjectName("IconLink")
+        _keyboard_focus(self)
         self.setCursor(Qt.PointingHandCursor)
         if tooltip:
             self.setToolTip(tooltip)
@@ -87,6 +101,7 @@ class StarButton(QPushButton):
                  tooltip_off: str = "", parent=None):
         super().__init__(icons.STAR, parent)
         self.setObjectName("StarButton")
+        _keyboard_focus(self)
         self.setCheckable(True)
         self.setChecked(bool(marked))
         self.setCursor(Qt.PointingHandCursor)
@@ -105,6 +120,7 @@ class IconFlatButton(QPushButton):
     def __init__(self, glyph: str, tooltip: str = "", parent=None):
         super().__init__(glyph, parent)
         self.setObjectName("IconFlat")
+        _keyboard_focus(self)
         self.setCursor(Qt.PointingHandCursor)
         if tooltip:
             self.setToolTip(tooltip)
@@ -127,6 +143,7 @@ class SwitchPill(QPushButton):
     def __init__(self, checked: bool = False, tooltip: str = "", parent=None):
         super().__init__(parent)
         self.setObjectName("Switch")
+        _keyboard_focus(self)
         self.setCheckable(True)
         self.setCursor(Qt.PointingHandCursor)
         self.setFixedSize(self.WIDTH, self.HEIGHT)
@@ -172,9 +189,10 @@ class SwitchPill(QPushButton):
                                    diameter, diameter))
 
         if self.hasFocus():
-            # Aro de foco para quien navega con el teclado.
+            # Aro de foco para quien navega con el teclado. En FOCUS_RING y no
+            # en ACCENT: encendido, la pista ya es ACCENT y el aro no se veía.
             painter.setBrush(Qt.NoBrush)
-            painter.setPen(QPen(QColor(t.ACCENT), 2))
+            painter.setPen(QPen(QColor(t.FOCUS_RING), 2))
             painter.drawRoundedRect(rect.adjusted(1, 1, -1, -1),
                                     radius - 1, radius - 1)
         painter.end()
@@ -206,6 +224,10 @@ class CheckPill(QCheckBox):
     GAP = 8           # separación entre el cuadro y el texto
     RADIUS = 4
 
+    def __init__(self, text: str = "", parent=None):
+        super().__init__(text, parent)
+        _keyboard_focus(self)
+
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
@@ -229,6 +251,9 @@ class CheckPill(QCheckBox):
         if self.isChecked():
             self._draw_check(painter, box)
 
+        if self.hasFocus():
+            self._draw_focus(painter, box)
+
         # El texto (y solo el texto) con el color del QSS. ``QCheckBox`` no tiene
         # ``alignment()``, así que se pinta a la izquierda y centrado a mano.
         if self.text():
@@ -238,6 +263,23 @@ class CheckPill(QCheckBox):
             painter.drawText(text_rect,
                              Qt.AlignLeft | Qt.AlignVCenter, self.text())
         painter.end()
+
+    def _draw_focus(self, painter: QPainter, box: QRectF) -> None:
+        """Aro de foco de teclado (como el de ``SwitchPill``).
+
+        Con texto, el aro rodea el texto (la casilla va pegada al borde
+        izquierdo y no deja sitio fuera); sin texto, es el propio cuadro el que
+        se pinta con el borde del foco. Sin esto, quien navega con Tab no sabe
+        en qué casilla está.
+        """
+        painter.setBrush(Qt.NoBrush)
+        painter.setPen(QPen(QColor(t.FOCUS_RING), 1.5))
+        if self.text():
+            ring = QRectF(self.rect()).adjusted(
+                box.right() + self.GAP / 2, 0.75, -0.75, -0.75)
+            painter.drawRoundedRect(ring, self.RADIUS, self.RADIUS)
+        else:
+            painter.drawRoundedRect(box, self.RADIUS, self.RADIUS)
 
     def _box_rect(self) -> QRectF:
         """Cuadro centrado verticalmente, a la izquierda."""

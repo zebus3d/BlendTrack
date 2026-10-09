@@ -86,6 +86,9 @@ def build_qss() -> str:
     }}
     QPushButton#Pill:hover {{ background-color: {t.ACCENT_DARK}; color: {t.TEXT_SEL}; }}
     QPushButton#Pill:checked {{ background-color: {t.ACCENT_SELECTED}; color: {t.TEXT_SEL}; }}
+    QPushButton#Pill:pressed {{
+        background-color: {t.ACCENT_BTN_PRESSED}; color: {t.TEXT_SEL};
+    }}
     QPushButton#Pill:disabled {{ color: {t.TEXT_DISABLED}; }}
 
     /* --- Pestañas (canal, migración y ajustes) ---
@@ -155,6 +158,9 @@ def build_qss() -> str:
     }}
     QPushButton#SideButton:hover {{ background-color: {t.ACCENT_DARK}; color: {t.TEXT_SEL}; }}
     QPushButton#SideButton:checked {{ background-color: {t.ACCENT_SELECTED}; color: {t.TEXT_SEL}; }}
+    QPushButton#SideButton:pressed {{
+        background-color: {t.ACCENT_BTN_PRESSED}; color: {t.TEXT_SEL};
+    }}
 
     /* --- Botón de tarjeta / acción (relleno + degradado + borde) ---
        El degradado (blanco 9 % arriba) solo va en los botones de color, como en
@@ -244,40 +250,50 @@ def build_qss() -> str:
         color: {t.TEXT_SEL};
     }}
     QPushButton#IconLink:hover {{ background-color: {t.ACCENT}; }}
+    QPushButton#IconLink:pressed {{ background-color: {t.ACCENT_BTN_PRESSED}; }}
 
     /* --- Estrella de favorito (misma diana de 24x24 que la "i") ---
        Se usa el mismo glifo en los dos estados: apagado cuando no está marcada
        y en ámbar cuando sí (solo empaquetamos la fuente sólida de iconos). */
     QPushButton#StarButton {{
         background: transparent;
-        border: none;
+        /* Borde transparente fijo: el aro de foco solo cambia su color, así
+           que no mueve nada. El contenido baja a 22 para que la diana siga
+           midiendo 24x24. */
+        border: 1px solid transparent;
+        border-radius: 4px;
         color: {t.ICON_MUTED};
         /* El glifo de la estrella aprovecha menos su caja que la "i", así que a
            13 px (el tamaño global) se veía más pequeña que el disco de info.
            Medido con tightBoundingRect: 16 px le da 18x17 px de tinta, a la par
            del disco azul de 20 px de la "i". */
         font-size: 16px;
-        min-width: 24px; max-width: 24px;
-        min-height: 24px; max-height: 24px;
+        min-width: 22px; max-width: 22px;
+        min-height: 22px; max-height: 22px;
     }}
     /* Al pasar por encima ya se enciende en ámbar: adelanta lo que va a pasar
        al pulsar (en gris claro parecía un icono cualquiera al que se le sube
        el brillo). */
     QPushButton#StarButton:hover {{ color: {t.WARNING}; }}
     QPushButton#StarButton:checked {{ color: {t.WARNING}; }}
+    /* Al pulsar, el glifo baja un poco: se "hunde" como un botón. */
+    QPushButton#StarButton:pressed {{ padding-top: 2px; }}
 
     /* --- Botón de icono plano (refrescar, etc.) --- */
     QPushButton#IconFlat {{
         background: transparent;
-        border: none;
+        /* Borde transparente fijo (ver la estrella): 30 + 2 = diana de 32. */
+        border: 1px solid transparent;
         color: {t.TEXT};
         /* Glifo a 16 px dentro de la diana de 32 (refrescar, "más opciones"). */
         font-size: 16px;
         border-radius: 6px;
-        min-width: 32px; max-width: 32px;
-        min-height: 32px; max-height: 32px;
+        min-width: 30px; max-width: 30px;
+        min-height: 30px; max-height: 30px;
     }}
     QPushButton#IconFlat:hover {{ background-color: {t.SURFACE_ALT}; }}
+    QPushButton#IconFlat:pressed {{ background-color: {t.FIELD}; }}
+    QPushButton#IconFlat:disabled {{ color: {t.TEXT_DISABLED}; }}
 
     /* --- Tarjetas ---
        OJO con el orden: en QSS, `#Card[installed="true"]` y `#Card:hover`
@@ -446,9 +462,11 @@ def build_qss() -> str:
     /* --- Campos de texto --- */
     QLineEdit {{
         background-color: {t.FIELD};
-        border: none;
+        /* Borde transparente fijo y un píxel menos de padding: al recibir el
+           foco solo cambia el color del borde, y el campo mide lo mismo. */
+        border: 1px solid transparent;
         border-radius: 8px;
-        padding: 6px 12px;
+        padding: 5px 11px;
         color: {t.TEXT};
         selection-background-color: {t.ACCENT_SELECTED};
         selection-color: {t.TEXT_SEL};
@@ -460,9 +478,9 @@ def build_qss() -> str:
        pero con el texto alineado arriba. */
     QPlainTextEdit {{
         background-color: {t.FIELD};
-        border: none;
+        border: 1px solid transparent;
         border-radius: 8px;
-        padding: 6px 12px;
+        padding: 5px 11px;
         color: {t.TEXT};
         selection-background-color: {t.ACCENT_SELECTED};
         selection-color: {t.TEXT_SEL};
@@ -587,6 +605,24 @@ def build_qss() -> str:
     /* --- Diálogos --- */
     QDialog {{ background-color: {t.SURFACE}; }}
     QDialog QLabel#DialogTitle {{ color: {t.TEXT}; font-size: 15px; font-weight: bold; }}
+
+    /* --- Foco de teclado ---
+       Quien navega con Tab tiene que ver dónde está. Los botones propios solo
+       toman el foco con el teclado (``Qt.TabFocus``, en ``buttons.py``), así
+       que el aro no se queda pintado después de un clic: es el equivalente al
+       ``:focus-visible`` de la web. Va al final para ganar a los estados
+       normales; con el ratón encima, manda el realce del hover. */
+    QPushButton#Pill:focus,
+    QPushButton#SideButton:focus,
+    QPushButton#CardButton:focus,
+    QPushButton#IconFlat:focus,
+    QPushButton#StarButton:focus {{ border: 1px solid {t.FOCUS_RING}; }}
+    /* La "i" ya lleva un reborde blanco: con el foco, ese reborde pasa a
+       ámbar, que se distingue del blanco y del disco azul. */
+    QPushButton#IconLink:focus {{ border-color: {t.WARNING}; }}
+    QComboBox:focus,
+    QLineEdit:focus,
+    QPlainTextEdit:focus {{ border: 1px solid {t.ACCENT}; }}
 
     /* --- Menú de la bandeja del sistema --- */
     /* Sin esto el QMenu sale con el estilo claro del escritorio y desentona
