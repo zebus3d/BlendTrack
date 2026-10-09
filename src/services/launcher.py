@@ -113,7 +113,8 @@ class Launcher:
     def __init__(self):
         self._processes = []
 
-    def launch(self, executable, args=None, cwd=None, console=False, env=None):
+    def launch(self, executable, args=None, cwd=None, console=False,
+               env=None) -> subprocess.Popen:
         """Ejecuta esa versión instalada y devuelve el proceso lanzado.
 
         ``console=True`` abre Blender con su consola visible (salida de Python y

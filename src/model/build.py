@@ -7,7 +7,6 @@ objetos claros en lugar de diccionarios sueltos.
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 # Versiones de Blender con soporte de larga duración (Long Term Support).
 # Las LTS reciben mantenimiento durante varios años, así que merece la pena
@@ -32,7 +31,7 @@ def fork_label(fork: str) -> str:
     return FORK_LABELS.get(fork or "", fork or "Blender")
 
 
-def version_tuple(version: str):
+def version_tuple(version: str) -> tuple[int, ...]:
     """Convierte '5.2.1' en (5, 2, 1) para poder ordenar y comparar versiones."""
     parts = re.findall(r"\d+", version or "")
     return tuple(int(part) for part in parts) if parts else (0,)
@@ -110,7 +109,7 @@ class Build:
     url: str
     filename: str
     size: int = 0
-    checksum: Optional[str] = None
+    checksum: str | None = None
     mtime: int = 0
     # Hash corto del commit con el que se compiló (lo da la API en "hash").
     # Es lo único que distingue dos compilaciones diarias del mismo día a día:
@@ -145,8 +144,7 @@ class Build:
         return self.risk == "stable" and minor_of(self.version) in LTS_MINORS
 
     @property
-    def sort_key(self):
-        # Orden por versión y, a igualdad, por fecha de compilación.
+    def sort_key(self) -> tuple:
         """Clave de orden: por versión y, a igualdad, por fecha."""
         return (version_tuple(self.version), self.mtime)
 
@@ -163,12 +161,12 @@ class Build:
 
 @dataclass
 class InstalledBuild:
-    """Una versión ya descargada y extraída en la carpeta destino."""
+    """Una versión ya descargada y extraída en una carpeta de la biblioteca."""
 
     name: str
     path: Path
     version: str
-    executable: Optional[Path] = None
+    executable: Path | None = None
     # Hash de la compilación, leído del marcador que dejamos al instalar.
     # Las carpetas instaladas antes de que existiera el marcador lo traen
     # vacío, y entonces se compara solo por versión (como se hacía siempre).
@@ -187,7 +185,7 @@ class InstalledBuild:
     # OJO: es un ``Path``, que no es serializable a JSON. Hoy no se cachean las
     # instaladas (el caché de ``api`` es solo de ``Build``); si algún día se
     # hace, hay que convertirlo a texto.
-    root: Optional[Path] = None
+    root: Path | None = None
     # Fork del que salió la instalación ('' = Blender). Se reconoce por el
     # nombre de la carpeta y por el marcador; decide el ejecutable que hay que
     # buscar y en qué carpeta de configuración vive la versión.

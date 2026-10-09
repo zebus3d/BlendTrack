@@ -38,6 +38,7 @@ import xml.etree.ElementTree as ET
 from dataclasses import asdict, fields
 from datetime import datetime
 from email.utils import parsedate_to_datetime
+from pathlib import Path
 
 from model.build import FORK_BFORARTISTS, FORK_UPBGE, Build
 from services import net, tls
@@ -77,12 +78,12 @@ BFA_MAC_ARM = ("silicon", "arm64", "aarch64")
 DAV = "{DAV:}"
 
 
-def bfa_cache_path():
+def bfa_cache_path() -> Path:
     """Fichero donde se guarda el listado de Bforartists."""
     return cache_dir() / "bforartists.json"
 
 
-def upbge_cache_path():
+def upbge_cache_path() -> Path:
     """Fichero donde se guarda el listado de UPBGE."""
     return cache_dir() / "upbge.json"
 

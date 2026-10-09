@@ -26,7 +26,7 @@ import http.client
 import time
 import urllib.error
 import urllib.request
-from typing import NamedTuple, Optional
+from typing import NamedTuple
 
 from model.build import minor_of
 from services import forks, net, tls
@@ -57,13 +57,13 @@ class Source(NamedTuple):
 
     label: str
     url: str
-    checksum: Optional[str] = None
+    checksum: str | None = None
     # Cabeceras extra que exige la fuente (el WebDAV público de Bforartists,
     # por ejemplo). El resto van con el User-Agent de siempre.
-    headers: Optional[dict] = None
+    headers: dict | None = None
 
 
-def release_url(build) -> Optional[str]:
+def release_url(build) -> str | None:
     """URL del release oficial de esa versión, o ``None`` si no hay.
 
     Solo las estables: las diarias y las alfas se compilan al vuelo y nunca se
@@ -79,15 +79,15 @@ def release_url(build) -> Optional[str]:
         return None
     if build.risk != "stable":
         return None
-    combinacion = RELEASE_NAMES.get((build.platform, build.arch))
-    if not combinacion:
+    names = RELEASE_NAMES.get((build.platform, build.arch))
+    if not names:
         return None
-    name, extension = combinacion
+    name, extension = names
     return (f"{RELEASE_BASE}/Blender{minor_of(build.version)}/"
             f"blender-{build.version}-{name}.{extension}")
 
 
-def release_checksum(build, timeout: int = 15) -> Optional[str]:
+def release_checksum(build, timeout: int = 15) -> str | None:
     """SHA-256 del release oficial, leído del ``.sha256`` de esa versión.
 
     Blender publica un fichero por versión con el hash de cada uno de sus
@@ -116,7 +116,7 @@ def release_checksum(build, timeout: int = 15) -> Optional[str]:
     return None
 
 
-def _speed(url: str, timeout: int = PROBE_TIMEOUT) -> Optional[float]:
+def _speed(url: str, timeout: int = PROBE_TIMEOUT) -> float | None:
     """Bytes por segundo bajando un trozo, o ``None`` si no se puede medir.
 
     Se corta a ``PROBE_BYTES``: si el servidor ignora el ``Range`` seguimos
@@ -144,14 +144,14 @@ def _speed(url: str, timeout: int = PROBE_TIMEOUT) -> Optional[float]:
     return read_bytes / elapsed
 
 
-def candidates(build) -> list:
+def candidates(build) -> list[Source]:
     """Las fuentes posibles, la del CDN primero (es la de siempre)."""
-    opciones = [Source(cdn_label(), build.url, build.checksum,
-                       forks.download_headers(build.url))]
+    options = [Source(cdn_label(), build.url, build.checksum,
+                      forks.download_headers(build.url))]
     url = release_url(build)
     if url:
-        opciones.append(Source("Blender release (Cloudflare)", url, None))
-    return opciones
+        options.append(Source("Blender release (Cloudflare)", url, None))
+    return options
 
 
 def cdn_label() -> str:
@@ -166,26 +166,26 @@ def choose(build) -> Source:
     que es lo que hacía la aplicación antes de esto: así lo peor que puede pasar
     es que la descarga vaya como siempre.
     """
-    opciones = candidates(build)
-    if len(opciones) == 1:
-        return opciones[0]
+    options = candidates(build)
+    if len(options) == 1:
+        return options[0]
 
-    medidas = []
-    for opcion in opciones:
-        velocidad = _speed(opcion.url)
-        if velocidad:
-            medidas.append((velocidad, opcion))
-    if not medidas:
-        return opciones[0]
+    measured = []
+    for option in options:
+        speed = _speed(option.url)
+        if speed:
+            measured.append((speed, option))
+    if not measured:
+        return options[0]
 
-    medida, elegida = max(medidas, key=lambda par: par[0])
-    if elegida.label == cdn_label():
-        return elegida
+    speed, chosen = max(measured, key=lambda pair: pair[0])
+    if chosen.label == cdn_label():
+        return chosen
     # El release se verifica con su propio .sha256 (el de la API es del fichero
     # del buildbot, que es otro artefacto).
-    elegida = elegida._replace(checksum=release_checksum(build))
-    if not elegida.checksum:
+    chosen = chosen._replace(checksum=release_checksum(build))
+    if not chosen.checksum:
         log("release source has no checksum; falling back to the CDN")
-        return opciones[0]
-    log(f"fastest source: {elegida.label} ({medida / 1048576:.1f} MB/s)")
-    return elegida
+        return options[0]
+    log(f"fastest source: {chosen.label} ({speed / 1048576:.1f} MB/s)")
+    return chosen

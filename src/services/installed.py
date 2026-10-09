@@ -1,8 +1,9 @@
-"""Escaneo de las versiones de Blender ya extraídas en la carpeta destino.
+"""Escaneo de las versiones de Blender ya extraídas en la biblioteca.
 
-Las builds oficiales se descomprimen en carpetas con un nombre del estilo
-``blender-4.5.13-linux-x64``. De ahí sacamos la versión y localizamos el
-ejecutable, que cambia según la plataforma.
+La biblioteca son varias carpetas (``settings.Folder``) y en cada una se mira
+solo el primer nivel. Las builds oficiales se descomprimen en carpetas con un
+nombre del estilo ``blender-4.5.13-linux-x64``. De ahí sacamos la versión y
+localizamos el ejecutable, que cambia según la plataforma (y según el fork).
 
 Ese nombre **no** incluye el hash de la compilación, así que dos alfa de
 ``main`` bajadas en días distintos producen exactamente la misma carpeta. Para
@@ -287,11 +288,12 @@ def _scan_root(root: Path, platform: str):
     return results
 
 
-def scan_folders(folders, platform: str):
+def scan_folders(folders, platform: str) -> list[InstalledBuild]:
     """Escanea varias carpetas y devuelve todo junto, de más nueva a más antigua.
 
-    Se usa cuando las versiones LTS viven en otra carpeta: hay que mirar las
-    dos. Si dos rutas apuntan al mismo directorio (o una está repetida) se
+    Es el escaneo de la biblioteca entera (``Settings.library_roots``): cada
+    carpeta puede recibir tipos distintos, y las instaladas se ven todas
+    juntas. Si dos rutas apuntan al mismo directorio (o una está repetida) se
     escanea una sola vez, para no listar la misma instalación por duplicado.
     """
     results = []
@@ -314,7 +316,7 @@ def scan_folders(folders, platform: str):
     return results
 
 
-def find_installed(installed, build):
+def find_installed(installed, build) -> InstalledBuild | None:
     """Devuelve la instalación que corresponde a ``build``, o None.
 
     Las estables se identifican por versión: 4.5.13 es 4.5.13 y punto. Las
@@ -350,7 +352,8 @@ def is_experimental(entry) -> bool:
     return channels.type_of_installed(entry) == channels.TYPE_EXPERIMENTAL
 
 
-def filter_installed(entries, channel: str, search: str = "", favorites=()):
+def filter_installed(entries, channel: str, search: str = "",
+                     favorites=()) -> list:
     """Aplica el filtro de canal y la búsqueda a las versiones instaladas.
 
     Es el equivalente de ``api.filter_builds`` para la pestaña de instaladas:
@@ -413,7 +416,7 @@ def _minor_tuple(version: str):
     return version_tuple(minor_of(version))
 
 
-def available_updates(installed, builds):
+def available_updates(installed, builds) -> list[Update]:
     """Empareja cada instalada con las actualizaciones que le corresponden.
 
     ``builds`` debe venir ya filtrada por plataforma y arquitectura (es lo que

@@ -33,7 +33,7 @@ CA_CANDIDATES = (
 _ca_file = None
 
 
-def ca_file():
+def ca_file() -> str | None:
     """Primer almacén de CAs que exista en este sistema, o ``None``.
 
     ``None`` no significa "sin verificar": en ese caso se usa el contexto por

@@ -18,7 +18,15 @@ import os
 import re
 from pathlib import Path
 
+from typing import TYPE_CHECKING
+
 from model.build import FORK_BFORARTISTS, FORK_UPBGE, LTS_MINORS, minor_of
+
+if TYPE_CHECKING:
+    # Solo para las anotaciones: ``settings`` importa este módulo, así que
+    # importarlo de verdad aquí sería un ciclo. ``TYPE_CHECKING`` es falso al
+    # ejecutar y verdadero para los comprobadores de tipos.
+    from services.settings import Folder
 
 # Los tipos que puede recibir una carpeta. Son los canales de Blender menos los
 # dos que no describen una compilación: "all" (no filtra) y "favorites" (es
@@ -137,7 +145,7 @@ def normalize_path(path) -> str:
     return os.path.normcase(str(Path(str(path)).expanduser()))
 
 
-def owner_of(folders, build_type: str):
+def owner_of(folders, build_type: str) -> "Folder | None":
     """Carpeta que se queda con ese tipo, o ``None`` si no lo tiene nadie.
 
     Cada tipo tiene **un único dueño**: la interfaz, al marcar una casilla, se

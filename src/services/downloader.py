@@ -123,7 +123,7 @@ class Downloader:
                 base = {"User-Agent": net.USER_AGENT}
                 base.update(extra)
                 request = urllib.request.Request(url, headers=base)
-                # Con contexto explicito: si no, en Arch no encuentra las CAs y
+                # Con contexto explícito: si no, en Arch no encuentra las CAs y
                 # no se puede descargar nada (ver services/tls.py).
                 return urllib.request.urlopen(request, timeout=CONNECT_TIMEOUT,
                                               context=tls.ssl_context())

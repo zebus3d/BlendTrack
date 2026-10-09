@@ -16,6 +16,7 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import asdict, fields
+from pathlib import Path
 
 from model.build import FORK_BFORARTISTS, FORK_UPBGE, Build
 from services.downloader import log
@@ -40,7 +41,7 @@ PREFERRED_EXTENSION = {"linux": "xz", "windows": "zip", "darwin": "dmg"}
 
 
 
-def cache_path():
+def cache_path() -> Path:
     """Ruta del caché del listado de compilaciones."""
     return cache_dir() / "builds.json"
 
@@ -56,7 +57,7 @@ def _fetch_json(url: str, timeout: int = 20, etag: str | None = None):
     if etag:
         headers["If-None-Match"] = etag
     request = urllib.request.Request(url, headers=headers)
-    # El contexto va explicito: el OpenSSL del binario no encuentra las CAs en
+    # El contexto va explícito: el OpenSSL del binario no encuentra las CAs en
     # distros que no son Debian (ver services/tls.py).
     try:
         with urllib.request.urlopen(request, timeout=timeout,
@@ -119,7 +120,7 @@ def _fetch_builds_from(url: str, timeout: int, experimental: bool,
 
 
 def fetch_builds(timeout: int = 20, etags: dict | None = None,
-                 cached=None, forks=()):
+                 cached=None, forks=()) -> tuple[list, dict]:
     """Descarga el listado completo: diarias + experimentales + forks.
 
     ``etags``/``cached`` son de la última vez: si un listado responde 304, se
@@ -194,7 +195,7 @@ def load_etags() -> dict:
     return etags if isinstance(etags, dict) else {}
 
 
-def load_cache(max_age=CACHE_MAX_AGE):
+def load_cache(max_age=CACHE_MAX_AGE) -> list:
     """Lee el caché en disco. Con ``max_age=None`` lo acepta aunque esté caducado."""
     path = cache_path()
     if not path.is_file():
@@ -265,7 +266,7 @@ def get_builds(force: bool = False, forks=()) -> list:
     return builds
 
 
-def available_for(builds, platform: str, arch: str):
+def available_for(builds, platform: str, arch: str) -> list:
     """Filtra por plataforma y arquitectura, quedándose con un archivo por versión."""
     preferred = PREFERRED_EXTENSION.get(platform)
     filtered = [build for build in builds if build.platform == platform and build.arch == arch]
@@ -294,7 +295,8 @@ def available_for(builds, platform: str, arch: str):
     return sorted(best.values(), key=lambda build: build.sort_key, reverse=True)
 
 
-def filter_builds(builds, channel: str, search: str = "", favorites=()):
+def filter_builds(builds, channel: str, search: str = "",
+                  favorites=()) -> list:
     """Aplica el filtro de canal y la búsqueda a las compilaciones de la tienda.
 
     "Todas" (*all*) enseña **todo**: Blender estable, LTS, diarias, ramas
