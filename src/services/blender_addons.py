@@ -456,6 +456,25 @@ def delete_path(path: Path) -> None:
     except OSError:
         pass
 
+def copy_entry(source: Path, destination: Path) -> None:
+    """Copia un addon, sea una carpeta o un addon legacy de un solo ``.py``.
+
+    Un addon legacy puede ser un fichero suelto (``scripts/addons/mi_addon.py``)
+    y ``shutil.copytree`` con un fichero revienta con ``NotADirectoryError``:
+    las carpetas van con ``copytree`` y los ficheros con ``copy2`` (que, como
+    ``copytree``, conserva las fechas).
+
+    En las carpetas, ``symlinks=True`` como el propio ``preferences.copy_prev``
+    de Blender: los enlaces de dentro (muy típicos en desarrollo) tienen que
+    seguir apuntando a su sitio, no duplicarse.
+    """
+    source = Path(source)
+    if source.is_dir():
+        shutil.copytree(source, destination, symlinks=True)
+    else:
+        shutil.copy2(source, destination)
+
+
 def park_existing(destination: Path, backed_up: list | None = None,
                   actions: list | None = None) -> None:
     """Aparta lo que ya hay en ``destination`` a su copia de seguridad.
@@ -538,10 +557,7 @@ def apply_migration(plans, target: BlenderConfig,
             destination = Path(plan.destination)
             destination.parent.mkdir(parents=True, exist_ok=True)
             park_existing(destination, result.backed_up, actions)
-            # ``symlinks=True`` como el propio ``preferences.copy_prev`` de
-            # Blender: los addons enlazados (muy típicos en desarrollo) tienen
-            # que seguir apuntando a su sitio, no duplicarse.
-            shutil.copytree(plan.addon.path, destination, symlinks=True)
+            copy_entry(plan.addon.path, destination)
             result.copied.append(plan)
             result.modules.append(plan.enable_module)
             actions.append({"path": str(destination)})

@@ -495,6 +495,27 @@ class ApplyMigrationTest(unittest.TestCase):
             self.assertFalse(second.marker_found)
             self.assertEqual(second.removed, [])
 
+    def test_migra_un_addon_legacy_de_un_solo_fichero(self):
+        """Un addon legacy puede ser un ``.py`` suelto, no una carpeta.
+
+        Se copiaba siempre con ``copytree``, que con un fichero revienta con
+        ``NotADirectoryError``... después de haber apartado el addon que había
+        en destino, que se quedaba en el ``.bak`` sin volver a su sitio.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "solo.py"
+            source.write_text("nuevo", encoding="utf-8")
+            target = _config(Path(tmp) / "target")
+            destination = target.addons_dir / "solo.py"
+            destination.parent.mkdir(parents=True)
+            destination.write_text("viejo", encoding="utf-8")
+            plan = self._plan(self._addon(source, module="solo"), destination)
+            result = baddons.apply_migration([plan], target)
+            self.assertEqual(result.failed, [])
+            self.assertEqual(destination.read_text(encoding="utf-8"), "nuevo")
+            self.assertEqual(result.backed_up[0].read_text(encoding="utf-8"),
+                             "viejo")
+
     def test_no_copia_los_no_seleccionados(self):
         with tempfile.TemporaryDirectory() as tmp:
             source = Path(tmp) / "addon"
