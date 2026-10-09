@@ -26,10 +26,10 @@ from ui.widgets import dialogs
 from ui.widgets.layouts import (CornerGrip, FittedList, clear_layout,
                                 list_scroll)
 from ui.widgets.migrate.common import (SNAPSHOT_MIN_HEIGHT,
-                                           SNAPSHOT_MIN_ROWS,
-                                           SNAPSHOT_SCROLL_HEIGHT,
-                                           _entry_info,
-                                           _make_scroll, _section_names)
+                                       SNAPSHOT_MIN_ROWS,
+                                       SNAPSHOT_SCROLL_HEIGHT, _entry_info,
+                                       _entry_key, _make_scroll,
+                                       _section_names)
 from ui.widgets.migrate.prefs_tab import _PrefRow
 
 
@@ -400,11 +400,14 @@ class FactoryTabMixin:
     def _forget_analysis(self) -> None:
         """Tira el análisis de los guardados (es de otra versión o ya no vale).
 
-        ``_analyzed_for`` vacío es lo que hace que ``_maybe_analyze_snapshots``
-        vuelva a arrancar Blender la próxima vez que se abra la pestaña.
+        ``_analyzed_for`` a ``None`` es lo que hace que
+        ``_maybe_analyze_snapshots`` vuelva a arrancar Blender la próxima vez
+        que se abra la pestaña. Si hay un análisis en marcha, se invalida: al
+        llegar, ``_on_snapshots_analyzed`` lo tira y lanza el que toca.
         """
         self._analysis = {}
-        self._analyzed_for = ""
+        self._analyzed_for = None
+        self._snapshot_job.invalidate()
 
     def _factory_entry(self):
         """Instalada elegida en la pestaña de fábrica (su propio selector)."""
@@ -498,11 +501,11 @@ class FactoryTabMixin:
         por versión: cada guardado cuesta un arranque de Blender, así que no se
         repite mientras no cambie la versión ni los guardados.
         """
-        if not hasattr(self, "_snapshot_widgets"):
-            return
+        if not hasattr(self, "tabs"):
+            return      # aún se está montando la vista
         if self._page_of(self.tabs.currentWidget()) is not self.factory_page:
             return
-        if self._snapshots_waiting or self._analyzed_for:
+        if self._snapshot_job.running or self._analyzed_for:
             return
         entry = self._factory_entry()
         executable, version = _entry_info(entry)
@@ -512,11 +515,17 @@ class FactoryTabMixin:
         snapshots = list(bsnap.snapshots_with_settings(config))
         if not snapshots:
             return
-        self._analyzed_for = version
-        self._snapshots_waiting = True
+        self._analyzed_for = _entry_key(entry)
+        ticket = self._snapshot_job.start(self._analyzed_for)
+        # Las filas sin análisis dicen que se está leyendo: en blanco parecía
+        # que el guardado no traía nada.
+        for row in self._snapshot_widgets.values():
+            if row.analysis is None:
+                row.set_analysis(None)
 
         def worker():
-            payload = {"version": version, "results": {}, "live": None}
+            payload = {"version": version, "results": {}, "live": None,
+                       "ticket": ticket}
             try:
                 factory = bprefs.read_preferences(executable, factory=True,
                                                   timeout=120)
@@ -541,9 +550,18 @@ class FactoryTabMixin:
         threading.Thread(target=worker, daemon=True).start()
 
     def _on_snapshots_analyzed(self, payload) -> None:
-        self._snapshots_waiting = False
-        if payload.get("version") != getattr(self._factory_entry(),
-                                             "version", ""):
+        """Vuelca en cada fila lo que cambia su guardado.
+
+        Si el análisis era de otra versión (o se tiró mientras corría), se
+        descarta y se lanza el de la versión elegida ahora: sin eso, sus filas
+        se quedaban en "Analyzing..." para siempre.
+        """
+        analyzed = self._snapshot_job.key
+        if not self._snapshot_job.finish(payload):
+            return
+        if analyzed != _entry_key(self._factory_entry()):
+            self._analyzed_for = None
+            self._maybe_analyze_snapshots()
             return
         results = payload.get("results") or {}
         best = None

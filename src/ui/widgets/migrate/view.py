@@ -97,8 +97,8 @@ class MigrateView(AddonsTabMixin, PrefsTabMixin, FactoryTabMixin,
         # Gestor de guardados: filas por instantánea, análisis cacheado y
         # bandera de "ya se está analizando" (un arranque de Blender por fila).
         self._snapshot_widgets = {}
+        self._snapshot_job = LatestJob()
         self._forget_analysis()
-        self._snapshots_waiting = False
         self._factory_live_count = None
         # Cuántas copias guardadas se conservan (lo fija MainWindow desde los
         # ajustes; aquí se usa al crear o restaurar una).

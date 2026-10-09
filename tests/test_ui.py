@@ -4370,8 +4370,8 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
                 self.assertIn("recent",
                               view._snapshot_widgets[newest].badge.text().lower())
                 # Llega el análisis: se cuentan y se marca el más completo.
-                view._snapshots_waiting = True
                 view._on_snapshots_analyzed({
+                    "ticket": view._snapshot_job.start(("", "5.2.2")),
                     "version": "5.2.2",
                     "results": {
                         str(first): [bprefs.Preference("view.ui_scale", 1.1)],
@@ -4416,8 +4416,8 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
                 view.factory_combo.addItem("5.2.2")
                 view.factory_combo.setCurrentIndex(0)
                 view.tabs.setCurrentIndex(2)
-                view._snapshots_waiting = True
                 view._on_snapshots_analyzed({
+                    "ticket": view._snapshot_job.start(("", "5.2.2")),
                     "version": "5.2.2",
                     "results": {
                         str(snap): [
@@ -5003,6 +5003,53 @@ class MigrateBackgroundJobTests(SettingsIsolated, unittest.TestCase):
                 threads.run(first + 1)
             self.assertEqual(len(view.detail_prefs), 1)
             self.assertIn("nuevo", view.source_enabled)
+
+    def test_el_analisis_de_otra_version_se_relanza(self):
+        """Cambiar de versión mientras se analizan los guardados no los deja a medias.
+
+        El análisis de la versión anterior llegaba, se descartaba por ser de
+        otra versión y ya nadie volvía a lanzar el de la nueva: sus filas se
+        quedaban en "Analyzing..." para siempre.
+        """
+        from services import blender_snapshots as bsnap
+
+        threads = _CapturedThreads()
+        with tempfile.TemporaryDirectory() as tmp:
+            exe = Path(tmp) / "blender"
+            exe.write_text("", encoding="utf-8")
+            configs = {}
+            for version in ("4.5.0", "5.2.2"):
+                config = self._config(tmp, version)
+                config.config_dir.mkdir(parents=True)
+                (config.config_dir / "userpref.blend").write_bytes(b"MIO")
+                bsnap.set_config_aside(config, label=f"v{version}")
+                configs[version] = config
+            view = self._view()
+            for patch in (mock.patch("services.blender_runner.is_running",
+                                     return_value=False),
+                          mock.patch("ui.widgets.migrate.factory_tab.threading",
+                                     threads)):
+                patch.start()
+                self.addCleanup(patch.stop)
+            self._with_configs(view, configs)
+            for entry in view._choices:
+                entry.executable = exe
+            versions = [entry.version for entry in view._choices]
+            view.factory_combo.setCurrentIndex(versions.index("4.5.0"))
+            view.tabs.setCurrentIndex(2)
+            self.assertEqual(len(threads.targets), 1)
+            row = next(iter(view._snapshot_widgets.values()))
+            self.assertIn("Analyzing", row.analysis_label.text())
+            view.factory_combo.setCurrentIndex(versions.index("5.2.2"))
+            # Mientras la primera sigue en marcha no se arranca otro Blender.
+            self.assertEqual(len(threads.targets), 1)
+            with mock.patch("services.blender_prefs.read_preferences"), \
+                    mock.patch("services.blender_prefs.snapshot_preferences"):
+                threads.run(0)
+            # Lo que llegó era de la 4.5: se tira y se analiza la 5.2.
+            self.assertEqual(len(threads.targets), 2)
+            row = next(iter(view._snapshot_widgets.values()))
+            self.assertIn("Analyzing", row.analysis_label.text())
 
     def test_una_senal_sin_ticket_no_abre_nada(self):
         """Una señal pública emitida desde fuera no dispara diálogos."""
