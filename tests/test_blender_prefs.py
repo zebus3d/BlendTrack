@@ -288,7 +288,10 @@ class ApplyScriptExecTest(unittest.TestCase):
         self.bpy = fake_bpy.FakeBpy(self.preferences, self.tmp.name)
 
     def _apply(self, pairs, enable="0", addon_utils=None):
-        env = {"BLENDERMANAGER_PREFS": json.dumps(pairs),
+        pairs_file = os.path.join(self.tmp.name, "preferences.json")
+        with open(pairs_file, "w", encoding="utf-8") as handle:
+            json.dump(pairs, handle)
+        env = {"BLENDERMANAGER_PREFS_FILE": pairs_file,
                "BLENDERMANAGER_ENABLE_ADDONS": enable}
         out = _run_script(bp._APPLY_SCRIPT, self.bpy, addon_utils, env)
         payload = blender_runner._parse_marker(out, "BLENDERMANAGER_RESULT=")
@@ -438,18 +441,37 @@ class ReadPreferencesTest(unittest.TestCase):
 
 
 class WritePreferencesTest(unittest.TestCase):
-    def test_manda_los_pares_y_el_permiso_de_activar(self):
-        with mock.patch.object(bp.blender_runner, "_run", return_value=(
-                0, 'BLENDERMANAGER_RESULT={"applied": ["view.ui_scale"], '
-                   '"errors": [], "addons_enabled": []}', "")) as run:
+    def test_manda_los_pares_en_un_fichero_y_el_permiso_de_activar(self):
+        """Los pares van en un fichero: una variable de entorno tiene tope.
+
+        En Windows no puede pasar de 32 767 caracteres, y unos cientos de
+        claves con colores y listas se acercan.
+        """
+        recibido = {}
+
+        def run(executable, args, extra_env=None, timeout=None):
+            with open(extra_env["BLENDERMANAGER_PREFS_FILE"],
+                      encoding="utf-8") as handle:
+                recibido["pairs"] = json.load(handle)
+            recibido["env"] = dict(extra_env)
+            return (0, 'BLENDERMANAGER_RESULT={"applied": ["view.ui_scale"], '
+                       '"errors": [], "addons_enabled": []}', "")
+
+        muchas = [bp.Preference(f"view.clave_{index}", "x" * 100)
+                  for index in range(400)]
+        with mock.patch.object(bp.blender_runner, "_run", side_effect=run):
             result = bp.write_preferences(
-                "/opt/blender", [bp.Preference("view.ui_scale", 2.0)],
+                "/opt/blender", [bp.Preference("view.ui_scale", 2.0)] + muchas,
                 enable_addons=True)
-        env = run.call_args[1]["extra_env"]
-        self.assertEqual(json.loads(env["BLENDERMANAGER_PREFS"]),
-                         [["view.ui_scale", 2.0]])
-        self.assertEqual(env["BLENDERMANAGER_ENABLE_ADDONS"], "1")
+        self.assertEqual(recibido["pairs"][0], ["view.ui_scale", 2.0])
+        self.assertEqual(len(recibido["pairs"]), 401)
+        self.assertTrue(all(len(value) < 1000
+                            for value in recibido["env"].values()))
+        self.assertEqual(recibido["env"]["BLENDERMANAGER_ENABLE_ADDONS"], "1")
         self.assertEqual(result["applied"], ["view.ui_scale"])
+        # El temporal no se queda en disco.
+        self.assertFalse(os.path.exists(
+            recibido["env"]["BLENDERMANAGER_PREFS_FILE"]))
 
     def test_sin_nada_que_escribir_no_arranca_blender(self):
         with mock.patch.object(bp.blender_runner, "_run") as run:

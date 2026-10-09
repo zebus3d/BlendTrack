@@ -248,9 +248,15 @@ print("BLENDERMANAGER_DUMP=" + json.dumps(payload))
 
 # --- Guion que escribe las claves elegidas ---------------------------------
 #
-# Recibe pares ``[ruta, valor]`` por variable de entorno. Escribe cada uno por
-# su cuenta: si una clave ya no existe en esta versión (o cambió de tipo), se
-# anota el error y se sigue con las demás. Solo guarda si algo se escribió.
+# Recibe pares ``[ruta, valor]`` en un fichero JSON cuya ruta llega por
+# variable de entorno. Escribe cada uno por su cuenta: si una clave ya no existe
+# en esta versión (o cambió de tipo), se anota el error y se sigue con las
+# demás. Solo guarda si algo se escribió.
+#
+# Los pares van en un fichero y no en la variable misma porque en Windows una
+# variable de entorno no puede pasar de 32 767 caracteres: unos cientos de
+# claves con sus descripciones de ruta (colores, listas) ya se acercan, y
+# pasarse no da un error claro, el proceso simplemente no arranca.
 #
 # Las preferencias de un addon solo existen si el addon está activado. Con
 # ``BLENDERMANAGER_ENABLE_ADDONS=1`` se intenta activar antes (en este mismo
@@ -262,7 +268,11 @@ import bpy
 import json
 import os
 
-pairs = json.loads(os.environ.get("BLENDERMANAGER_PREFS", "[]"))
+pairs_file = os.environ.get("BLENDERMANAGER_PREFS_FILE", "")
+pairs = []
+if pairs_file:
+    with open(pairs_file, encoding="utf-8") as handle:
+        pairs = json.load(handle)
 enable_addons = os.environ.get("BLENDERMANAGER_ENABLE_ADDONS") == "1"
 applied = []
 errors = []
@@ -634,13 +644,19 @@ def write_preferences(executable, preferences, timeout: int = 180,
     if not pairs or not executable:
         result["errors"].append({"path": "", "error": "no Blender to run"})
         return result
-    code, out, err = blender_runner._run(
-        executable,
-        ["--background", "--python-expr", _APPLY_SCRIPT],
-        extra_env={"BLENDERMANAGER_PREFS": json.dumps(pairs),
-                   "BLENDERMANAGER_ENABLE_ADDONS": "1" if enable_addons else "0"},
-        timeout=timeout,
-    )
+    # Los pares van en un fichero temporal (ver el comentario del guion): el
+    # ``with`` lo borra en cuanto Blender termina.
+    with tempfile.TemporaryDirectory(prefix="blendermanager-prefs-") as tmp:
+        pairs_file = Path(tmp) / "preferences.json"
+        pairs_file.write_text(json.dumps(pairs), encoding="utf-8")
+        code, out, err = blender_runner._run(
+            executable,
+            ["--background", "--python-expr", _APPLY_SCRIPT],
+            extra_env={"BLENDERMANAGER_PREFS_FILE": str(pairs_file),
+                       "BLENDERMANAGER_ENABLE_ADDONS":
+                           "1" if enable_addons else "0"},
+            timeout=timeout,
+        )
     result["log"] = (err or "")[-4000:]
     if code is None:
         result["errors"].append({"path": "", "error": err})
