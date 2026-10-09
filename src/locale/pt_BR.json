@@ -548,5 +548,9 @@
   "Portuguese (Brazil)": "Português (Brasil)",
   "Loading the list of versions...": "Carregando a lista de versões...",
   "Delete older saved settings": "Excluir configurações salvas antigas",
-  "Keep only the {keep} newest saved copies of {program} {version}? The {count} older ones are deleted for good.": "Manter só as {keep} cópias salvas mais recentes de {program} {version}? As {count} mais antigas serão excluídas para sempre."
+  "Keep only the {keep} newest saved copies of {program} {version}? The {count} older ones are deleted for good.": "Manter só as {keep} cópias salvas mais recentes de {program} {version}? As {count} mais antigas serão excluídas para sempre.",
+  "Could not delete the settings saved on {date}. Close any program that is using that folder and try again:\n{path}": "Não foi possível excluir as configurações salvas em {date}. Feche qualquer programa que esteja usando essa pasta e tente de novo:\n{path}",
+  "{count} saved copies could not be deleted. Close any program that is using them and try again.": "Não foi possível excluir {count} cópias salvas. Feche qualquer programa que as esteja usando e tente de novo.",
+  "Could not save the current settings aside, so nothing was reset:\n{error}": "Não foi possível guardar à parte as configurações atuais, então nada foi redefinido:\n{error}",
+  "Could not put the saved settings back:\n{error}": "Não foi possível restaurar as configurações salvas:\n{error}"
 }

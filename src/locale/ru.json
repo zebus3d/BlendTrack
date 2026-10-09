@@ -548,5 +548,9 @@
   "Portuguese (Brazil)": "Португальский (Бразилия)",
   "Loading the list of versions...": "Загрузка списка версий...",
   "Delete older saved settings": "Удалить старые сохранённые настройки",
-  "Keep only the {keep} newest saved copies of {program} {version}? The {count} older ones are deleted for good.": "Оставить только {keep} последних сохранённых копий {program} {version}? Более старые ({count}) будут удалены навсегда."
+  "Keep only the {keep} newest saved copies of {program} {version}? The {count} older ones are deleted for good.": "Оставить только {keep} последних сохранённых копий {program} {version}? Более старые ({count}) будут удалены навсегда.",
+  "Could not delete the settings saved on {date}. Close any program that is using that folder and try again:\n{path}": "Не удалось удалить настройки, сохранённые {date}. Закройте программы, которые используют эту папку, и попробуйте снова:\n{path}",
+  "{count} saved copies could not be deleted. Close any program that is using them and try again.": "Не удалось удалить сохранённые копии: {count}. Закройте программы, которые их используют, и попробуйте снова.",
+  "Could not save the current settings aside, so nothing was reset:\n{error}": "Не удалось отложить текущие настройки, поэтому ничего не сброшено:\n{error}",
+  "Could not put the saved settings back:\n{error}": "Не удалось вернуть сохранённые настройки:\n{error}"
 }

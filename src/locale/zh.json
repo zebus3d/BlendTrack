@@ -548,5 +548,9 @@
   "Portuguese (Brazil)": "葡萄牙语（巴西）",
   "Loading the list of versions...": "正在加载版本列表...",
   "Delete older saved settings": "删除较早的已保存设置",
-  "Keep only the {keep} newest saved copies of {program} {version}? The {count} older ones are deleted for good.": "只保留 {program} {version} 最新的 {keep} 份已保存副本吗？较早的 {count} 份将被永久删除。"
+  "Keep only the {keep} newest saved copies of {program} {version}? The {count} older ones are deleted for good.": "只保留 {program} {version} 最新的 {keep} 份已保存副本吗？较早的 {count} 份将被永久删除。",
+  "Could not delete the settings saved on {date}. Close any program that is using that folder and try again:\n{path}": "无法删除 {date} 保存的设置。请关闭正在使用该文件夹的程序后重试：\n{path}",
+  "{count} saved copies could not be deleted. Close any program that is using them and try again.": "有 {count} 份已保存副本无法删除。请关闭正在使用它们的程序后重试。",
+  "Could not save the current settings aside, so nothing was reset:\n{error}": "无法将当前设置另存，因此没有进行任何重置：\n{error}",
+  "Could not put the saved settings back:\n{error}": "无法恢复已保存的设置：\n{error}"
 }

@@ -634,7 +634,16 @@ class FactoryTabMixin:
                    "be able to restore them.", date=date),
                 accept_text=tr("Delete"), danger=True):
             return
-        bsnap.delete_snapshot(snapshot)
+        # ``delete_snapshot`` no lanza: devuelve False si no pudo (un fichero
+        # abierto en Windows, sin permiso...). Anunciar "borrado" en ese caso
+        # dejaba al usuario creyendo que el guardado ya no estaba.
+        if not bsnap.delete_snapshot(snapshot):
+            dialogs.show_error(self, tr("Could not finish"), tr(
+                "Could not delete the settings saved on {date}. Close any "
+                "program that is using that folder and try again:\n{path}",
+                date=date, path=str(snapshot)))
+            self._fill_factory()
+            return
         self._analysis.pop(str(snapshot), None)
         self.status_message.emit(tr("Saved settings deleted."))
         self._fill_factory()
@@ -655,11 +664,16 @@ class FactoryTabMixin:
                    "will not be able to restore them."),
                 accept_text=tr("Delete"), danger=True):
             return
-        for snapshot in snapshots:
-            bsnap.delete_snapshot(snapshot)
+        failed = [snapshot for snapshot in snapshots
+                  if not bsnap.delete_snapshot(snapshot)]
         self._forget_analysis()
-        self.status_message.emit(tr("Saved settings deleted."))
         self._fill_factory()
+        if failed:
+            dialogs.show_error(self, tr("Could not finish"), tr(
+                "{count} saved copies could not be deleted. Close any program "
+                "that is using them and try again.", count=len(failed)))
+            return
+        self.status_message.emit(tr("Saved settings deleted."))
 
     def reset_to_factory(self) -> None:
         """Aparta la config de esa versión (instantánea) para dejarla limpia."""
@@ -677,8 +691,18 @@ class FactoryTabMixin:
                    "this same screen.", version=version),
                 accept_text=tr("Reset"), danger=True):
             return
-        snapshot = bsnap.set_config_aside(config, label=f"v{version}",
-                                      keep=self.snapshot_keep)
+        try:
+            snapshot = bsnap.set_config_aside(config, label=f"v{version}",
+                                              keep=self.snapshot_keep)
+        except OSError as error:
+            # Apartar es mover una carpeta: puede fallar (un fichero abierto,
+            # sin permiso). Sin el diálogo, la excepción se perdía en el slot
+            # y parecía que el botón no hacía nada.
+            dialogs.show_error(self, tr("Could not finish"), tr(
+                "Could not save the current settings aside, so nothing was "
+                "reset:\n{error}", error=str(error)))
+            self._fill_factory()
+            return
         if snapshot is None:
             self.factory_status.setText(tr(
                 "This version has no settings yet."))
@@ -713,7 +737,15 @@ class FactoryTabMixin:
                    "undone.", version=version, date=date),
                 accept_text=tr("Restore")):
             return
-        bsnap.restore_snapshot(config, target, keep=self.snapshot_keep)
+        try:
+            bsnap.restore_snapshot(config, target, keep=self.snapshot_keep)
+        except OSError as error:
+            dialogs.show_error(self, tr("Could not finish"), tr(
+                "Could not put the saved settings back:\n{error}",
+                error=str(error)))
+            self._forget_analysis()
+            self._fill_factory()
+            return
         self._forget_analysis()
         self.status_message.emit(tr("Settings restored."))
         self._fill_factory()

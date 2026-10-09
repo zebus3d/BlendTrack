@@ -5194,5 +5194,45 @@ class FactorySafetyTests(SettingsIsolated, unittest.TestCase):
             self.assertEqual(view.snapshot_keep, 3)
 
 
+    def test_si_no_se_puede_borrar_un_guardado_lo_dice(self):
+        """``delete_snapshot`` devuelve False: no se anuncia "borrado"."""
+        with tempfile.TemporaryDirectory() as tmp:
+            view, config = self._factory_view(tmp, copies=1)
+            from services import blender_snapshots as bsnap
+
+            snapshot = bsnap.all_snapshots(config)[0]
+            said = []
+            view.status_message.connect(said.append)
+            with mock.patch("ui.widgets.dialogs.confirm", return_value=True), \
+                    mock.patch("services.blender_snapshots.delete_snapshot",
+                               return_value=False), \
+                    mock.patch("ui.widgets.dialogs.show_error") as error:
+                view.delete_snapshot(snapshot)
+            self.assertTrue(error.called)
+            self.assertEqual(said, [])
+
+    def test_un_fallo_al_apartar_la_config_se_ensena(self):
+        """Un ``OSError`` al restablecer no puede perderse en el slot."""
+        with tempfile.TemporaryDirectory() as tmp:
+            view, config = self._factory_view(tmp, copies=0)
+            config.config_dir.mkdir(parents=True)
+            with mock.patch("ui.widgets.dialogs.confirm", return_value=True), \
+                    mock.patch("services.blender_snapshots.set_config_aside",
+                               side_effect=PermissionError("denied")), \
+                    mock.patch("ui.widgets.dialogs.show_error") as error:
+                view.reset_to_factory()
+            self.assertIn("denied", error.call_args[0][2])
+
+    def test_un_fallo_al_restaurar_se_ensena(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            view, config = self._factory_view(tmp, copies=1)
+            with mock.patch("ui.widgets.dialogs.confirm", return_value=True), \
+                    mock.patch("services.blender_snapshots.restore_snapshot",
+                               side_effect=OSError("disk full")), \
+                    mock.patch("ui.widgets.dialogs.show_error") as error:
+                view.restore_factory_snapshot()
+            self.assertIn("disk full", error.call_args[0][2])
+
+
 if __name__ == "__main__":
     unittest.main()
