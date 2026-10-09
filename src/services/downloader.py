@@ -38,9 +38,22 @@ def log(message: str) -> None:
         pass
 
 
+# Códigos de los fallos que no son de red. Llegan a la interfaz como texto por
+# ``on_error`` y ella decide qué decir: "cancelled" no es un error que enseñar
+# (lo pidió el usuario) y "checksum" se traduce a "Checksum error". Cualquier
+# otro texto es el mensaje de la excepción tal cual.
+#
+# Comparar cadenas es frágil (un error de red que dijera "cancelled" pasaría
+# por cancelación), pero es el contrato con ``ui.widgets.downloads`` y
+# ``ui.widgets.updates``: cambiarlo a excepciones o a un enum obliga a tocar
+# los dos lados a la vez. Por eso los códigos viven aquí con nombre, y la
+# interfaz los compara con estos mismos valores.
+CANCELLED = "cancelled"
+CHECKSUM = "checksum"
+
+
 class DownloadError(Exception):
-    """Error de descarga, con el mensaje ya listo para mostrar."""
-    pass
+    """Fallo propio de la descarga; su texto es uno de los códigos de arriba."""
 
 
 def _retry_after(error) -> float:
@@ -162,7 +175,7 @@ class Downloader:
                 with open(part_path, "wb") as handle:
                     while True:
                         if self._cancel.is_set():
-                            raise DownloadError("cancelled")
+                            raise DownloadError(CANCELLED)
                         chunk = response.read(CHUNK_SIZE)
                         if not chunk:
                             break
@@ -172,10 +185,10 @@ class Downloader:
                         if on_progress:
                             on_progress(downloaded, total)
             if self._cancel.is_set():
-                raise DownloadError("cancelled")
+                raise DownloadError(CANCELLED)
             # Verificación de integridad si la API nos dio la suma SHA-256.
             if expected_sha256 and digest.hexdigest().lower() != expected_sha256.lower():
-                raise DownloadError("checksum")
+                raise DownloadError(CHECKSUM)
             if final_path.exists():
                 final_path.unlink()
             part_path.replace(final_path)
@@ -202,7 +215,7 @@ class Downloader:
             except OSError as cleanup_error:
                 log(f"could not remove {part_path}: {cleanup_error}")
             cancelled = (isinstance(error, DownloadError)
-                         and str(error) == "cancelled")
+                         and str(error) == CANCELLED)
             if not cancelled:
                 log(f"download error ({url}): {error}")
             if on_error:

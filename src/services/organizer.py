@@ -54,9 +54,10 @@ class Move:
 class OrganizerError(Exception):
     """Fallo al mover, con un código en vez de un texto.
 
-    El código ("not_writable", "exists", "no_space", "running", "io") lo
-    traduce la interfaz, igual que con ``installed.rename_failure``: aquí no se
-    puede llamar a ``tr()`` porque esta capa no sabe de idiomas.
+    El código ("not_writable", "exists", "no_space", "running", "io" o
+    "cancelled", si el usuario cortó la copia) lo traduce la interfaz, igual
+    que con ``installed.rename_failure``: aquí no se puede llamar a ``tr()``
+    porque esta capa no sabe de idiomas.
     """
 
     def __init__(self, code: str, detail: str = ""):
