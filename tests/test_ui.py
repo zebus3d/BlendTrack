@@ -5795,5 +5795,38 @@ class ReadOnlyCardTests(unittest.TestCase):
             self.assertIsNotNone(title._editor)
 
 
+
+@unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
+class HiDpiPixmapTests(unittest.TestCase):
+    """Logos e iconos pintados a mano, nítidos en una pantalla HiDPI."""
+
+    app = None
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def test_el_logo_se_escala_a_pixeles_fisicos(self):
+        from ui.widgets import cards
+
+        with mock.patch.object(cards, "device_ratio", return_value=2.0), \
+                mock.patch.dict(cards._logo_cache, clear=True):
+            for dim in (False, True):
+                pix = cards._logo_pixmap(44, dim)
+                self.assertEqual(pix.devicePixelRatio(), 2.0)
+                self.assertEqual(pix.width(), 88)
+                # A tamaño lógico ocupa lo mismo que antes: no cambia el layout.
+                self.assertEqual(pix.deviceIndependentSize().width(), 44)
+
+    def test_el_icono_de_un_glifo_tambien(self):
+        from ui import fonts
+
+        with mock.patch.object(fonts, "device_ratio", return_value=2.0):
+            icon = fonts.glyph_icon("x", 12, "#FFFFFF")
+        # El QIcon guarda el pixmap a su resolución física (24 px para 12).
+        self.assertEqual([size.width() for size in icon.availableSizes()],
+                         [24])
+
+
 if __name__ == "__main__":
     unittest.main()

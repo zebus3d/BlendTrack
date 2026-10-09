@@ -9,7 +9,7 @@ como fuente de la aplicación, **nunca** como regla ``font-family`` del QSS. Un
 sin su glifo (la razón por la que los iconos "no salían").
 """
 
-from PySide6.QtGui import QFont, QFontDatabase
+from PySide6.QtGui import QFont, QFontDatabase, QGuiApplication
 
 from paths import ASSETS_DIR
 from ui import theme as t
@@ -71,21 +71,37 @@ def apply_ui_font(app) -> None:
     app.setFont(font)
 
 
+def device_ratio() -> float:
+    """Píxeles físicos por píxel lógico de la pantalla (2 en una "Retina").
+
+    Un ``QPixmap`` pintado a tamaño lógico se ve **borroso** en una pantalla
+    HiDPI: Qt lo estira al doble. Por eso los iconos y logos que se pintan a
+    mano se crean a ``tamaño × ratio`` y se marcan con ``setDevicePixelRatio``,
+    y Qt los dibuja a su tamaño lógico con todo el detalle.
+    """
+    app = QGuiApplication.instance()
+    return app.devicePixelRatio() if app is not None else 1.0
+
+
 def glyph_icon(glyph: str, size: int = 16, color: str = t.MUTED):
     """Renderiza un glifo de la fuente de iconos como ``QIcon``.
 
-    Útil para meter iconos dentro de un ``QLineEdit`` (``addAction``), donde no
-    se puede usar directamente la fuente.
+    Útil para meter iconos dentro de un ``QLineEdit`` (``addAction``) o junto
+    al texto de un botón, donde no se puede usar directamente la fuente. Se
+    pinta a la resolución real de la pantalla (``device_ratio``).
     """
-    from PySide6.QtCore import Qt
+    from PySide6.QtCore import QRect, Qt
     from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
 
-    pix = QPixmap(size, size)
+    ratio = device_ratio()
+    pix = QPixmap(round(size * ratio), round(size * ratio))
+    pix.setDevicePixelRatio(ratio)
     pix.fill(Qt.transparent)
     painter = QPainter(pix)
     painter.setRenderHint(QPainter.TextAntialiasing)
     painter.setFont(icon_font(size))
     painter.setPen(QColor(color))
-    painter.drawText(pix.rect(), Qt.AlignCenter, glyph)
+    # En coordenadas lógicas: ``pix.rect()`` sería el tamaño en píxeles físicos.
+    painter.drawText(QRect(0, 0, size, size), Qt.AlignCenter, glyph)
     painter.end()
     return QIcon(pix)

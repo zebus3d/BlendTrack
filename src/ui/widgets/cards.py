@@ -20,6 +20,7 @@ from model.build import FORK_BLENDER
 from paths import ASSETS_DIR
 from ui import icons
 from ui import theme as t
+from ui.fonts import device_ratio
 from ui.widgets.buttons import CardButton, IconLinkButton, StarButton
 from ui.widgets.labels import EditableLabel, ElidedLabel
 
@@ -50,15 +51,24 @@ def _logo_source_pixmap(fork: str) -> QPixmap:
 
 
 def _logo_pixmap(size: int, dim: bool, fork: str = FORK_BLENDER) -> QPixmap:
-    """Logo del fork escalado a ``size`` (y atenuado si ``dim``), desde la caché."""
-    key = (fork or FORK_BLENDER, size, dim)
+    """Logo del fork escalado a ``size`` (y atenuado si ``dim``), desde la caché.
+
+    Se escala a los píxeles **físicos** (``size × device_ratio``) y se marca
+    con ese ratio: escalado a ``size`` a secas, en una pantalla HiDPI Qt lo
+    estiraba al doble y el logo salía borroso.
+    """
+    ratio = device_ratio()
+    key = (fork or FORK_BLENDER, size, dim, ratio)
     cached = _logo_cache.get(key)
     if cached is not None:
         return cached
     pix = _logo_source_pixmap(fork)
     if pix.isNull():
         return pix
-    scaled = pix.scaled(size, size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+    physical = round(size * ratio)
+    scaled = pix.scaled(physical, physical, Qt.KeepAspectRatio,
+                        Qt.SmoothTransformation)
+    scaled.setDevicePixelRatio(ratio)
     if dim:
         scaled = _with_opacity(scaled, 0.32)
     _logo_cache[key] = scaled
@@ -213,6 +223,9 @@ def _with_opacity(pix: QPixmap, opacity: float) -> QPixmap:
     from PySide6.QtGui import QPainter
 
     result = QPixmap(pix.size())
+    # Mismo ratio que el original: si no, el resultado se pintaría al doble de
+    # tamaño en una pantalla HiDPI.
+    result.setDevicePixelRatio(pix.devicePixelRatio())
     result.fill(Qt.transparent)
     painter = QPainter(result)
     painter.setOpacity(opacity)
