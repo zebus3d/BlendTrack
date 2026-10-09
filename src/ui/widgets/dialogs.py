@@ -195,12 +195,13 @@ class ProgressDialog(AppDialog):
         self.body_label.setVisible(bool(text))
 
 
-def update_available(parent, tag: str, on_update, on_skip=None) -> bool:
-    """Diálogo de actualización disponible (de BlenderManager).
+def update_dialog(parent, tag: str, with_skip: bool = True) -> tuple:
+    """Monta (sin abrir) el diálogo de actualización: ``(dialog, choice)``.
 
-    ``on_update`` se llama si acepta; ``on_skip`` si elige no volver a avisar de
-    esa versión concreta. El aviso automático la silencia; "Buscar ahora" la
-    sigue mostrando. Devuelve True si se ha aceptado.
+    Va aparte de ``update_available`` para que ``packaging/capture_docs.py``
+    fotografíe **este** diálogo y no una copia a mano, que se quedó atrás (sin
+    "Omitir esta versión") en cuanto el de verdad cambió. ``choice["skip"]``
+    queda en True si el usuario pide no volver a ver esa versión.
     """
     # Lo mismo en las tres plataformas: en macOS también se instala sola (un
     # *helper* al estilo de Sparkle cambia el ``.app``, ``updater._apply_macos``).
@@ -213,7 +214,7 @@ def update_available(parent, tag: str, on_update, on_skip=None) -> bool:
     choice = {"skip": False}
     dialog.add_button(tr("Later"), on_click=dialog.reject,
                       tooltip=tr("Ask me again another time."))
-    if on_skip is not None:
+    if with_skip:
         dialog.add_button(
             tr("Skip this version"),
             on_click=lambda: (choice.update(skip=True), dialog.reject()),
@@ -222,6 +223,17 @@ def update_available(parent, tag: str, on_update, on_skip=None) -> bool:
     dialog.add_button(tr("Update"), variant="accent", on_click=dialog.accept,
                       tooltip=tr("Download and install it now.\n"
                                  "The app restarts by itself."))
+    return dialog, choice
+
+
+def update_available(parent, tag: str, on_update, on_skip=None) -> bool:
+    """Diálogo de actualización disponible (de BlenderManager).
+
+    ``on_update`` se llama si acepta; ``on_skip`` si elige no volver a avisar de
+    esa versión concreta. El aviso automático la silencia; "Buscar ahora" la
+    sigue mostrando. Devuelve True si se ha aceptado.
+    """
+    dialog, choice = update_dialog(parent, tag, with_skip=on_skip is not None)
     accepted = dialog.exec() == QDialog.Accepted
     if accepted:
         on_update()

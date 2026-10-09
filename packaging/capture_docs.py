@@ -54,6 +54,24 @@ def _prepare_folder_library(window) -> None:
     window._rebuild_folder_rows()
 
 
+def _next_release_tag() -> str:
+    """La versión que ofrecería el aviso: la minor siguiente al último tag.
+
+    ``src/version.py`` vale "0.0.0" en el repositorio (el CI la cuece al
+    compilar), así que se mira el último tag de git; sin git, uno fijo.
+    """
+    import subprocess
+
+    try:
+        last = subprocess.run(
+            ["git", "describe", "--tags", "--abbrev=0"], capture_output=True,
+            text=True, check=True, cwd=SRC.parent).stdout.strip()
+        major, minor = last.lstrip("v").split(".")[:2]
+        return f"v{major}.{int(minor) + 1}.0"
+    except (OSError, subprocess.CalledProcessError, ValueError):
+        return "v2.0.0"
+
+
 def main() -> None:
     from PySide6.QtCore import QTimer
     from PySide6.QtWidgets import QApplication
@@ -62,8 +80,7 @@ def main() -> None:
     from services import settings as settings_service
     from ui import fonts, qss
     from ui.widgets import MainWindow
-    from ui.widgets.dialogs import AppDialog
-    from i18n import tr
+    from ui.widgets.dialogs import update_dialog
 
     # Los ajustes van a un directorio temporal, y ojo con esto: el script fija
     # el zoom en memoria para que las capturas salgan siempre iguales, y sin
@@ -146,14 +163,9 @@ def main() -> None:
             QTimer.singleShot(300, capture_update)
 
         def capture_update():
-            dialog = AppDialog(
-                window, tr("Update available"),
-                tr("A new version is available: {version}", version="v1.2.34")
-                + "\n\n"
-                + tr("It will be installed and the app will restart automatically."))
-            dialog.add_button(tr("Later"), on_click=dialog.reject)
-            dialog.add_button(tr("Update"), variant="accent",
-                              on_click=dialog.reject)
+            # El diálogo de verdad (``dialogs.update_dialog``), sin abrirlo con
+            # ``exec``: una copia a mano se quedaba atrás cuando cambiaba.
+            dialog, _ = update_dialog(window, _next_release_tag())
             dialog.show()
 
             def save_dialog():
