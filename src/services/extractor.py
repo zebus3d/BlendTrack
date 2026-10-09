@@ -8,7 +8,7 @@ destino (ataque "zip slip"): en los tar lo impide el filtro ``data`` de
 
 import tarfile
 import zipfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 ARCHIVE_SUFFIXES = (".tar.xz", ".tar.gz", ".tar.bz2", ".tgz", ".tbz2", ".zip")
 
@@ -28,8 +28,8 @@ def _within(base: Path, target: Path) -> bool:
         return False
 
 
-def _safe_extract_tar(archive: tarfile.TarFile, dest: Path) -> None:
-    """Extrae un tar con el filtro ``data`` de la biblioteca estándar.
+def _safe_extract_tar(archive: tarfile.TarFile, dest: Path) -> list[str]:
+    """Extrae un tar con el filtro ``data`` y devuelve los nombres extraídos.
 
     El filtro ``data`` (PEP 706) ya hace todo lo que hace falta y lo hace
     bien: rechaza rutas absolutas, rutas con ``..`` que salgan del destino y
@@ -53,39 +53,83 @@ def _safe_extract_tar(archive: tarfile.TarFile, dest: Path) -> None:
     Si el miembro peligroso no es el primero, los anteriores ya se habrán
     escrito (dentro del destino, que es lo que importa): es el precio de leer
     de una sola pasada.
+
+    Los nombres se apuntan **mientras** se extrae (``extractall`` acepta
+    cualquier iterable de miembros), no con un listado previo, por lo mismo:
+    pedirlos antes costaría otra descompresión entera.
     """
+    names = []
+
+    def members():
+        for member in archive:
+            names.append(member.name)
+            yield member
+
     try:
-        archive.extractall(dest, filter="data")
+        archive.extractall(dest, members=members(), filter="data")
     except tarfile.FilterError as error:
         raise ValueError(f"unsafe member in archive: {error}") from error
+    return names
 
 
-def _safe_extract_zip(archive: zipfile.ZipFile, dest: Path) -> None:
-    for member in archive.infolist():
-        target = dest / member.filename
-        if not _within(dest, target):
-            raise ValueError("unsafe path in archive: " + member.filename)
+def _safe_extract_zip(archive: zipfile.ZipFile, dest: Path) -> list[str]:
+    """Extrae un zip tras comprobar que nada sale del destino ("zip slip").
+
+    Aquí sí se valida antes: el índice de un zip está al final del fichero y
+    listarlo no obliga a descomprimir nada. Devuelve los nombres extraídos.
+    """
+    names = archive.namelist()
+    for name in names:
+        if not _within(dest, dest / name):
+            raise ValueError("unsafe path in archive: " + name)
     archive.extractall(dest)
+    return names
+
+
+def _top_level(names) -> set[str]:
+    """Nombres de primer nivel de un archivo (``a/b/c`` -> ``a``).
+
+    Se ignoran ``./`` y la barra inicial, que algunos empaquetadores ponen
+    delante de todo y que el filtro ``data`` también quita al extraer.
+    """
+    tops = set()
+    for name in names:
+        parts = [part for part in
+                 PurePosixPath(name.replace("\\", "/").lstrip("/")).parts
+                 if part != "."]
+        if parts:
+            tops.add(parts[0])
+    return tops
 
 
 def extract(archive_path, dest_folder) -> Path:
-    """Extrae el archivo y devuelve la carpeta creada (o la destino si hubo varias)."""
+    """Extrae el archivo y devuelve la carpeta que contiene lo extraído.
+
+    Las versiones de Blender traen todo dentro de una única carpeta
+    (``blender-5.2.1-linux-x64/...``): entonces se devuelve esa carpeta. Si el
+    archivo trae varias cosas sueltas en la raíz, se devuelve el destino.
+
+    La carpeta se deduce **de los nombres del propio archivo**, no comparando
+    el destino antes y después: así se acierta también cuando esa carpeta ya
+    existía (reinstalar encima). Con la comparación, una carpeta que "no era
+    nueva" hacía devolver el destino, y quien llama escribía el marcador de la
+    instalación en la carpeta padre en vez de en la de Blender.
+    """
     archive = Path(archive_path)
     dest = Path(dest_folder).expanduser()
     dest.mkdir(parents=True, exist_ok=True)
-    before = {entry.name for entry in dest.iterdir() if entry.is_dir()}
 
     if archive.suffix.lower() == ".zip":
         with zipfile.ZipFile(archive) as zf:
-            _safe_extract_zip(zf, dest)
+            names = _safe_extract_zip(zf, dest)
     else:
         # "r:*" detecta automáticamente la compresión (xz, gz, bz2...).
         with tarfile.open(archive, "r:*") as tf:
-            _safe_extract_tar(tf, dest)
+            names = _safe_extract_tar(tf, dest)
 
-    after = {entry.name for entry in dest.iterdir() if entry.is_dir()}
-    created = after - before
-    # Si solo apareció una carpeta nueva, es la de Blender.
-    if len(created) == 1:
-        return dest / created.pop()
+    tops = _top_level(names)
+    if len(tops) == 1:
+        folder = dest / tops.pop()
+        if folder.is_dir():
+            return folder
     return dest

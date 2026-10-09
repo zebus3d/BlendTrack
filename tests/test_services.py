@@ -690,6 +690,26 @@ class ExtractorTests(unittest.TestCase):
                 target = extract(archive_path, Path(tmp) / "out")
             self.assertTrue((target / "blender").is_file())
 
+    def test_devuelve_la_carpeta_del_archivo_aunque_ya_existiera(self):
+        """Reinstalar encima: antes, como la carpeta "no era nueva", se
+        devolvía el destino y el marcador acababa en la carpeta padre."""
+        with tempfile.TemporaryDirectory() as tmp:
+            archive_path = Path(tmp) / "build.tar.xz"
+            self._make_tar(archive_path, "blender-9.9.9-linux-x64")
+            dest = Path(tmp) / "out"
+            (dest / "blender-9.9.9-linux-x64").mkdir(parents=True)
+            target = extract(archive_path, dest)
+            self.assertEqual(target, dest / "blender-9.9.9-linux-x64")
+
+    def test_varias_carpetas_de_primer_nivel_devuelven_el_destino(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive_path = Path(tmp) / "two.zip"
+            with zipfile.ZipFile(archive_path, "w") as archive:
+                archive.writestr("uno/a.txt", "a")
+                archive.writestr("dos/b.txt", "b")
+            dest = Path(tmp) / "out"
+            self.assertEqual(extract(archive_path, dest), dest)
+
     def test_extract_rejects_traversal(self):
         with tempfile.TemporaryDirectory() as tmp:
             archive_path = Path(tmp) / "evil.zip"
