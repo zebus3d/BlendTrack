@@ -15,15 +15,15 @@ El AppImage no usa estos ficheros: appimagetool coge el ``.desktop`` con
 ``Icon=blendermanager``, el ``blendermanager.png`` del AppDir y el ``.DirIcon``
 (lo que ensena el gestor de ficheros), todo desde ``build_appimage.sh``.
 
-Notas de formato (comprobadas, no de oidas):
+Notas de formato (comprobadas, no de oídas):
 
-* Qt sabe escribir .ico y .icns, pero **un solo tamano por fichero**: al
-  encadenar ``write()`` se queda con el primer tamano y el resto se pierde. Por
-  eso aqui se montan los contenedores a mano.
-* El .ico se monta concatenando los .ico de un solo tamano que escribe Qt, que
-  llevan los pixeles en formato BMP/DIB (el mas compatible: Windows XP en
-  adelante). Se podria meter PNG (Vista+), pero BMP no depende de nada.
-* El .icns lleva PNG dentro, con el codigo que le toca a cada tamano
+* Qt sabe escribir .ico y .icns, pero **un solo tamaño por fichero**: al
+  encadenar ``write()`` se queda con el primer tamaño y el resto se pierde. Por
+  eso aquí se montan los contenedores a mano.
+* El .ico se monta concatenando los .ico de un solo tamaño que escribe Qt, que
+  llevan los píxeles en formato BMP/DIB (el más compatible: Windows XP en
+  adelante). Se podría meter PNG (Vista+), pero BMP no depende de nada.
+* El .icns lleva PNG dentro, con el código que le toca a cada tamaño
   (``icp4``=16, ``icp5``=32, ``icp6``=64, ``ic07``=128, ``ic08``=256,
   ``ic09``=512), que es lo que espera macOS.
 """
@@ -60,7 +60,7 @@ def _png_bytes(image) -> bytes:
 
 
 def _one_ico(image, size) -> bytes:
-    """Un .ico de un solo tamano, escrito por Qt (pixeles en BMP/DIB)."""
+    """Un .ico de un solo tamaño, escrito por Qt (píxeles en BMP/DIB)."""
     from PySide6.QtCore import QTemporaryFile
 
     temporary = QTemporaryFile(str(OUT / ".tmp-XXXXXX.ico"))
@@ -78,7 +78,7 @@ def _one_ico(image, size) -> bytes:
 
 
 def build_ico(image) -> bytes:
-    """Une los .ico de cada tamano en uno solo."""
+    """Une los .ico de cada tamaño en uno solo."""
     payloads = []
     for size in ICO_SIZES:
         single = _one_ico(image, size)
@@ -86,7 +86,7 @@ def build_ico(image) -> bytes:
         if count != 1:
             raise RuntimeError(f"Qt escribio {count} imagenes en un .ico")
         # Los 8 primeros bytes del directorio son w,h,colores,reservado,planos
-        # y bpp; los 8 ultimos son tamano y offset, que hay que recalcular
+        # y bpp; los 8 últimos son tamaño y offset, que hay que recalcular
         # porque van a cambiar al unir los ficheros.
         directory = single[6:14]
         payloads.append((directory, single[22:]))
@@ -103,7 +103,7 @@ def build_ico(image) -> bytes:
 
 
 def build_icns(image) -> bytes:
-    """Contenedor .icns con un PNG por tamano y su codigo correspondiente."""
+    """Contenedor .icns con un PNG por tamaño y su código correspondiente."""
     body = b""
     for size in ICNS_SIZES:
         payload = _png_bytes(_scaled(image, size))

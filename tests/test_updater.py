@@ -25,10 +25,10 @@ class VersionCompareTests(unittest.TestCase):
         # En modo fuente la version es el describe del checkout, con sufijo.
         self.assertFalse(updater.is_newer("1.7.0-19-g24a0b43", "v1.7.0"))
         self.assertTrue(updater.is_newer("1.7.0-19-g24a0b43", "v1.8.0"))
-        # Instalada MAS nueva que la ultima release (p. ej. la pre-release que
+        # Instalada MAS nueva que la última release (p. ej. la pre-release que
         # se acaba de promover): no hay nada que ofrecer.
         self.assertFalse(updater.is_newer("1.8.0", "v1.7.0"))
-        # La numeracion del esquema viejo (parche = nº de build) tambien ordena.
+        # La numeración del esquema viejo (parche = nº de build) también ordena.
         self.assertTrue(updater.is_newer("1.1.203", "v1.2.39"))
         self.assertTrue(updater.is_newer("1.2.39", "v1.7.0"))
 

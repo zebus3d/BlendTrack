@@ -311,7 +311,7 @@ class FavoriteFilterTests(unittest.TestCase):
         self.assertEqual([b.version for b in selected], ["4.5.13"])
 
     def test_incluye_experimentales_si_estan_marcadas(self):
-        # A diferencia del resto de canales, aqui no se excluyen: si la has
+        # A diferencia del resto de canales, aquí no se excluyen: si la has
         # marcado, la quieres ver.
         builds = self._builds()
         marked = [favorite_key("geometry-nodes", "4.5.0")]
@@ -553,15 +553,15 @@ class InstalledFilterTests(unittest.TestCase):
         self.assertEqual(len(installed.filter_installed(entries, "daily")), 1)
 
     def test_favoritos_comparten_clave_con_la_tienda(self):
-        # La clave no lleva plataforma ni arquitectura a proposito: asi marcar
-        # una version en la tienda marca tambien la que tienes instalada.
+        # La clave no lleva plataforma ni arquitectura a propósito: así marcar
+        # una version en la tienda marca también la que tienes instalada.
         build = make_build("4.5.13", "stable", "v45", "b.tar.xz")
         entry = installed.InstalledBuild("blender-4.5.13-linux-x64", Path("/tmp/a"),
                                          "4.5.13", branch="v45")
         self.assertEqual(build.favorite_key, entry.favorite_key)
         self.assertEqual(build.favorite_key, favorite_key("v45", "4.5.13"))
-        # Dos builds del mismo dia (mismo numero, hash distinto) comparten
-        # favorito: si no, el de una diaria se perderia al dia siguiente.
+        # Dos builds del mismo día (mismo número, hash distinto) comparten
+        # favorito: si no, el de una diaria se perderia al día siguiente.
         otra = make_build("4.5.13", "daily", "v45", "c.tar.xz", build_hash="ffff")
         self.assertEqual(build.favorite_key, otra.favorite_key)
 
@@ -570,7 +570,7 @@ class InstalledFilterTests(unittest.TestCase):
         marked = [entries[1].favorite_key]
         selected = installed.filter_installed(entries, "favorites", "", marked)
         self.assertEqual([entry.branch for entry in selected], ["main"])
-        # Sin marcar nada el canal sale vacio (y no revienta).
+        # Sin marcar nada el canal sale vacío (y no revienta).
         self.assertEqual(installed.filter_installed(entries, "favorites"), [])
 
 
@@ -1166,7 +1166,7 @@ class SettingsTests(unittest.TestCase):
         self.assertTrue(settings.set_favorite("v45|4.5.13", False))
         self.assertFalse(settings.set_favorite("v45|4.5.13", False))
         self.assertEqual(settings.favorites, ["main|5.3.0"])
-        # Una clave vacia se ignora.
+        # Una clave vacía se ignora.
         self.assertFalse(settings.set_favorite("", True))
 
     def test_recuerda_el_filtro_de_canal(self):
@@ -1317,7 +1317,7 @@ class SmokeTests(unittest.TestCase):
         self.assertEqual(self._smoke({"return_value": (builds, {})}), 0)
 
     def test_sin_red_falla(self):
-        # Antes caia al cache de disco y salia con 0: un binario sin HTTPS
+        # Antes caia al cache de disco y salía con 0: un binario sin HTTPS
         # "parecia" funcionar. Se descubrio en Arch, con el auto-update roto.
         self.assertEqual(
             self._smoke({"side_effect": OSError("sin red")}), 1)
@@ -1348,8 +1348,8 @@ class TlsTests(unittest.TestCase):
         self.assertGreater(contexto.cert_store_stats()["x509_ca"], 0)
 
     def test_sin_candidatos_cae_al_contexto_por_defecto(self):
-        # Si no hay ningun fichero conocido, no se inventa nada: contexto
-        # normal, y como mucho fallara la peticion (no se degrada la seguridad).
+        # Si no hay ningún fichero conocido, no se inventa nada: contexto
+        # normal, y como mucho fallara la petición (no se degrada la seguridad).
         with mock.patch.object(tls, "CA_CANDIDATES", ("/no/existe/ca.crt",)):
             tls._ca_file = None
             self.assertIsNone(tls.ca_file())
@@ -1650,7 +1650,7 @@ class MacosDmgTests(unittest.TestCase):
     """El .dmg de macOS se monta y se copia el Blender.app a la carpeta destino.
 
     No hace falta un Mac: se mockea ``_run`` (hdiutil/ditto) y se comprueba la
-    logica de montaje, nombre de carpeta y copia.
+    lógica de montaje, nombre de carpeta y copia.
     """
 
     def _fake_run(self, calls):
