@@ -5387,5 +5387,36 @@ class AddonsViewStateTests(SettingsIsolated, unittest.TestCase):
         self.assertIn("no /proc", str(log.call_args))
 
 
+
+@unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
+class UpdateDialogTextTests(unittest.TestCase):
+    """El aviso de actualización dice lo que de verdad va a pasar."""
+
+    app = None
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def test_en_macos_no_dice_que_hay_que_instalar_a_mano(self):
+        """En macOS la actualización se aplica sola (``_apply_macos``)."""
+        import i18n
+        from ui.widgets import dialogs
+
+        self.addCleanup(i18n.set_language, i18n.get_language())
+        i18n.set_language("en")
+        texts = []
+
+        def spy(dialog):
+            texts.append(dialog.body_label.text())
+            return 0
+
+        with mock.patch.object(sys, "platform", "darwin"), \
+                mock.patch.object(dialogs.AppDialog, "exec", spy):
+            dialogs.update_available(None, "v9.9.0", lambda: None)
+        self.assertIn("restart automatically", texts[0])
+        self.assertNotIn("manually", texts[0])
+
+
 if __name__ == "__main__":
     unittest.main()

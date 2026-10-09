@@ -311,7 +311,6 @@
   "Downloaded to {folder}": "已下载到 {folder}",
   "Open it to install Blender manually.": "打开它以手动安装 Blender。",
   "It will be installed and the app will restart automatically.": "它将被安装，应用会自动重启。",
-  "It will be downloaded. You will have to install it manually.": "它将被下载。你需要手动安装。",
   "Running from source: the app will run git pull and restart.": "正从源代码运行：应用将执行 git pull 并重启。",
   "You have local changes. Commit or stash them and try again.": "你有本地更改。请提交或暂存它们后重试。",
   "Could not update. Run git pull manually.": "无法更新。请手动运行 git pull。",

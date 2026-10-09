@@ -311,7 +311,6 @@
   "Downloaded to {folder}": "Descargado en {folder}",
   "Open it to install Blender manually.": "Ábrelo para instalar Blender a mano.",
   "It will be installed and the app will restart automatically.": "Se instalará y la aplicación se reiniciará sola.",
-  "It will be downloaded. You will have to install it manually.": "Se descargará. Tendrás que instalarla a mano.",
   "Running from source: the app will run git pull and restart.": "Estás ejecutando desde el código fuente: se hará git pull y se reiniciará.",
   "You have local changes. Commit or stash them and try again.": "Tienes cambios locales sin guardar. Confírmalos o guárdalos aparte e inténtalo de nuevo.",
   "Could not update. Run git pull manually.": "No se pudo actualizar. Ejecuta git pull a mano.",

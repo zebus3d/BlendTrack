@@ -311,7 +311,6 @@
   "Downloaded to {folder}": "Скачано в {folder}",
   "Open it to install Blender manually.": "Откройте его, чтобы установить Blender вручную.",
   "It will be installed and the app will restart automatically.": "Оно будет установлено, и приложение перезапустится автоматически.",
-  "It will be downloaded. You will have to install it manually.": "Оно будет скачано. Установить его придётся вручную.",
   "Running from source: the app will run git pull and restart.": "Запуск из исходников: приложение выполнит git pull и перезапустится.",
   "You have local changes. Commit or stash them and try again.": "У вас есть локальные изменения. Зафиксируйте или отложите их и попробуйте снова.",
   "Could not update. Run git pull manually.": "Не удалось обновить. Выполните git pull вручную.",

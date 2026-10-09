@@ -311,7 +311,6 @@
   "Downloaded to {folder}": "{folder} にダウンロードしました",
   "Open it to install Blender manually.": "開いて Blender を手動でインストールしてください。",
   "It will be installed and the app will restart automatically.": "インストールされ、アプリは自動的に再起動します。",
-  "It will be downloaded. You will have to install it manually.": "ダウンロードします。手動でインストールする必要があります。",
   "Running from source: the app will run git pull and restart.": "ソースから実行中です。git pull を実行して再起動します。",
   "You have local changes. Commit or stash them and try again.": "ローカルに変更があります。コミットまたはスタッシュしてから再試行してください。",
   "Could not update. Run git pull manually.": "更新できませんでした。手動で git pull を実行してください。",
