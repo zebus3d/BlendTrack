@@ -368,18 +368,18 @@ class AddonsTabMixin:
     def _start_activation(self, executable, modules, version) -> None:
         """Habilita los addons copiados en un hilo (Blender tarda en arrancar)."""
         self.status_message.emit(tr("Enabling the add-ons in Blender..."))
-        self._activating = True
+        ticket = self._activation_job.start(version)
 
         def worker():
             result = blender_runner.enable_addons(executable, modules)
-            self.activation_done.emit({"result": result, "version": version})
+            self.activation_done.emit({"result": result, "version": version,
+                                       "ticket": ticket})
 
         threading.Thread(target=worker, daemon=True).start()
 
     def _on_activation_done(self, payload) -> None:
-        if not self._activating:
+        if not self._activation_job.finish(payload):
             return
-        self._activating = False
         result = payload.get("result") or {}
         version = payload.get("version") or ""
         lines = []

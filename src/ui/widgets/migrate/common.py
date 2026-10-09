@@ -62,6 +62,74 @@ _STATUS = {
 }
 
 
+class LatestJob:
+    """Un trabajo en segundo plano del que solo vale la **última** respuesta.
+
+    Las pestañas de Migración arrancan Blender en un hilo y el resultado vuelve
+    por una señal. Mientras tanto el usuario puede cambiar de versión, o lanzar
+    otra operación que responde por otra señal. Con una sola bandera booleana
+    compartida, la primera respuesta en llegar "gastaba" la bandera de la otra
+    y una de las dos se perdía (la lista se quedaba en "Leyendo ajustes..." para
+    siempre), y un resultado de la versión anterior se pintaba sobre la nueva.
+
+    Aquí cada operación lleva su propio objeto, y cada arranque, un número de
+    **ticket** que el hilo devuelve en su ``payload``:
+
+    * ``start(key)`` abre el trabajo y da el ticket. ``key`` dice *para qué* se
+      lanzó (la versión, por ejemplo) y se guarda en ``self.key``.
+    * ``finish(payload)`` es True solo si esa respuesta es la del último
+      ``start`` y el trabajo seguía abierto; entonces lo cierra. Lo demás (un
+      ticket viejo, o una señal emitida desde fuera sin ticket) se ignora.
+      ``owns(payload)`` hace la misma comprobación sin cerrarlo, para un hilo
+      que responde en dos señales.
+    * ``invalidate()`` deja el trabajo en marcha pero avisa de que lo que
+      traiga ya no sirve (``key`` pasa a ``None``): quien lo recibe compara
+      ``key`` con lo que hay ahora y, si no cuadra, lo relanza.
+
+    No se lanza un segundo hilo mientras hay uno en marcha (``running``): cada
+    uno arranca Blender, y cambiar el desplegable cinco veces seguidas no debe
+    dejar cinco Blenders trabajando a la vez.
+    """
+
+    def __init__(self):
+        self._ticket = 0
+        self.running = False
+        self.key = None
+
+    def start(self, key=None) -> int:
+        """Abre el trabajo para ``key`` y devuelve el ticket que lo identifica."""
+        self._ticket += 1
+        self.running = True
+        self.key = key
+        return self._ticket
+
+    def owns(self, payload) -> bool:
+        """True si ``payload`` es la respuesta del trabajo en marcha."""
+        return self.running and payload.get("ticket") == self._ticket
+
+    def finish(self, payload) -> bool:
+        """True (y cierra el trabajo) si ``payload`` es la respuesta esperada."""
+        if not self.owns(payload):
+            return False
+        self.running = False
+        return True
+
+    def invalidate(self) -> None:
+        """Lo que está en marcha ya no vale: su ``key`` no cuadrará con nada."""
+        self.key = None
+
+
+def _entry_key(entry) -> tuple:
+    """Identidad de una instalada para la migración: ``(fork, versión)``.
+
+    La versión sola no basta: Bforartists 4.5.0 y Blender 4.5.0 tienen el mismo
+    número y cada uno su propia carpeta de configuración.
+    """
+    if entry is None:
+        return ("", "")
+    return (getattr(entry, "fork", "") or "", getattr(entry, "version", "") or "")
+
+
 def _reason_text(plan) -> str:
     """Frase que explica el motivo del estado (vacía si todo está bien)."""
     addon = plan.addon

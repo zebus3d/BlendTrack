@@ -33,9 +33,9 @@ from ui.widgets import dialogs
 from ui.widgets.labels import ElidedLabel
 from ui.widgets.layouts import CornerGrip, FittedList, clear_layout
 from ui.widgets.migrate.common import (DETAIL_MIN_HEIGHT, DETAIL_MIN_ROWS,
-                                           DETAIL_SCROLL_HEIGHT,
-                                           _accent_button, _entry_info,
-                                           _failure_block, _make_scroll)
+                                       DETAIL_SCROLL_HEIGHT, _accent_button,
+                                       _entry_info, _entry_key,
+                                       _failure_block, _make_scroll)
 
 
 class _PrefRow(QWidget):
@@ -233,19 +233,19 @@ class PrefsTabMixin:
         _, source_version = _entry_info(self.source_entry)
         name = f"{bstyle.STYLE_PREFIX} {minor_of(source_version)}"
         self.style_status.setText(tr("Applying theme and key map..."))
-        self._style_waiting = True
+        ticket = self._style_job.start(target_version)
 
         def worker():
             result = bstyle.copy_style(source_exe, target_exe, name,
                                        theme=theme, keymap=keymap)
-            self.style_done.emit({"result": result, "version": target_version})
+            self.style_done.emit({"result": result, "version": target_version,
+                                  "ticket": ticket})
 
         threading.Thread(target=worker, daemon=True).start()
 
     def _on_style_done(self, payload) -> None:
-        if not self._style_waiting:
+        if not self._style_job.finish(payload):
             return
-        self._style_waiting = False
         result = payload.get("result") or {}
         applied = result.get("applied") or []
         errors = result.get("errors") or []
@@ -494,12 +494,14 @@ class PrefsTabMixin:
         misma versión, no repite el trabajo. ``force`` rehace la lectura.
 
         Se hace todo en un arranque para que cambiar de versión cueste un solo
-        Blender, no dos.
+        Blender, no dos. Si ya hay una lectura en marcha no se lanza otra: al
+        llegar, ``_on_prefs_loaded`` ve si sigue siendo del origen elegido y,
+        si no, vuelve a llamar aquí para leer el nuevo.
         """
-        if self._source_reading or self.source_entry is None:
+        if self._prefs_read.running or self.source_entry is None:
             return
-        version = getattr(self.source_entry, "version", "")
-        if not force and version == self._source_read_for:
+        key = _entry_key(self.source_entry)
+        if not force and key == self._source_read_for:
             return
         if not self._source_usable():
             self.detail_status.setText(
@@ -507,10 +509,8 @@ class PrefsTabMixin:
             self._show_detail_buttons(False)
             self._clear_detail_rows()
             return
-        executable, _ = _entry_info(self.source_entry)
-        self._source_reading = True
-        self._prefs_loading = True
-        self._prefs_waiting = True
+        executable, version = _entry_info(self.source_entry)
+        ticket = self._prefs_read.start(key)
         self.detail_load_btn.setEnabled(False)
         # Se vacía lo que hubiera: mientras se lee, una lista de la lectura
         # anterior haría creer que esos siguen siendo los ajustes de ahora.
@@ -523,23 +523,39 @@ class PrefsTabMixin:
                 enabled = blender_runner.enabled_addons(executable)
                 user = bprefs.read_preferences(executable)
                 factory = bprefs.read_preferences(executable, factory=True)
-            except Exception as error:  # noqa: BLE001
-                self.source_read.emit({"version": version, "error": str(error)})
-                self.prefs_loaded.emit({"error": str(error)})
+            except Exception as error:  # noqa: BLE001 - se enseña el motivo
+                self.source_read.emit({"version": version, "error": str(error),
+                                       "ticket": ticket})
+                self.prefs_loaded.emit({"error": str(error), "ticket": ticket})
                 return
-            self.source_read.emit({"version": version, "enabled": enabled})
+            self.source_read.emit({"version": version, "enabled": enabled,
+                                   "ticket": ticket})
             # ``user`` y ``factory`` son ``PreferenceDump``: valores, nombres y
             # descripciones, y el motivo si alguno no se pudo leer.
-            self.prefs_loaded.emit({"user": user, "factory": factory})
+            self.prefs_loaded.emit({"user": user, "factory": factory,
+                                    "ticket": ticket})
 
         threading.Thread(target=worker, daemon=True).start()
 
+    def _reading_current_source(self, payload) -> bool:
+        """True si ``payload`` es de la lectura en marcha **y** del origen actual.
+
+        Si el usuario cambió de origen mientras se leía, lo leído es de la
+        versión anterior y no puede pintarse sobre la nueva.
+        """
+        return (self._prefs_read.owns(payload)
+                and self._prefs_read.key == _entry_key(self.source_entry))
+
     def _on_source_read(self, payload) -> None:
-        """Aplica el estado activado/desactivado del origen al plan."""
-        self._source_reading = False
-        version = payload.get("version") or ""
+        """Aplica el estado activado/desactivado del origen al plan.
+
+        Llega antes que ``prefs_loaded`` (las dos las emite el mismo hilo); el
+        trabajo se da por cerrado en ``_on_prefs_loaded``, no aquí.
+        """
+        if not self._reading_current_source(payload):
+            return
         if payload.get("enabled") is not None:
-            self._source_read_for = version
+            self._source_read_for = self._prefs_read.key
             self.source_enabled = {baddons.addon_id_of(name)
                                    for name in payload["enabled"]}
         # Recalcula el plan con el estado real (marca ``was_enabled``).
@@ -563,11 +579,16 @@ class PrefsTabMixin:
         self.detail_status.setText(text)
 
     def _on_prefs_loaded(self, payload) -> None:
-        if not self._prefs_waiting:
+        """Pinta los ajustes leídos del origen (o el motivo de no poder)."""
+        read_for = self._prefs_read.key
+        if not self._prefs_read.finish(payload):
             return
-        self._prefs_waiting = False
-        self._prefs_loading = False
         self.detail_load_btn.setEnabled(True)
+        if read_for != _entry_key(self.source_entry):
+            # Era del origen anterior: se tira y se lee el que hay ahora.
+            self.detail_status.setText("")
+            self._read_source_blender()
+            return
         user, factory = payload.get("user"), payload.get("factory")
         error = payload.get("error")
         if not error and (user is None or not user.ok):
@@ -670,7 +691,7 @@ class PrefsTabMixin:
         if self._blocked_by_running():
             return
         self.detail_status.setText(tr("Applying settings..."))
-        self._prefs_waiting = True
+        ticket = self._prefs_write.start(version)
 
         enable_addons = (self.enable_addons_check.isVisible()
                          and self.enable_addons_check.isChecked())
@@ -678,14 +699,14 @@ class PrefsTabMixin:
         def worker():
             result = bprefs.write_preferences(executable, selected,
                                               enable_addons=enable_addons)
-            self.prefs_applied.emit({"result": result, "version": version})
+            self.prefs_applied.emit({"result": result, "version": version,
+                                     "ticket": ticket})
 
         threading.Thread(target=worker, daemon=True).start()
 
     def _on_prefs_applied(self, payload) -> None:
-        if not self._prefs_waiting:
+        if not self._prefs_write.finish(payload):
             return
-        self._prefs_waiting = False
         result = payload.get("result") or {}
         version = payload.get("version") or ""
         applied = result.get("applied") or []

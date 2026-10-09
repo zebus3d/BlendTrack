@@ -38,7 +38,8 @@ from ui.widgets.cards import settings_card
 from ui.widgets import dialogs
 from ui.widgets.layouts import list_scroll
 from ui.widgets.migrate.addons_tab import AddonsTabMixin
-from ui.widgets.migrate.common import _entry_info, _version_label
+from ui.widgets.migrate.common import (LatestJob, _entry_info,
+                                       _version_label)
 from ui.widgets.migrate.factory_tab import FactoryTabMixin
 from ui.widgets.migrate.prefs_tab import PrefsTabMixin
 
@@ -76,22 +77,19 @@ class MigrateView(AddonsTabMixin, PrefsTabMixin, FactoryTabMixin,
         self.plans = []
         self.pref_items = []
         self._rows = []
-        # True solo mientras hay una activación pedida por el usuario. La señal
-        # ``activation_done`` es pública y un evento diferido podría emitirla sin
-        # que nadie esté esperando; sin esta guarda se abriría un diálogo modal
-        # de la nada (le pasó al suite: un ``QTest.qWait`` procesaba el evento y
-        # el modal bloqueaba las pruebas).
-        self._activating = False
-        self._prefs_loading = False
-        # True solo mientras hay una lectura/aplicación pedida por el usuario.
-        # Las señales ``prefs_loaded``/``prefs_applied`` son públicas y un evento
-        # diferido podría emitirlas sin que nadie espere: sin esta guarda se
-        # abriría un diálogo modal de la nada (le pasó al suite con QTest.qWait).
-        self._prefs_waiting = False
-        # Lectura automática del origen: guarda para qué versión se hizo, para
-        # no repetir el arranque de Blender mientras no cambie el origen.
-        self._source_read_for = ""
-        self._source_reading = False
+        # Un ``LatestJob`` por cada trabajo en segundo plano, **uno por
+        # operación**: leer el origen y escribir ajustes pueden estar en marcha
+        # a la vez, y con una bandera compartida la respuesta de una se comía la
+        # de la otra. Además las señales son públicas: un evento diferido podría
+        # emitirlas sin que nadie espere, y sin el ticket se abriría un diálogo
+        # modal de la nada (le pasó al suite con ``QTest.qWait``).
+        self._activation_job = LatestJob()
+        self._prefs_read = LatestJob()
+        self._prefs_write = LatestJob()
+        self._style_job = LatestJob()
+        # Lectura automática del origen: guarda para qué ``(fork, versión)`` se
+        # hizo, para no repetir el arranque de Blender mientras no cambie.
+        self._source_read_for = None
         self.source_enabled = set()
         self.detail_prefs = []
         self.detail_checks = []
@@ -101,7 +99,6 @@ class MigrateView(AddonsTabMixin, PrefsTabMixin, FactoryTabMixin,
         self._snapshot_widgets = {}
         self._forget_analysis()
         self._snapshots_waiting = False
-        self._style_waiting = False
         self._factory_live_count = None
         # Cuántas copias guardadas se conservan (lo fija MainWindow desde los
         # ajustes; aquí se usa al crear o restaurar una).

@@ -3565,6 +3565,21 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
 
         return _Immediate()
 
+    @staticmethod
+    def _prefs_answer(view, handler_name, payload):
+        """Simula que el hilo de lectura/escritura de ajustes responde.
+
+        La respuesta lleva el ticket de un trabajo recién abierto (como haría
+        el hilo de verdad); sin él la vista la ignora por venir "de fuera".
+        """
+        from ui.widgets.migrate.common import _entry_key
+
+        if handler_name == "_on_prefs_loaded":
+            ticket = view._prefs_read.start(_entry_key(view.source_entry))
+        else:
+            ticket = view._prefs_write.start(payload.get("version"))
+        getattr(view, handler_name)(dict(payload, ticket=ticket))
+
     def _with_configs(self, view, configs, source=None, target=None):
         """Inyecta instaladas y redirige ``config_for`` a carpetas temporales.
 
@@ -3903,8 +3918,8 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
                 view.source_entry.executable = exe
                 # La lectura es automática y corre en un hilo; aquí se simula
                 # que ya llegó el resultado de las preferencias.
-                view._prefs_waiting = True
-                view._on_prefs_loaded({"user": user, "factory": factory})
+                self._prefs_answer(
+                    view, "_on_prefs_loaded", {"user": user, "factory": factory})
                 self.assertEqual(len(view.detail_prefs), 3)
                 # La fila enseña el nombre de Blender y explica la clave.
                 fila = next(row for row in view.detail_checks
@@ -3916,8 +3931,8 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
                 self.assertTrue(view.enable_addons_check.isHidden())
                 view.detail_prefs[0].selected = True
                 view.write_detail_prefs()
-                view._prefs_waiting = True
-                view._on_prefs_applied(
+                self._prefs_answer(
+                    view, "_on_prefs_applied",
                     {"result": {"applied": ["view.ui_scale"], "errors": []},
                      "version": "5.3.0"})
             self.assertTrue(apply.called)
@@ -3935,8 +3950,8 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
         view.detail_prefs = [bprefs.Preference("view.ui_scale", 1.25)]
         view._fill_detail_rows()
         self.assertFalse(view.detail_scroll.isHidden())
-        view._prefs_waiting = True
-        view._on_prefs_loaded({
+        self._prefs_answer(
+            view, "_on_prefs_loaded", {
             "user": bprefs.PreferenceDump(values={"view.ui_scale": 1.0}),
             "factory": bprefs.PreferenceDump(values={"view.ui_scale": 1.0})})
         self.assertEqual(view.detail_prefs, [])
@@ -3948,8 +3963,8 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
         from services import blender_prefs as bprefs
 
         view = self._view()
-        view._prefs_waiting = True
-        view._on_prefs_loaded({
+        self._prefs_answer(
+            view, "_on_prefs_loaded", {
             "user": bprefs.PreferenceDump(error="timeout after 180s"),
             "factory": bprefs.PreferenceDump(values={})})
         self.assertIn("Could not read", view.detail_status.text())
@@ -3966,15 +3981,15 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
         from services import blender_prefs as bprefs
 
         view = self._view()
-        view._prefs_waiting = True
-        view._on_prefs_loaded({
+        self._prefs_answer(
+            view, "_on_prefs_loaded", {
             "user": bprefs.PreferenceDump(
                 values={"addons.hurricane.cache_format": "USD"}),
             "factory": bprefs.PreferenceDump(values={})})
         self.assertFalse(view.enable_addons_check.isHidden())
         with _mock.patch("ui.widgets.dialogs.show_info") as info:
-            view._prefs_waiting = True
-            view._on_prefs_applied({"result": {
+            self._prefs_answer(
+                view, "_on_prefs_applied", {"result": {
                 "applied": [],
                 "errors": [{"path": "addons.hurricane.cache_format",
                             "error": bprefs.ADDON_NOT_ENABLED},
@@ -4837,6 +4852,166 @@ class SingleInstanceTests(SettingsIsolated, unittest.TestCase):
         """Un socket huérfano de un cierre brusco no bloquea el arranque."""
         self.assertTrue(self._single().listen(lambda: None))
         self.assertTrue(self._single().listen(lambda: None))
+
+
+
+class _CapturedThreads:
+    """Sustituto de ``threading`` que guarda los hilos en vez de lanzarlos.
+
+    Así el test decide **en qué orden** terminan los trabajos en segundo plano,
+    que es justo lo que provocaba los fallos de las banderas compartidas.
+    """
+
+    def __init__(self):
+        self.targets = []
+        outer = self
+
+        class _Thread:
+            def __init__(self, target=None, daemon=None, **_kwargs):
+                outer.targets.append(target)
+
+            def start(self):
+                pass
+
+        self.Thread = _Thread
+
+    def run(self, index):
+        """Ejecuta ahora el trabajo número ``index`` (emite su señal)."""
+        self.targets[index]()
+
+
+@unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
+class MigrateBackgroundJobTests(SettingsIsolated, unittest.TestCase):
+    """Los trabajos en segundo plano de Migración no se pisan entre sí."""
+
+    app = None
+    _view = MigrateViewTests._view
+    _with_configs = MigrateViewTests._with_configs
+    _config = MigrateViewTests._config
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+        from ui import fonts, qss
+
+        fonts.load()
+        cls.app.setStyleSheet(qss.build_qss())
+
+    def setUp(self):
+        super().setUp()
+        import i18n
+
+        self.addCleanup(i18n.set_language, i18n.get_language())
+        i18n.set_language("en")
+
+    def _prepared_view(self, tmp, versions, source, target, threads):
+        """Vista con instaladas cuyo ejecutable existe (sin hilos de verdad)."""
+        exe = Path(tmp) / "blender"
+        exe.write_text("", encoding="utf-8")
+        view = self._view()
+        configs = {version: self._config(tmp, version) for version in versions}
+        for patch in (mock.patch("services.blender_runner.is_running",
+                                 return_value=False),
+                      mock.patch("ui.widgets.migrate.prefs_tab.threading",
+                                 threads)):
+            patch.start()
+            self.addCleanup(patch.stop)
+        self._with_configs(view, configs)
+        for entry in view._choices:
+            entry.executable = exe
+        versions = [entry.version for entry in view._choices]
+        view.target_combo.setCurrentIndex(versions.index(target))
+        view.source_combo.setCurrentIndex(versions.index(source))
+        # Con los ejecutables ya en su sitio, la lectura automática del origen
+        # arranca (la de ``_with_configs`` se cortó por no tener ejecutable).
+        view._fill_from_installed()
+        return view
+
+    @staticmethod
+    def _dumps():
+        from services import blender_prefs as bprefs
+
+        user = bprefs.PreferenceDump(values={"view.ui_scale": 1.25})
+        factory = bprefs.PreferenceDump(values={"view.ui_scale": 1.0})
+        return user, factory
+
+    def test_la_escritura_no_se_come_el_resultado_de_la_lectura(self):
+        """Leer y escribir a la vez: cada respuesta llega a su sitio.
+
+        Compartían la bandera ``_prefs_waiting``: si la escritura terminaba
+        antes, se "gastaba" la bandera y la lectura se tiraba, así que la lista
+        se quedaba en "Reading settings..." para siempre.
+        """
+        threads = _CapturedThreads()
+        with tempfile.TemporaryDirectory() as tmp:
+            view = self._prepared_view(tmp, ["4.5.0", "5.3.0"], "4.5.0",
+                                       "5.3.0", threads)
+            reads = len(threads.targets)
+            self.assertGreaterEqual(reads, 1)
+            from services import blender_prefs as bprefs
+
+            view.detail_prefs = [bprefs.Preference("view.ui_scale", 1.25)]
+            view.detail_prefs[0].selected = True
+            view.write_detail_prefs()
+            self.assertEqual(len(threads.targets), reads + 1)
+            user = bprefs.PreferenceDump(
+                values={"inputs.navigation_mode": "FLY"})
+            factory = bprefs.PreferenceDump(
+                values={"inputs.navigation_mode": "WALK"})
+            with mock.patch("services.blender_prefs.write_preferences",
+                            return_value={"applied": ["view.ui_scale"],
+                                          "errors": []}), \
+                    mock.patch("ui.widgets.dialogs.show_info") as info:
+                threads.run(reads)          # termina antes la escritura
+            self.assertTrue(info.called)
+            with mock.patch("services.blender_runner.enabled_addons",
+                            return_value=[]), \
+                    mock.patch("services.blender_prefs.read_preferences",
+                               side_effect=[user, factory]):
+                threads.run(reads - 1)      # y luego la lectura
+            # Lo que se ve es lo recién leído, no lo que se acababa de escribir.
+            self.assertEqual([p.path for p in view.detail_prefs],
+                             ["inputs.navigation_mode"])
+            self.assertIn("1 settings changed", view.detail_status.text())
+
+    def test_cambiar_el_origen_mientras_se_lee_relee_el_nuevo(self):
+        """El resultado de la versión vieja no se pinta sobre la nueva."""
+        threads = _CapturedThreads()
+        with tempfile.TemporaryDirectory() as tmp:
+            view = self._prepared_view(tmp, ["4.4.0", "4.5.0", "5.3.0"],
+                                       "4.5.0", "5.3.0", threads)
+            first = len(threads.targets) - 1
+            versions = [entry.version for entry in view._choices]
+            view.source_combo.setCurrentIndex(versions.index("4.4.0"))
+            # Mientras la primera lectura sigue en marcha no se lanza otra.
+            self.assertEqual(len(threads.targets), first + 1)
+            user, factory = self._dumps()
+            with mock.patch("services.blender_runner.enabled_addons",
+                            return_value=["viejo"]), \
+                    mock.patch("services.blender_prefs.read_preferences",
+                               side_effect=[user, factory]):
+                threads.run(first)
+            # Lo leído era de la 4.5: no se aplica y se relee la 4.4.
+            self.assertEqual(view.detail_prefs, [])
+            self.assertNotIn("viejo", view.source_enabled)
+            self.assertEqual(len(threads.targets), first + 2)
+            self.assertIn("Reading", view.detail_status.text())
+            with mock.patch("services.blender_runner.enabled_addons",
+                            return_value=["nuevo"]), \
+                    mock.patch("services.blender_prefs.read_preferences",
+                               side_effect=[user, factory]):
+                threads.run(first + 1)
+            self.assertEqual(len(view.detail_prefs), 1)
+            self.assertIn("nuevo", view.source_enabled)
+
+    def test_una_senal_sin_ticket_no_abre_nada(self):
+        """Una señal pública emitida desde fuera no dispara diálogos."""
+        view = self._view()
+        with mock.patch("ui.widgets.dialogs.show_info") as info:
+            view.prefs_applied.emit({"result": {"applied": []},
+                                     "version": "5.3.0"})
+            view.activation_done.emit({"result": {}, "version": "5.3.0"})
+        self.assertFalse(info.called)
 
 
 if __name__ == "__main__":
