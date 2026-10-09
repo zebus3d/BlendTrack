@@ -22,6 +22,7 @@ candidatas, ambas de Blender, y se elige la que va más rápida midiendo ~1 MB d
 cada una. Si la medición falla, se sigue usando el CDN, que es lo de siempre.
 """
 
+import http.client
 import time
 import urllib.error
 import urllib.request
@@ -132,7 +133,12 @@ def _speed(url: str, timeout: int = PROBE_TIMEOUT) -> Optional[float]:
         with urllib.request.urlopen(request, timeout=timeout,
                                     context=tls.ssl_context()) as response:
             read_bytes = len(response.read(PROBE_BYTES))
-    except (urllib.error.URLError, OSError, ValueError) as error:
+    except (urllib.error.URLError, OSError, ValueError,
+            http.client.HTTPException) as error:
+        # ``HTTPException`` va aparte porque no es un ``OSError``: es lo que
+        # lanza ``http.client`` con una respuesta mal formada o cortada
+        # (``BadStatusLine``, ``IncompleteRead``). Una sonda fallida solo
+        # significa "no se pudo medir", y entonces se usa el CDN.
         log(f"source probe failed ({url}): {error}")
         return None
     elapsed = time.monotonic() - started

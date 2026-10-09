@@ -135,5 +135,20 @@ class ChooseTests(unittest.TestCase):
         self.assertFalse(checksum.called)
 
 
+class SpeedTests(unittest.TestCase):
+    def test_una_respuesta_http_rota_no_revienta_la_sonda(self):
+        """``http.client`` lanza sus propios errores (cabecera ilegible,
+        cuerpo cortado) que no son ``OSError``: la sonda tiene que darlos por
+        "no se pudo medir" y dejar que se use el CDN."""
+        import http.client
+
+        for error in (http.client.BadStatusLine("basura"),
+                      http.client.IncompleteRead(b"")):
+            with self.subTest(error=type(error).__name__), \
+                    mock.patch.object(sources.urllib.request, "urlopen",
+                                      side_effect=error):
+                self.assertIsNone(sources._speed("https://x/blender.tar.xz"))
+
+
 if __name__ == "__main__":
     unittest.main()
