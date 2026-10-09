@@ -174,6 +174,24 @@ class LinkAddonTest(unittest.TestCase):
             self.assertEqual(caso.exception.reason, "symlink_failed")
             self.assertEqual((instalado / "__init__.py").read_text(), "# mio")
 
+    def test_si_no_se_puede_borrar_lo_dice(self):
+        """Un borrado que falla no puede contarse como hecho."""
+        with tempfile.TemporaryDirectory() as tmp:
+            carpeta = _config_dir(tmp) / "scripts" / "addons" / "mi_addon"
+            carpeta.mkdir(parents=True)
+            (carpeta / "__init__.py").write_text("# mio", encoding="utf-8")
+            addon = ap.baddons.Addon(kind=ap.LEGACY, module="mi_addon",
+                                     name="Mi Addon", version="", min_version="",
+                                     max_version="", path=carpeta)
+            entry = _entry(tmp)
+            entry.executable = None
+            with mock.patch.object(ap.baddons.shutil, "rmtree",
+                                   side_effect=PermissionError("sin permiso")):
+                with self.assertRaises(ap.AddonError) as caso:
+                    ap.remove(entry, addon, "linux", _env(tmp))
+            self.assertEqual(caso.exception.reason, "copy_failed")
+            self.assertTrue(carpeta.is_dir())
+
 class SetEnabledTest(unittest.TestCase):
     def test_activa_y_desactiva(self):
         with tempfile.TemporaryDirectory() as tmp:

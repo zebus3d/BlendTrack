@@ -209,6 +209,13 @@ def remove(entry, addon: baddons.Addon, platform: str, env=None) -> None:
 
     Si es un enlace de desarrollo, borra el enlace y deja la carpeta original
     intacta (``delete_path`` respeta los symlinks).
+
+    Si no se puede borrar (sin permiso, un fichero abierto en Windows) lanza
+    ``AddonError``: antes el fallo se perdía por el camino y la interfaz decía
+    "borrado" con el addon todavía en su sitio. Se usa la clave
+    ``copy_failed`` porque su mensaje ("no se pudo escribir en la carpeta de
+    add-ons de Blender") es justo lo que pasa, y es una de las que la interfaz
+    ya sabe contar.
     """
     executable = getattr(entry, "executable", None)
     if executable:
@@ -216,7 +223,10 @@ def remove(entry, addon: baddons.Addon, platform: str, env=None) -> None:
             blender_runner.set_addons(executable, disable=[addon.module])
         except Exception:  # noqa: BLE001 - borrar no debe fallar por desactivar
             pass
-    baddons.delete_path(addon.path)
+    try:
+        baddons.delete_path(addon.path)
+    except OSError as error:
+        raise AddonError("copy_failed", str(error)) from error
 
 
 def _find_addon_root(folder: Path):

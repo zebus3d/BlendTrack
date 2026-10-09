@@ -447,13 +447,31 @@ class MigrationResult:
     modules: list = field(default_factory=list)
 
 def delete_path(path: Path) -> None:
-    """Borra un fichero o una carpeta entera, sin fallar si no está."""
+    """Borra un fichero, un enlace o una carpeta entera; si no está, no hace nada.
+
+    Un enlace simbólico se borra **él**, no lo que apunta: así quitar un addon
+    de desarrollo enlazado deja intacta la carpeta del proyecto.
+
+    Si no se puede borrar (sin permiso, un fichero abierto en Windows...) lanza
+    ``OSError``. Antes se tragaba el error y quien llamaba daba por hecho el
+    borrado: el gestor de addons decía "borrado" con el addon todavía en su
+    sitio. Para limpiar restos, donde fallar no importa, está ``_discard``.
+    """
     path = Path(path)
+    if path.is_dir() and not path.is_symlink():
+        shutil.rmtree(path)
+    elif path.exists() or path.is_symlink():
+        path.unlink()
+
+
+def _discard(path: Path) -> None:
+    """Borra un resto (un temporal, una copia apartada) sin quejarse si falla.
+
+    Se usa al recoger después de un error, donde un segundo fallo no puede
+    tapar el primero, que es el que hay que contar.
+    """
     try:
-        if path.is_dir() and not path.is_symlink():
-            shutil.rmtree(path)
-        elif path.exists() or path.is_symlink():
-            path.unlink()
+        delete_path(path)
     except OSError:
         pass
 
@@ -540,19 +558,19 @@ def replace_with_copy(source: Path, destination: Path,
     try:
         copy_entry(source, staging)
     except OSError:
-        delete_path(staging)
+        _discard(staging)
         raise
     backup = displaced = None
-    if not discard_existing:
-        backup = park_existing(destination)
-    elif destination.exists() or destination.is_symlink():
-        # Nuestra copia vieja se aparta (no se borra todavía) por si el paso
-        # siguiente falla y hay que devolverla.
-        displaced = destination.with_name(
-            f".{destination.name}{STAGING_SUFFIX}-old")
-        delete_path(displaced)
-        destination.rename(displaced)
     try:
+        if not discard_existing:
+            backup = park_existing(destination)
+        elif destination.exists() or destination.is_symlink():
+            # Nuestra copia vieja se aparta (no se borra todavía) por si el
+            # paso siguiente falla y hay que devolverla.
+            displaced = destination.with_name(
+                f".{destination.name}{STAGING_SUFFIX}-old")
+            delete_path(displaced)
+            destination.rename(displaced)
         os.replace(staging, destination)
     except OSError:
         previous = backup or displaced
@@ -564,10 +582,12 @@ def replace_with_copy(source: Path, destination: Path,
                 # solo no se pudo devolver a su sitio. El error que importa es
                 # el de arriba, que es el que se relanza.
                 pass
-        delete_path(staging)
+        _discard(staging)
         raise
     if displaced is not None:
-        delete_path(displaced)
+        # La copia nueva ya está en su sitio; la vieja era nuestra y sobra. Si
+        # no se puede borrar, se queda oculta (empieza por punto) sin estorbar.
+        _discard(displaced)
     return backup
 
 
