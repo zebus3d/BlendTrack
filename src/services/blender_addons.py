@@ -11,6 +11,7 @@ guardados de "valores de fábrica", en ``blender_snapshots``. Es un módulo de
 """
 
 import ast
+import glob
 import json
 import os
 import re
@@ -496,8 +497,10 @@ def park_existing(destination: Path) -> Path | None:
     # Quita un sufijo .bak ya existente, para no respaldar el respaldo.
     base = destination.name.split(BACKUP_SUFFIX, 1)[0]
     # Limpia restos de intentos anteriores (y de versiones viejas de la app,
-    # que sí ponían fecha) antes de reutilizar el nombre.
-    for old in destination.parent.glob(f"{base}{BACKUP_SUFFIX}*"):
+    # que sí ponían fecha) antes de reutilizar el nombre. El nombre se escapa:
+    # un addon llamado ``addon[1]`` es un patrón de glob que casa con
+    # ``addon1``, y sin escapar se borraba el respaldo de otro addon.
+    for old in destination.parent.glob(f"{glob.escape(base)}{BACKUP_SUFFIX}*"):
         if old != destination:
             delete_path(old)
     backup = destination.with_name(f"{base}{BACKUP_SUFFIX}")

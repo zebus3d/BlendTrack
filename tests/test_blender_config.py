@@ -416,6 +416,18 @@ class ApplyMigrationTest(unittest.TestCase):
             self.assertEqual(len(backups), 1)
             self.assertEqual((backups[0] / "a.py").read_text(), "v2")
 
+    def test_el_respaldo_no_borra_el_de_otro_addon_por_un_corchete(self):
+        """``addon[1]`` no puede tratarse como patrón y casar con ``addon1``."""
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            ajeno = folder / f"addon1{bc.BACKUP_SUFFIX}"
+            ajeno.mkdir()
+            destination = folder / "addon[1]"
+            destination.mkdir()
+            backup = baddons.park_existing(destination)
+            self.assertTrue(ajeno.is_dir())
+            self.assertEqual(backup, folder / f"addon[1]{bc.BACKUP_SUFFIX}")
+
     def test_undo_restaura_el_backup(self):
         with tempfile.TemporaryDirectory() as tmp:
             source = Path(tmp) / "addon"
