@@ -5061,5 +5061,64 @@ class MigrateBackgroundJobTests(SettingsIsolated, unittest.TestCase):
         self.assertFalse(info.called)
 
 
+
+@unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
+class ForkSeriesChoiceTests(SettingsIsolated, unittest.TestCase):
+    """Los selectores de versión distinguen el fork, no solo la serie."""
+
+    app = None
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    @staticmethod
+    def _installed():
+        from model.build import InstalledBuild
+
+        def entry(name, version, fork=""):
+            return InstalledBuild(name=name, path=Path("/tmp") / name,
+                                  version=version,
+                                  executable=Path("/tmp") / name / "blender",
+                                  fork=fork)
+
+        return [entry("blender-4.5.0", "4.5.0"),
+                entry("blender-4.5.1", "4.5.1"),
+                entry("bforartists-4.5.0", "4.5.0", fork="bforartists")]
+
+    def test_migracion_no_junta_bforartists_con_blender(self):
+        """Bforartists 4.5 y Blender 4.5 son dos opciones (configs distintas)."""
+        from ui.widgets.migrate import MigrateView
+
+        view = MigrateView()
+        with mock.patch("services.blender_runner.is_running",
+                        return_value=False):
+            view.set_installed(self._installed())
+            forks = sorted((entry.fork, entry.version)
+                           for entry in view._choices)
+            # Las dos Blender 4.5 comparten config: queda la más nueva.
+            self.assertEqual(forks, [("", "4.5.1"), ("bforartists", "4.5.0")])
+            bfa = [entry.fork for entry in view._choices].index("bforartists")
+            view.factory_combo.setCurrentIndex(bfa)
+            self.assertIn("Bforartists", view.factory_combo.currentText())
+            # Al volver a recibir la lista, se queda elegida la Bforartists,
+            # no la Blender de la misma versión.
+            view.set_installed(list(reversed(self._installed())))
+            self.assertEqual(view._factory_entry().fork, "bforartists")
+
+    def test_addons_no_junta_bforartists_con_blender(self):
+        from ui.widgets.addons import AddonsView
+
+        view = AddonsView()
+        view.set_installed(self._installed())
+        self.assertEqual(view.version_combo.count(), 2)
+        bfa = [entry.fork for entry in view._choices].index("bforartists")
+        view.version_combo.setCurrentIndex(bfa)
+        with mock.patch.object(view, "read"):
+            view.set_installed(list(reversed(self._installed())))
+        self.assertEqual(view._selected().fork, "bforartists")
+        self.assertIn("Bforartists", view.version_combo.currentText())
+
+
 if __name__ == "__main__":
     unittest.main()

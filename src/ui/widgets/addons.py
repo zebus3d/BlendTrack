@@ -26,7 +26,6 @@ from PySide6.QtWidgets import (
 )
 
 from i18n import tr
-from model.build import minor_of, version_tuple
 from services import addons as addons_service
 from services import blender_runner, opener
 from services.downloader import log as download_log
@@ -38,6 +37,8 @@ from ui.widgets.dialogs import confirm, show_error, show_info
 from ui.widgets.labels import ElidedLabel
 from ui.widgets.layouts import clear_layout, list_scroll
 from ui.widgets.menus import card_menu
+from ui.widgets.migrate.common import (_entry_key, choice_label,
+                                       newest_per_series)
 
 # Filtros de tipo de la barra: (clave, etiqueta).
 _TYPE_FILTERS = (
@@ -242,32 +243,24 @@ class AddonsView(QWidget):
         self.platform = platform or ""
 
     def set_installed(self, installed) -> None:
-        """Rellena el selector con las versiones instaladas (una por serie)."""
+        """Rellena el selector con las versiones instaladas (una por serie).
+
+        Una por ``(fork, serie)`` (``newest_per_series``): las de una misma
+        serie comparten carpeta de addons, pero Bforartists y Blender no.
+        """
         self.installed = list(installed or [])
-        index = self.version_combo.currentIndex()
-        keep = (self._choices[index].version
-                if 0 <= index < len(self._choices) else "")
-        seen = set()
-        choices = []
-        for entry in sorted(self.installed,
-                            key=lambda item: version_tuple(
-                                getattr(item, "version", "") or ""),
-                            reverse=True):
-            series = minor_of(getattr(entry, "version", "") or "")
-            if not series or series in seen:
-                continue
-            seen.add(series)
-            choices.append(entry)
-        self._choices = choices
+        keep = _entry_key(self._selected())
+        self._choices = newest_per_series(self.installed)
         self.version_combo.blockSignals(True)
         self.version_combo.clear()
-        # Solo la versión: la etiqueta de arriba ya dice "Versión" y el nombre
-        # de la carpeta repetía el número (misma regla que en el selector de
-        # fábrica).
-        for entry in choices:
-            self.version_combo.addItem(entry.version)
-        index = next((i for i, entry in enumerate(choices)
-                      if entry.version == keep), 0 if choices else -1)
+        # Solo la versión (y el fork, si no es Blender): la etiqueta de arriba
+        # ya dice "Versión" y el nombre de la carpeta repetía el número (misma
+        # regla que en el selector de fábrica).
+        for entry in self._choices:
+            self.version_combo.addItem(choice_label(entry))
+        index = next((i for i, entry in enumerate(self._choices)
+                      if _entry_key(entry) == keep),
+                     0 if self._choices else -1)
         self.version_combo.setCurrentIndex(index)
         self.version_combo.blockSignals(False)
         # No se lee aquí: leer arranca Blender. Lo pide quien entra en la vista

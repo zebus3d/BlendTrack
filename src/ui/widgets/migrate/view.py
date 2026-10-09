@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (QComboBox, QFrame, QHBoxLayout, QLabel,
                                QSizePolicy, QTabWidget, QVBoxLayout, QWidget)
 
 from i18n import tr
-from model.build import version_tuple
+from model.build import fork_label
 from services import blender_config as bc
 from services import blender_runner
 from ui import icons
@@ -38,8 +38,8 @@ from ui.widgets.cards import settings_card
 from ui.widgets import dialogs
 from ui.widgets.layouts import list_scroll
 from ui.widgets.migrate.addons_tab import AddonsTabMixin
-from ui.widgets.migrate.common import (LatestJob, _entry_info,
-                                       _version_label)
+from ui.widgets.migrate.common import (LatestJob, _entry_info, _entry_key,
+                                       choice_label, newest_per_series)
 from ui.widgets.migrate.factory_tab import FactoryTabMixin
 from ui.widgets.migrate.prefs_tab import PrefsTabMixin
 
@@ -367,70 +367,52 @@ class MigrateView(AddonsTabMixin, PrefsTabMixin, FactoryTabMixin,
     def set_installed(self, installed) -> None:
         """Recibe las versiones instaladas y rellena los desplegables.
 
-        Se **ordena de más nueva a más vieja** en vez de fiarse del orden de
-        entrada: de ahí sale el valor por defecto de los dos combos, y no puede
-        depender de cómo venga la lista de fuera. Se deduplica por serie (dos
-        diarias de ``main`` comparten carpeta de config).
+        Una opción por ``(fork, serie)``, de la más nueva a la más vieja (ver
+        ``newest_per_series``): de ahí sale el valor por defecto de los combos.
         """
         self.installed = list(installed or [])
-        seen = set()
-        choices = []
-        for entry in sorted(self.installed,
-                            key=lambda item: version_tuple(
-                                getattr(item, "version", "") or ""),
-                            reverse=True):
-            version = (getattr(entry, "version", "") or "")
-            series = ".".join(version.split(".")[:2])
-            if not series or series in seen:
-                continue
-            seen.add(series)
-            choices.append(entry)
-        self._choices = choices
+        # Lo elegido se busca por ``(fork, versión)`` **antes** de cambiar la
+        # lista: el índice de antes ya no vale con la lista nueva.
+        keep = {combo: _entry_key(self._selected(combo))
+                for combo in (self.source_combo, self.target_combo,
+                              self.factory_combo)}
+        self._choices = newest_per_series(self.installed)
 
         # Al reordenar, el desplegable mantiene la versión que tuviera elegida.
-        self._fill_combo(self.source_combo, choices,
-                         self._selected_entry(self.source_combo))
-        self._fill_combo(self.target_combo, choices,
-                         self._selected_entry(self.target_combo))
+        self._fill_combo(self.source_combo, keep[self.source_combo])
+        self._fill_combo(self.target_combo, keep[self.target_combo])
         # La pestaña de fábrica tiene su propio selector de una versión: se
         # mantiene lo elegido y, la primera vez, arranca en la más nueva (igual
         # que el destino de la migración).
-        self._fill_combo(self.factory_combo, choices,
-                         self._selected_entry(self.factory_combo),
-                         label=_version_label)
-        if choices and self.factory_combo.currentIndex() < 0:
+        self._fill_combo(self.factory_combo, keep[self.factory_combo],
+                         label=choice_label)
+        if self._choices and self.factory_combo.currentIndex() < 0:
             self.factory_combo.setCurrentIndex(0)
         # Por defecto (solo la primera vez): de la **penúltima** a la **última**,
         # que es el caso normal de "acabo de instalarme la nueva y quiero
         # traerme lo de la anterior".
-        if len(choices) >= 2:
+        if len(self._choices) >= 2:
             if self.source_combo.currentIndex() < 0:
                 self.source_combo.setCurrentIndex(1)
             if self.target_combo.currentIndex() < 0:
                 self.target_combo.setCurrentIndex(0)
         self._fill_from_installed()
 
-    def _selected_entry(self, combo) -> str:
-        index = combo.currentIndex()
-        if 0 <= index < len(self._choices):
-            return self._choices[index].version
-        return ""
+    def _fill_combo(self, combo, keep: tuple, label=None) -> None:
+        """Rellena un desplegable con ``self._choices`` y conserva ``keep``.
 
-    def _fill_combo(self, combo, choices, keep_version: str,
-                    label=None) -> None:
-        """Rellena un desplegable de versiones.
-
-        ``label`` decide el texto de cada opción (por defecto, versión y carpeta;
-        el selector de fábrica usa solo la versión, que allí el nombre de la
-        carpeta no aporta nada y repetía el número).
+        ``keep`` es el ``(fork, versión)`` que estaba elegido. ``label`` decide
+        el texto de cada opción (por defecto, programa, versión y carpeta; el
+        selector de fábrica usa ``choice_label``, sin la carpeta).
         """
-        label = label or (lambda entry: f"Blender {entry.version}  ·  {entry.name}")
+        label = label or (lambda entry: f"{fork_label(entry.fork)} "
+                                        f"{entry.version}  ·  {entry.name}")
         combo.blockSignals(True)
         combo.clear()
-        for entry in choices:
+        for entry in self._choices:
             combo.addItem(label(entry))
-        index = next((i for i, entry in enumerate(choices)
-                      if entry.version == keep_version), -1)
+        index = next((i for i, entry in enumerate(self._choices)
+                      if _entry_key(entry) == keep), -1)
         combo.setCurrentIndex(index)
         combo.blockSignals(False)
 
@@ -460,7 +442,7 @@ class MigrateView(AddonsTabMixin, PrefsTabMixin, FactoryTabMixin,
             self._set_controls_enabled(False)
             self._fill_preference_files()
             return
-        if source.version == target.version:
+        if _entry_key(source) == _entry_key(target):
             self.summary.setText(tr("Source and destination must be different."))
             self._set_controls_enabled(False)
             self._fill_preference_files()

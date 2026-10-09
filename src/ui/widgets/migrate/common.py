@@ -10,6 +10,7 @@ from pathlib import Path
 from PySide6.QtWidgets import QScrollArea
 
 from i18n import tr
+from model.build import fork_label, fork_series, version_tuple
 from services import blender_config as bc
 from services import blender_addons as baddons
 from services import blender_prefs as bprefs
@@ -117,6 +118,46 @@ class LatestJob:
     def invalidate(self) -> None:
         """Lo que está en marcha ya no vale: su ``key`` no cuadrará con nada."""
         self.key = None
+
+
+def newest_per_series(installed) -> list:
+    """Una instalada por ``(fork, serie)``, de la más nueva a la más vieja.
+
+    Las versiones de una misma serie comparten carpeta de configuración (dos
+    diarias de 5.3 escriben en ``~/.config/blender/5.3``), así que en los
+    selectores de Migración y de Add-ons basta con una por serie: la más
+    nueva. El **fork** entra en la clave porque Bforartists 4.5 y Blender 4.5
+    tienen cada uno su propia carpeta (y UPBGE usa la serie de Blender a la que
+    equivale, ``fork_series``): juntarlos dejaba sin poder elegir uno de los dos.
+
+    Se ordena aquí en vez de fiarse del orden de entrada: de ahí salen los
+    valores por defecto de los desplegables.
+    """
+    seen = set()
+    choices = []
+    for entry in sorted(installed or [],
+                        key=lambda item: version_tuple(
+                            getattr(item, "version", "") or ""),
+                        reverse=True):
+        fork = getattr(entry, "fork", "") or ""
+        series = fork_series(fork, getattr(entry, "version", "") or "")
+        if not series or (fork, series) in seen:
+            continue
+        seen.add((fork, series))
+        choices.append(entry)
+    return choices
+
+
+def choice_label(entry) -> str:
+    """Texto de una instalada en un selector: la versión y, si es un fork, cuál.
+
+    El nombre de la carpeta no aporta nada (repetía el número y la ruta ya va
+    debajo), pero el del fork sí: sin él, "4.5.0" podía ser Bforartists o
+    Blender.
+    """
+    version = getattr(entry, "version", "") or getattr(entry, "name", "")
+    fork = getattr(entry, "fork", "") or ""
+    return f"{fork_label(fork)} {version}" if fork else version
 
 
 def _entry_key(entry) -> tuple:
@@ -238,14 +279,6 @@ def _entry_info(entry) -> tuple:
     if entry is None:
         return None, ""
     return getattr(entry, "executable", None), getattr(entry, "version", "")
-
-def _version_label(entry) -> str:
-    """Texto de una opción del selector de fábrica: solo la versión.
-
-    Allí el nombre de la carpeta no aporta nada y repetía el número
-    («Blender 5.2.2 · blender-5.2.2-linux-x64»); la ruta ya está debajo.
-    """
-    return getattr(entry, "version", "") or getattr(entry, "name", "")
 
 def _failure_block(title: str, lines, limit: int = 10) -> list:
     """Bloque "título + viñetas" de un diálogo de resultado, recortado.
