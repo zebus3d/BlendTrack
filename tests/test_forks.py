@@ -312,6 +312,14 @@ class ForkFetchTest(unittest.TestCase):
                          {})
         self.assertEqual(fk.download_headers("https://github.com/x/y.zip"), {})
 
+    def test_un_host_que_solo_empieza_igual_no_recibe_la_autenticacion(self):
+        """Comparar el prefijo de la URL dejaba pasar hosts de otro dueño."""
+        for url in ("https://cloud.bforartists.de.example.com/x.tar.xz",
+                    "https://cloud.bforartists.de@example.com/x.tar.xz",
+                    "http://cloud.bforartists.de/x.tar.xz"):
+            with self.subTest(url=url):
+                self.assertEqual(fk.download_headers(url), {})
+
 
 if __name__ == "__main__":
     unittest.main()

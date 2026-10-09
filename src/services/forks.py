@@ -53,7 +53,8 @@ BFA_WORKERS = 6
 
 # --------------------------------------------------------------- Bforartists
 
-BFA_ORIGIN = "https://cloud.bforartists.de"
+BFA_HOST = "cloud.bforartists.de"
+BFA_ORIGIN = f"https://{BFA_HOST}"
 BFA_WEBDAV_URL = f"{BFA_ORIGIN}/public.php/webdav"
 # Share público (sin contraseña, la del usuario va vacía). Es el mismo que usa
 # Blender Launcher V2 y está pensado para que lo lea cualquiera.
@@ -499,6 +500,11 @@ def download_headers(url: str) -> dict:
     Sin esto, descargar una versión de Bforartists daba 401. El resto de
     fuentes (CDN de Blender, releases de GitHub) son públicas.
     """
-    if url.startswith(BFA_ORIGIN):
+    # Se compara el host ya interpretado, no el principio del texto: con
+    # ``startswith`` también pasaban ``https://cloud.bforartists.de.otro.com``
+    # o ``https://cloud.bforartists.de@otro.com``, y la autenticación (aunque
+    # sea de un share público) acabaría en un servidor ajeno.
+    parsed = urllib.parse.urlparse(url or "")
+    if parsed.scheme == "https" and parsed.hostname == BFA_HOST:
         return {"Authorization": "Basic " + BFA_AUTH}
     return {}
