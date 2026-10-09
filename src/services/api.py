@@ -222,10 +222,26 @@ def load_cache(max_age=CACHE_MAX_AGE):
     return builds
 
 
-def get_builds(force: bool = False, forks=()):
-    """Listado de compilaciones: usa caché y, si falla la red, cae al caché antiguo."""
+def _without_disabled_forks(builds, forks) -> list:
+    """Quita las versiones de los forks que no están activados.
+
+    El caché se escribió con los forks que hubiera encendidos entonces. Si el
+    usuario apaga Bforartists y el listado sale del caché (está fresco, o no
+    hay red), sus versiones seguirían apareciendo en "Todas" sin que nadie las
+    haya pedido.
+    """
+    enabled = set(forks or ())
+    return [build for build in builds if not build.fork or build.fork in enabled]
+
+
+def get_builds(force: bool = False, forks=()) -> list:
+    """Listado de compilaciones: usa caché y, si falla la red, cae al caché antiguo.
+
+    ``forks`` son los forks activados; las versiones de los demás no se
+    devuelven nunca, vengan de la red o del caché.
+    """
     if not force:
-        cached = load_cache()
+        cached = _without_disabled_forks(load_cache(), forks)
         if cached:
             return cached
     # La caché (aunque esté caducada) sirve para dos cosas: reutilizar las
@@ -239,7 +255,7 @@ def get_builds(force: bool = False, forks=()):
         # Se apunta el motivo: sin él, "no veo versiones nuevas" no se puede
         # distinguir de "no hay versiones nuevas" mirando el log.
         log(f"builds listing unavailable, using the cache: {error}")
-        return stale
+        return _without_disabled_forks(stale, forks)
     # Guardar va aparte de descargar: si el disco está lleno o la carpeta de
     # caché no deja escribir, el listado recién bajado sigue siendo bueno y
     # tirarlo para enseñar el viejo sería castigar al usuario por el disco.

@@ -209,6 +209,20 @@ class GetBuildsTests(unittest.TestCase):
                                   side_effect=OSError("disco lleno")):
             self.assertEqual(api.get_builds(force=True), fresh)
 
+    def test_el_cache_no_trae_versiones_de_un_fork_apagado(self):
+        """Un caché escrito con Bforartists encendido no la enseña al apagarlo."""
+        api.save_cache([self.blender, self.bfa])
+        self.assertEqual(api.get_builds(forks=()), [self.blender])
+        self.assertEqual(api.get_builds(forks=("bforartists",)),
+                         [self.blender, self.bfa])
+
+    def test_sin_red_el_cache_viejo_tampoco_trae_forks_apagados(self):
+        api.save_cache([self.blender, self.bfa])
+        with mock.patch.object(api, "fetch_builds",
+                               side_effect=OSError("sin red")):
+            self.assertEqual(api.get_builds(force=True, forks=()),
+                             [self.blender])
+
 
 class ChannelFilterTests(unittest.TestCase):
     """Filtro de canal de la tienda (incluidas las ramas experimentales)."""
