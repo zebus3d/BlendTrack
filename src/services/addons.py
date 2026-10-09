@@ -17,16 +17,12 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from services import blender_config as bc
 from services import blender_addons as baddons
-from services import blender_runner
-from services import extractor
-
-# Tipos de addon. ``core`` no se lista hoy (los addons que vienen dentro de
-# Blender no están en la carpeta de usuario); queda por si se añade.
-LEGACY = "legacy"
-EXTENSION = "extension"
-CORE = "core"
+from services import blender_config as bc
+from services import blender_runner, extractor
+# Los tipos de addon se definen junto a ``Addon``; se reexportan porque la
+# interfaz los usa como ``services.addons.LEGACY``/``EXTENSION``.
+from services.blender_addons import EXTENSION, LEGACY
 
 
 class AddonError(Exception):
@@ -134,10 +130,8 @@ def install(entry, source, platform: str, env=None) -> dict:
     with tempfile.TemporaryDirectory(prefix="blendermanager-addon-") as tmp:
         try:
             extracted = Path(extractor.extract(source, Path(tmp)))
-        except AddonError:
-            raise
         except Exception as error:  # noqa: BLE001 - zip roto, truncado, sin permisos...
-            raise AddonError("broken_archive", str(error))
+            raise AddonError("broken_archive", str(error)) from error
         kind, root = _find_addon_root(extracted)
         if kind == EXTENSION:
             manifest = baddons.read_manifest(root)

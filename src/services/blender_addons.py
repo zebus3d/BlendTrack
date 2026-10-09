@@ -49,6 +49,12 @@ _OS_TOKENS = {"linux": "linux", "windows": "windows", "darwin": "macos"}
 
 # -------------------------------------------------------------------- addons
 
+# Los dos tipos de addon (``Addon.kind``). La interfaz los usa para agrupar la
+# lista, así que se nombran aquí una sola vez y ``services.addons`` los reexporta.
+LEGACY = "legacy"        # ``bl_info`` en ``scripts/addons`` (el sistema de siempre)
+EXTENSION = "extension"  # ``blender_manifest.toml`` en ``extensions/<repo>`` (4.2+)
+
+
 @dataclass
 class Addon:
     """Un addon instalado en una versión de Blender.
@@ -158,7 +164,7 @@ def _legacy_addons(config: BlenderConfig) -> list[Addon]:
             continue
         info = read_bl_info(init)
         result.append(Addon(
-            kind="legacy",
+            kind=LEGACY,
             module=module,
             name=str(info.get("name") or module),
             version=_tuple_text(info.get("version")),
@@ -197,7 +203,7 @@ def _extensions(config: BlenderConfig) -> list[Addon]:
                 continue
             addon_id = str(manifest.get("id") or entry.name)
             result.append(Addon(
-                kind="extension",
+                kind=EXTENSION,
                 module=f"bl_ext.{repo}.{addon_id}",
                 name=str(manifest.get("name") or addon_id),
                 version=str(manifest.get("version") or ""),
@@ -378,7 +384,7 @@ class AddonPlan:
         Las extensiones se copian al repositorio local, así que su módulo en
         destino es ``bl_ext.user_default.<id>`` aunque en origen fuera otro.
         """
-        if self.addon.kind == "extension":
+        if self.addon.kind == EXTENSION:
             return f"bl_ext.{LOCAL_REPO}.{addon_id_of(self.addon.module)}"
         return self.addon.module
 
@@ -398,7 +404,7 @@ def destination_for(addon: Addon, target: BlenderConfig) -> Path:
     aunque en origen vinieran de otro; así no hay que dar de alta repositorios
     remotos solo para copiar una carpeta.
     """
-    if addon.kind == "extension":
+    if addon.kind == EXTENSION:
         return target.extensions_dir / LOCAL_REPO / addon_id_of(addon.module)
     return target.addons_dir / addon.path.name
 
