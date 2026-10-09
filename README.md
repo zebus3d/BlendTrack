@@ -120,16 +120,23 @@ python src/main.py
 
 The app opens on the store. The first time, if you already have Blender
 versions in the destination folder, it opens on the **Local** tab instead. The
-default destination is `~/Descargas/Blenders`; change it in **Settings**.
+default destination is a `Blenders` folder inside your Downloads folder
+(`~/Downloads/Blenders`; on Linux, `~/Descargas/Blenders` when only that one
+exists; on Windows, wherever the system says Downloads lives, even if it was
+moved to another drive). Add or change folders in **Settings → Folders**.
 
 ### Command-line options
 
 ```bash
 python src/main.py                     # open the UI
-python src/main.py --debug             # UI with verbose logging
+python src/main.py --debug             # UI; if it crashes, the Python stack goes to the log
 python src/main.py --smoke             # list builds in the console (no window)
 python src/main.py --screenshot r.png  # start, save a screenshot and quit
 ```
+
+The log is `blendermanager.log` in the app's cache folder:
+`~/.cache/blendermanager` on Linux, `~/Library/Caches/BlenderManager` on macOS
+and `%LOCALAPPDATA%\BlenderManager\cache` on Windows.
 
 ### Portable mode
 
