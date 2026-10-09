@@ -124,7 +124,7 @@ def scalar(kind, value):
     """Valor JSON del tipo RNA ``kind``.
 
     Los float se redondean: Blender devuelve 0.10000000149 para un 0.1, y sin
-    redondear dos lecturas de una preferencia sin tocar podian salir distintas.
+    redondear dos lecturas de una preferencia sin tocar podían salir distintas.
     """
     if kind == "FLOAT":
         return round(float(value), 6)
@@ -148,7 +148,7 @@ def serialise(prop, value):
     if is_flag(prop):
         # Un enum de varios valores llega como ``set``, y ``str()`` sobre un
         # set NO tiene orden estable entre procesos (Python aleatoriza el hash
-        # de las cadenas): se ordena para que el diff no lo de por cambiado.
+        # de las cadenas): se ordena para que el diff no lo dé por cambiado.
         return sorted(str(item) for item in value)
     if prop.type == "ENUM":
         return str(value)
@@ -161,7 +161,7 @@ def serialise(prop, value):
 
 
 def default_of(prop):
-    """Valor de fabrica de la propiedad, en la misma forma que ``serialise``."""
+    """Valor de fábrica de la propiedad, en la misma forma que ``serialise``."""
     if is_flag(prop):
         return sorted(str(item) for item in prop.default_flag)
     if prop.type == "ENUM":
@@ -172,10 +172,10 @@ def default_of(prop):
 
 
 def is_default(prop, value):
-    """True si ``value`` (ya serializado) es el de fabrica de esa propiedad.
+    """True si ``value`` (ya serializado) es el de fábrica de esa propiedad.
 
-    Se usa para las preferencias de addons: como un addon que solo esta
-    activado en la config del usuario no sale en el volcado de fabrica, se
+    Se usa para las preferencias de addons: como un addon que solo está
+    activado en la config del usuario no sale en el volcado de fábrica, se
     compara contra el valor por defecto que declara el propio RNA.
     """
     try:
@@ -185,7 +185,7 @@ def is_default(prop, value):
 
 
 def describe(prop):
-    """Nombre, descripcion y tipo: lo que la interfaz ensena por cada clave."""
+    """Nombre, descripción y tipo: lo que la interfaz enseña por cada clave."""
     meta = {
         "name": prop.name or "",
         "description": prop.description or "",
@@ -230,18 +230,18 @@ payload = {"format": DUMP_FORMAT, "values": VALUES, "meta": META,
 try:
     walk(bpy.context.preferences, "")
     # Preferencias de los addons ACTIVOS. No son atributos de ``preferences``
-    # (viven en la coleccion ``addons``), asi que el recorrido de arriba no
-    # las ve: de ahi salian sin detectar el dispositivo de Cycles (OPTIX/CUDA/
-    # HIP) o las opciones de glTF. Los modulos de extension llevan puntos en
-    # el nombre (``bl_ext.<repo>.<id>``); quien las escribe resuelve el modulo
-    # por el prefijo mas largo de ``addons``.
+    # (viven en la colección ``addons``), así que el recorrido de arriba no
+    # las ve: de ahí salían sin detectar el dispositivo de Cycles (OPTIX/CUDA/
+    # HIP) o las opciones de glTF. Los módulos de extensión llevan puntos en
+    # el nombre (``bl_ext.<repo>.<id>``); quien las escribe resuelve el módulo
+    # por el prefijo más largo de ``addons``.
     for addon in bpy.context.preferences.addons:
         ADDONS.append(addon.module)
         try:
             addon_prefs = addon.preferences
         except Exception:
             continue
-        # ``only_changed``: sin el volcado de fabrica con el que comparar, se
+        # ``only_changed``: sin el volcado de fábrica con el que comparar, se
         # descartan las claves que ya valen lo que su propio RNA dice.
         walk(addon_prefs, "addons." + addon.module + ".", 0, True)
 except Exception as exc:
@@ -295,13 +295,13 @@ except Exception:
 
 
 def longest_prefix(rest, names):
-    """El nombre de modulo mas largo que sea prefijo de ``rest``."""
+    """El nombre de módulo más largo que sea prefijo de ``rest``."""
     matches = [name for name in names if rest.startswith(name + ".")]
     return max(matches, key=len) if matches else None
 
 
 def ensure_addon(rest):
-    """Modulo del addon de ``rest`` si esta activado (o se acaba de activar)."""
+    """Módulo del addon de ``rest`` si está activado (o se acaba de activar)."""
     module = longest_prefix(rest, list(prefs.addons.keys()))
     if module is not None:
         return module
@@ -328,9 +328,9 @@ def ensure_addon(rest):
 def resolve(path):
     """``(objeto RNA, error)`` de la ruta: el objeto que tiene la hoja.
 
-    ``addons.<modulo>.<clave>`` no es una cadena de atributos (``addons`` es una
-    coleccion), asi que se entra por ella. El modulo puede llevar puntos
-    (extensiones), y se elige el que sea prefijo mas largo de la ruta.
+    ``addons.<módulo>.<clave>`` no es una cadena de atributos (``addons`` es una
+    colección), así que se entra por ella. El módulo puede llevar puntos
+    (extensiones), y se elige el que sea prefijo más largo de la ruta.
     """
     if path.startswith("addons."):
         rest = path[len("addons."):]
