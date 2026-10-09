@@ -1,18 +1,19 @@
-"""Tarjetas de compilaciones: la tienda y las versiones instaladas.
+"""Tarjetas de versiones: la tienda y las versiones instaladas.
 
-Sustituyen a ``ui/widgets/cards.py`` + ``views/cards.kv``. Cada tarjeta existe
-en versión lista (una fila) y rejilla (icono grande). En vez de llamar
-directamente al controlador, emiten señales; la ventana principal las conecta.
+Cada tarjeta existe en versión lista (una fila) y rejilla (icono grande). En
+vez de llamar directamente a la ventana, emiten señales y la ventana las
+conecta. Aquí viven también ``settings_card``/``GripCard``, la tarjeta de
+Ajustes, Migración y Add-ons.
 """
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QFont, QPixmap
+from PySide6.QtGui import QColor, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QFrame,
+    QGraphicsDropShadowEffect,
     QHBoxLayout,
     QLabel,
     QVBoxLayout,
-    QWidget,
 )
 
 from i18n import tr
@@ -20,7 +21,7 @@ from model.build import FORK_BLENDER
 from paths import ASSETS_DIR
 from ui import icons
 from ui import theme as t
-from ui.fonts import device_ratio
+from ui.fonts import device_ratio, glyph_icon, icon_font
 from ui.widgets.buttons import CardButton, IconLinkButton, StarButton
 from ui.widgets.labels import EditableLabel, ElidedLabel
 
@@ -79,12 +80,6 @@ def _logo_pixmap(size: int, dim: bool, fork: str = FORK_BLENDER) -> QPixmap:
 MIN_ICON_BUTTON_WIDTH = 26
 
 
-def _icon_font(size: int | None = None) -> QFont:
-    from ui.fonts import icon_font
-
-    return icon_font(size)
-
-
 def _icon_only(button) -> None:
     """Marca un CardButton que solo lleva un icono.
 
@@ -112,8 +107,7 @@ def _download_icon():
 
 
 def _action_icon(glyph: str, color: str):
-    from ui.fonts import glyph_icon
-
+    """Glifo de 12 px como ``QIcon``, para ir junto al texto de un botón."""
     return glyph_icon(glyph, 12, color)
 
 
@@ -123,9 +117,6 @@ def _drop_shadow(widget, blur: float, offset: float, alpha: int):
     Único sitio que construye el efecto: la del logo y la de la tarjeta solo
     se diferencian en cuánto difumina y cuánto se desplaza.
     """
-    from PySide6.QtGui import QColor
-    from PySide6.QtWidgets import QGraphicsDropShadowEffect
-
     effect = QGraphicsDropShadowEffect(widget)
     effect.setBlurRadius(blur)
     effect.setOffset(offset, offset)
@@ -173,7 +164,7 @@ def _favorite_star(marked: bool, on_toggle) -> StarButton:
     """Estrella de favorito de una tarjeta (misma diana que la "i": 24x24)."""
     star = StarButton(marked, tooltip_on=tr("Remove from favorites"),
                       tooltip_off=tr("Mark as favorite"))
-    star.setFont(_icon_font())
+    star.setFont(icon_font())
     star.toggled.connect(on_toggle)
     return star
 
@@ -186,7 +177,7 @@ def _info_button(item, signal) -> IconLinkButton:
     saber de quién son (y, en UPBGE, la URL exacta de su release).
     """
     info = IconLinkButton(icons.INFO, tr("Read the release notes for this version"))
-    info.setFont(_icon_font())
+    info.setFont(icon_font())
     info.clicked.connect(lambda: signal.emit(item))
     return info
 
@@ -204,7 +195,7 @@ def _console_button(checked: bool, entry, signal) -> CardButton:
     button.setCheckable(True)
     button.setChecked(checked)
     _icon_only(button)
-    button.setFont(_icon_font())
+    button.setFont(icon_font())
     button.setFixedWidth(46)
     button.toggled.connect(lambda on: signal.emit(entry, on))
     button.toggled.connect(
@@ -220,8 +211,6 @@ def _with_opacity(pix: QPixmap, opacity: float) -> QPixmap:
     que no tienes instaladas -que en la version Kivy si se veia- hay que
     pintarlo aqui.
     """
-    from PySide6.QtGui import QPainter
-
     result = QPixmap(pix.size())
     # Mismo ratio que el original: si no, el resultado se pintaría al doble de
     # tamaño en una pantalla HiDPI.
@@ -318,8 +307,8 @@ class BaseBuildCard(_HoverCard, QFrame):
     favorite_toggled = Signal(object, bool)   # build, marcada
     console_toggled = Signal(object, bool)    # build, con consola
 
-    def __init__(self, build, installed: bool, zebra: bool, zoom: float = 1.0,
-                 marked: bool = False, console=None, parent=None):
+    def __init__(self, build, installed: bool, zebra: bool, console=None,
+                 parent=None):
         super().__init__(parent)
         self.build = build
         self.installed = installed
@@ -394,8 +383,8 @@ class BuildCard(BaseBuildCard):
 
     def __init__(self, build, installed: bool, zebra: bool,
                  marked: bool = False, console=None, parent=None):
-        super().__init__(build, installed, zebra, marked=marked,
-                         console=console, parent=parent)
+        super().__init__(build, installed, zebra, console=console,
+                         parent=parent)
         self.setFixedHeight(68)
         lay = QHBoxLayout(self)
         lay.setContentsMargins(16, 9, 12, 9)
@@ -466,8 +455,8 @@ class GridBuildCard(BaseBuildCard):
 
     def __init__(self, build, installed: bool, zebra: bool, zoom: float = 1.0,
                  marked: bool = False, console=None, parent=None):
-        super().__init__(build, installed, zebra, zoom, marked=marked,
-                         console=console, parent=parent)
+        super().__init__(build, installed, zebra, console=console,
+                         parent=parent)
         # La fila de la insignia ("Instalada") se reserva SIEMPRE, aunque la
         # compilación no esté instalada: en el Kivy original la etiqueta existía
         # con el texto vacío y así todas las tarjetas de la tienda medían lo
@@ -605,7 +594,7 @@ class InstalledCard(_HoverCard, QFrame):
         delete = CardButton(icons.DELETE, variant="danger",
                             tooltip=tr("Remove this installed version"))
         _icon_only(delete)
-        delete.setFont(_icon_font())
+        delete.setFont(icon_font())
         delete.setFixedWidth(46)
         delete.clicked.connect(lambda: self.delete_clicked.emit(entry))
         lay.addWidget(delete)
@@ -717,7 +706,7 @@ class GridInstalledCard(_HoverCard, QFrame):
         # tamano del icono no se puede escalar con setFont: el `font-size` del
         # QSS global (13 px) pisa lo que ponga el widget, y da igual, porque el
         # resto del texto de la tarjeta tampoco escala.
-        delete.setFont(_icon_font())
+        delete.setFont(icon_font())
         delete.setFixedWidth(max(int(42 * zoom), MIN_ICON_BUTTON_WIDTH))
         delete.clicked.connect(lambda: self.delete_clicked.emit(entry))
         row.addWidget(delete)
@@ -737,8 +726,8 @@ class GripCard(QFrame):
     reserva abajo la altura del asa para que ningún botón quede debajo.
 
     La tarjeta no fija su propio alto: lo hereda de la lista de dentro, que sí
-    lo tiene fijo (``MigrateView._fit_scroll`` (Migración)). Así estirar la esquina mueve
-    el panel gris entero sin que haya dos sitios decidiendo el mismo alto.
+    lo tiene fijo (``layouts.FittedList``). Así estirar la esquina mueve el
+    panel gris entero sin que haya dos sitios decidiendo el mismo alto.
     """
 
     # Separación del asa respecto a los bordes de la tarjeta. Es 0 porque el

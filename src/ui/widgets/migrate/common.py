@@ -12,7 +12,6 @@ from PySide6.QtWidgets import QScrollArea
 from i18n import tr
 from model.build import fork_label, fork_series, version_tuple
 from services import blender_config as bc
-from services import blender_addons as baddons
 from services import blender_prefs as bprefs
 from services import blender_runner
 from services.downloader import log as download_log

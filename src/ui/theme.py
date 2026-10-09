@@ -36,12 +36,6 @@ CARD_DIM_ALT = "#202020"  # por descargar (oscura)
 ROW_ALT = "#2A2A2A"     # instalada (oscura)
 SURFACE_ALT = "#3D3D3D"  # hover / contornos suaves
 BORDER = "#3D3D3D"
-# Tarjeta **encima de un canvas gris**, un escalón por encima de SURFACE.
-# Comparte valor con SURFACE_ALT a propósito: es el mismo escalón de
-# profundidad del tema. Hoy no lo usa ninguna vista (Migración y Ajustes
-# pasaron a fondo oscuro con tarjetas en SURFACE), pero se queda como parte de
-# la escala de grises.
-SURFACE_HIGH = "#3D3D3D"
 
 # --- Texto ---
 TEXT = "#E6E6E6"

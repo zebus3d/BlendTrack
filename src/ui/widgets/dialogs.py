@@ -1,18 +1,17 @@
-"""Diálogos con el aspecto de la aplicación (versión PySide6).
+"""Diálogos con el aspecto de la aplicación.
 
-Sustituyen a ``ui/widgets/dialogs.py`` + ``views/dialogs.kv``. Qt trae
-``QMessageBox`` y ``QDialog``, pero con el estilo claro/nativo del escritorio
-desentonan con el tema oscuro; aquí heredamos de ``QDialog`` y los montamos con
-nuestros propios botones (``CardButton``), que ya llevan el QSS de la app.
+Qt trae ``QMessageBox`` y ``QDialog``, pero con el estilo claro/nativo del
+escritorio desentonan con el tema oscuro; aquí heredamos de ``QDialog`` y los
+montamos con nuestros propios botones (``CardButton``), que ya llevan el QSS de
+la app.
 """
 
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDialog,
     QHBoxLayout,
     QLabel,
+    QProgressBar,
     QVBoxLayout,
-    QWidget,
 )
 
 from i18n import tr
@@ -167,8 +166,6 @@ class ProgressDialog(AppDialog):
         acción posible mientras corre es cancelar.
         """
         super().__init__(parent, title, message)
-
-        from PySide6.QtWidgets import QProgressBar
 
         self.progress = QProgressBar()
         self.progress.setRange(0, 100)

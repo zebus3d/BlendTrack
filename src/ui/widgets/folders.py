@@ -11,7 +11,7 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout
 
 from i18n import tr
 from services import channels
-from ui import icons, theme as t
+from ui import icons
 from ui.fonts import icon_font
 from ui.widgets.buttons import CardButton, CheckPill
 from ui.widgets.labels import ElidedLabel

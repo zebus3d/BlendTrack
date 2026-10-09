@@ -143,17 +143,17 @@ class AddonsTabMixin:
         board_lay = QHBoxLayout()
         board_lay.setContentsMargins(0, 0, 0, 0)
         board_lay.setSpacing(14)
-        self.left_card, self.left_title, self.left_rows = self._board_column(
+        left_card, self.left_rows = self._board_column(
             tr("Source"),
             tr("Add-ons installed in the version you are copying from. Tick "
                "the ones you want in the destination version."))
-        self.right_card, self.right_title, self.right_rows = self._board_column(
+        right_card, self.right_rows = self._board_column(
             tr("Destination"),
             tr("Where each add-on lands in the destination version. Add-ons "
                "that were enabled in the source are enabled here too."))
-        board_lay.addWidget(self.left_card, 1)
+        board_lay.addWidget(left_card, 1)
         board_lay.addLayout(self._arrow_column(), 0)
-        board_lay.addWidget(self.right_card, 1)
+        board_lay.addWidget(right_card, 1)
         lay.addLayout(board_lay)
 
         # Los botones van pegados a las tarjetas (debajo), y el resumen y la
@@ -208,8 +208,8 @@ class AddonsTabMixin:
         # el scroll, las tarjetas miden lo que miden y lo que no cabe se baja.
         return self._scrollable(page)
 
-    def _board_column(self, title: str, tooltip: str = ""):
-        """Una columna del tablero: título y hueco de filas.
+    def _board_column(self, title: str, tooltip: str = "") -> tuple:
+        """Una columna del tablero: ``(tarjeta, layout de sus filas)``.
 
         Comparte el ``SettingsCard`` con las demás tarjetas, pero con menos
         margen: el tablero va a dos columnas y con los 16 px de las tarjetas
@@ -225,7 +225,7 @@ class AddonsTabMixin:
         rows.setSpacing(4)
         lay.addLayout(rows)
         lay.addStretch()
-        return card, label, rows
+        return card, rows
 
     def _arrow_column(self):
         """Columna central: la flecha (un solo sentido) del tablero."""

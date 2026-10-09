@@ -379,7 +379,6 @@ class FactoryTabMixin:
             tooltip=tr("Drag the corner to make the saved copies list taller "
                        "or shorter."))
         card.set_grip(self.snapshot_grip)
-        self.snapshot_card = card
 
         self._fill_factory()
         return card
