@@ -127,19 +127,31 @@ def rename_failure(folder, new_name: str) -> str:
 
 
 def rename(folder, new_name: str, version: str = "", branch: str = "",
-           build_hash: str = "", fork: str = "") -> Path:
+           build_hash: str = "", fork: str = "", risk: str = "") -> Path:
     """Renombra la carpeta de una instalación y devuelve la ruta nueva.
 
     Si la instalación no tenía marcador (de antes de que existiera) se le
     escribe uno con lo que sabemos **antes** de renombrar: si no, al perder el
     nombre la versión, el escaneo ya no la reconocería. La validación del nombre
     va aparte (``rename_failure``); esto solo hace el cambio en disco.
+
+    El nombre no solo lleva la versión: en una carpeta sin marcador, el
+    ``alpha`` del nombre es lo único que dice que es una diaria. Por eso el
+    marcador guarda también el ``risk``: el que nos pasen o, si no lo sabemos,
+    el que se deduce del nombre **viejo** (``channels.type_from_marker``).
+    Sin él, una diaria renombrada pasaba a contar como estable y cambiaba de
+    pestaña (y de carpeta de destino al reorganizar).
     """
     origin = Path(folder)
     target = origin.with_name((new_name or "").strip())
     if version and not read_marker(origin):
+        if not risk:
+            guessed = channels.type_from_marker(branch, version, origin.name,
+                                                fork=fork)
+            risk = "alpha" if guessed == channels.TYPE_DAILY else "stable"
         _write_marker_payload(origin, {
             "version": version,
+            "risk": risk,
             "branch": branch,
             "hash": build_hash,
             "fork": fork,

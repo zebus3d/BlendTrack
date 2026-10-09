@@ -474,6 +474,30 @@ class InstalledTests(unittest.TestCase):
             self.assertEqual([entry.version for entry in results], ["5.2.1"])
             self.assertEqual(results[0].build_hash, "abc123")
 
+    def test_renombrar_una_diaria_sin_marcador_la_deja_en_diarias(self):
+        """Sin marcador, lo único que delataba la diaria era el "alpha" del
+        nombre; al renombrarla se perdía y pasaba a contar como estable."""
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp) / "blender-5.3.0-alpha+main.abc-linux-x64"
+            folder.mkdir()
+            (folder / "blender").write_text("bin")
+            self.assertEqual(channels.type_of_installed(
+                installed.scan_folders([tmp], "linux")[0]), channels.TYPE_DAILY)
+            installed.rename(folder, "Mi Blender", "5.3.0", "", "", "")
+            entry = installed.scan_folders([tmp], "linux")[0]
+            self.assertEqual(entry.name, "Mi Blender")
+            self.assertEqual(channels.type_of_installed(entry),
+                             channels.TYPE_DAILY)
+
+    def test_renombrar_guarda_el_risk_que_le_pasen(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp) / "blender-5.2.1-linux-x64"
+            folder.mkdir()
+            new_path = installed.rename(folder, "Mi Blender", "5.2.1", "v52",
+                                        "", "", risk="candidate")
+            self.assertEqual(installed.read_marker(new_path)["risk"],
+                             "candidate")
+
     def test_rename_no_pisa_el_marcador_existente(self):
         # Una instalación con marcador conserva el suyo (con su hash) al
         # renombrar; no se reescribe con lo que le pase el escaneo.
