@@ -3488,6 +3488,9 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
         cls.app.setStyleSheet(qss.build_qss())
 
     def setUp(self):
+        # Sin esto el mixin no aísla nada y la ventana lee la config y las
+        # versiones de Blender del usuario (ver SettingsIsolated).
+        super().setUp()
         # Otros tests de la suite dejan el idioma en español; aquí se comprueban
         # textos, así que hay que fijarlo (y restaurarlo al terminar).
         import i18n
@@ -4515,6 +4518,9 @@ class AddonsViewTests(SettingsIsolated, unittest.TestCase):
         cls.app.setStyleSheet(qss.build_qss())
 
     def setUp(self):
+        # Sin esto el mixin no aísla nada y la ventana lee la config y las
+        # versiones de Blender del usuario (ver SettingsIsolated).
+        super().setUp()
         import i18n
 
         self.addCleanup(i18n.set_language, i18n.get_language())
@@ -4650,6 +4656,9 @@ class RecentViewTests(SettingsIsolated, unittest.TestCase):
         cls.app.setStyleSheet(qss.build_qss())
 
     def setUp(self):
+        # Sin esto el mixin no aísla nada y la ventana lee la config y las
+        # versiones de Blender del usuario (ver SettingsIsolated).
+        super().setUp()
         # Otros tests dejan el idioma en español; aquí se comprueban textos.
         import i18n
 

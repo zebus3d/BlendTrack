@@ -88,3 +88,37 @@ class ModuleSizeTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class IsolatedTestsCallSuperTest(unittest.TestCase):
+    """Un test que hereda ``SettingsIsolated`` y redefine ``setUp`` llama a super.
+
+    Si no lo hace, el mixin no aísla nada y la ventana del test lee el
+    ``settings.json`` y las carpetas de Blender **del usuario**. Pasó con tres
+    clases de ``test_ui.py`` (Migración, Addons y Recientes): la suite pasaba
+    en verde mientras arrancaba en segundo plano el Blender 5.2.2 de quien la
+    ejecutaba para leer sus preferencias, y lo único visible era un
+    ``RuntimeError: Signal source has been deleted`` cuando ese Blender
+    contestaba con la ventana del test ya cerrada.
+    """
+
+    def test_setup_y_teardown_llaman_a_super(self):
+        import ast
+
+        offenders = []
+        for path in sorted(Path(__file__).resolve().parent.glob("test_*.py")):
+            source = path.read_text(encoding="utf-8")
+            for node in ast.walk(ast.parse(source)):
+                if not isinstance(node, ast.ClassDef):
+                    continue
+                bases = {getattr(base, "id", getattr(base, "attr", ""))
+                         for base in node.bases}
+                if "SettingsIsolated" not in bases:
+                    continue
+                for item in node.body:
+                    if (isinstance(item, ast.FunctionDef)
+                            and item.name in ("setUp", "tearDown")
+                            and f"super().{item.name}()"
+                            not in ast.get_source_segment(source, item)):
+                        offenders.append(f"{path.name}:{node.name}.{item.name}")
+        self.assertEqual(offenders, [])
