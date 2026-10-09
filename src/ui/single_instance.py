@@ -79,16 +79,24 @@ class SingleInstance(QObject):
         """Se pone a escuchar y llama a ``on_activate`` en cada nueva apertura.
 
         ``on_activate`` no recibe argumentos: la ventana que hay que enseñar la
-        conoce quien llama (que la creará justo después). Se admite que sea
-        ``None`` mientras la ventana no existe todavía; en ese caso la primera
-        conexión simplemente no hace nada, porque la ventana está a punto de
-        aparecer.
+        conoce quien llama. Como se escucha **antes** de crear la ventana (para
+        no dejar un hueco en el que una segunda apertura se cuele), quien llama
+        pasa una función que mira si la ventana ya existe y, si todavía no,
+        no hace nada: la ventana está a punto de aparecer de todos modos (ver
+        ``main.run_ui``). Devuelve ``False`` si no se pudo escuchar.
         """
         self._on_activate = on_activate
         # Un cierre brusco (kill, cuelgue) deja el socket huérfano y ``listen``
         # fallaría para siempre con "address in use": se borra antes de escuchar.
         QLocalServer.removeServer(self._name)
         server = QLocalServer(self)
+        # Solo el usuario que abrió la app puede conectarse. En Linux y macOS el
+        # socket es un fichero, y sin esta opción nace con los permisos que
+        # dicte la ``umask``: con una ``umask`` de grupo escribible, otro
+        # usuario del grupo podría conectarse y sacar nuestra ventana al frente
+        # (o, si algún día el protocolo hace algo más, pedirle cosas). En
+        # Windows la opción restringe igual el *named pipe*.
+        server.setSocketOptions(QLocalServer.SocketOption.UserAccessOption)
         if not server.listen(self._name):
             return False
         server.newConnection.connect(self._on_connection)
