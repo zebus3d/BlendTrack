@@ -32,6 +32,20 @@ except ImportError:  # sin PySide6 (p. ej. el job de tests sin deps)
 from model.build import Build
 
 
+def _wait_until(condition, timeout: float = 3.0) -> None:
+    """Procesa eventos hasta que ``condition()`` se cumpla (o se agote el plazo).
+
+    Para lo que pasa en un hilo y vuelve por señal: sin bombear el bucle de
+    eventos, la señal encolada no llega nunca al hilo de la interfaz.
+    """
+    import time
+
+    deadline = time.monotonic() + timeout
+    while not condition() and time.monotonic() < deadline:
+        QApplication.processEvents()
+        time.sleep(0.01)
+
+
 def _build(version, branch, risk, lts=False):
     return Build(version=version, branch=branch, risk=risk, platform="linux",
                  arch="x86_64", url="http://x", filename=f"{version}.tar.xz",
@@ -2115,15 +2129,43 @@ class SourceUpdateUiTests(SettingsIsolated, unittest.TestCase):
                  "url": "http://example/v1.3.0"}
         with mock.patch.object(sys, "frozen", True, create=True), \
                 mock.patch.object(window, "_show_update_available") as ofrecer, \
+                mock.patch.object(updates.updater, "checksum_for",
+                                  return_value="ab" * 32), \
                 mock.patch.object(window.update_downloader, "start") as bajar:
             window._on_update_result("v1.3.0", [asset], False)
             # Se ofrece la 1.3.0 (no una intermedia).
             self.assertEqual(ofrecer.call_args.args[0], "v1.3.0")
             # Y al aceptar se descarga el asset de la 1.3.0.
-            window._do_update(asset)
+            window._do_update(asset, [asset])
+            _wait_until(lambda: bajar.called)
 
         bajar.assert_called_once()
         self.assertEqual(bajar.call_args.args[0], "http://example/v1.3.0")
+        # Con el SHA-256 de checksums.txt: lo que se baja aquí se ejecuta.
+        self.assertEqual(bajar.call_args.args[3], "ab" * 32)
+
+    def test_sin_checksum_no_se_instala_la_actualizacion(self):
+        """Sin ``checksums.txt`` no se baja (ni se ejecuta) el binario nuevo.
+
+        El port a PySide6 dejó de pasar el SHA-256 al descargador y durante un
+        tiempo se instalaban actualizaciones sin verificar nada.
+        """
+        from i18n import tr
+        from services import updater
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        asset = {"name": updater.asset_for(window.system), "url": "http://x"}
+        with mock.patch.object(updates.updater, "checksum_for",
+                               return_value=None), \
+                mock.patch.object(window.update_downloader, "start") as bajar, \
+                mock.patch.object(updates, "AppDialog") as dialogo:
+            window._do_update(asset, [asset])
+            _wait_until(lambda: dialogo.called)
+        bajar.assert_not_called()
+        # Se ofrece la salida manual (la página de releases) con el motivo.
+        mensaje = dialogo.call_args.args[2]
+        self.assertIn(tr("Checksum error"), mensaje)
 
     def test_dialogo_fuente_rehabilita_al_fallar(self):
         from i18n import tr
@@ -2241,8 +2283,55 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
         self.assertTrue(arranque.called)
         self.assertEqual(problemas["n"], 2)
 
+    def test_actualizar_la_app_no_cruza_la_descarga_de_blender(self):
+        """Cada descarga vuelve por su propio puente.
+
+        Antes las dos compartían ``self._bridge``: si se aceptaba actualizar la
+        app con un Blender bajando, al acabar el Blender se llamaba a
+        ``_apply_update`` con su ``.tar.xz`` (y con el AppImage, se copiaba
+        encima del ejecutable de la app).
+        """
+        from services import updater
+        from services.sources import Source
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        build = _build("4.2.23", "v42", "stable")
+        asset = {"name": updater.asset_for(window.system), "url": "http://x"}
+        with mock.patch.object(downloads, "write_problem", return_value=""), \
+                mock.patch.object(window.downloader, "start") as blender, \
+                mock.patch.object(window.update_downloader, "start") as app, \
+                mock.patch.object(updates.updater, "checksum_for",
+                                  return_value="ab" * 32), \
+                mock.patch.object(window, "_on_download_done") as hecho, \
+                mock.patch.object(window, "_apply_update") as aplicar:
+            window._start_download(build, Source("Blender CDN",
+                                                 "https://x/f.tar.xz"))
+            window._do_update(asset, [asset])
+            _wait_until(lambda: app.called)
+            # Termina la descarga de Blender, la que empezó primero.
+            blender.call_args.kwargs["on_done"](Path("/tmp/f.tar.xz"))
+            _wait_until(lambda: hecho.called or aplicar.called)
+        hecho.assert_called_once()
+        aplicar.assert_not_called()
+
+    def test_cancelar_mientras_se_elige_la_fuente(self):
+        """Cancelar durante la medición descarta la fuente que llegue tarde."""
+        from services.sources import Source
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        build = _build("4.2.23", "v42", "stable")
+        with mock.patch.object(downloads.sources, "choose",
+                               return_value=Source("Blender CDN", "https://x")), \
+                mock.patch.object(window, "_start_download") as empezar:
+            window.install_build(build)
+            window.cancel_download()
+            _wait_until(lambda: False, timeout=0.3)
+        empezar.assert_not_called()
+        self.assertFalse(window._download_busy())
+
     def test_pide_permiso_de_administrador(self):
-        from ui.widgets import downloads
         from unittest import mock
 
         from ui.widgets import main_window
@@ -2253,8 +2342,11 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
                                return_value=True), \
                 mock.patch.object(folder_library.elevate, "relaunch_elevated",
                                   return_value=True) as relanzar, \
-                mock.patch.object(downloads, "write_problem",
+                mock.patch.object(folder_library, "write_problem",
                                   return_value=""):
+            # Se parchea donde se **usa** (folder_library): parchearlo en
+            # downloads dejaba correr el real, que creaba la carpeta
+            # "C:\\Program Files\\X" en el directorio actual.
             self.assertTrue(window._grant_permission("C:\\Program Files\\X"))
         # Se pide el UAC con el argumento interno que da el permiso.
         self.assertEqual(relanzar.call_args.args[0][0], "--grant-access")

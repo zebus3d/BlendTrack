@@ -521,28 +521,26 @@ class SettingsViewMixin:
                 tr("Silenced: {series}", series=", ".join(series)))
 
     def _settings_advanced_card(self) -> QFrame:
-        """Opciones avanzadas/experimentales (hoy solo la vista de Migración)."""
+        """Opciones experimentales: las vistas de ``EXPERIMENTAL_VIEWS``
+        (hoy, Add-ons) y lanzar Blender con su consola."""
         card, lay = settings_card("Advanced", spacing=10)
+        explanation = tr(
+            "Show the experimental features: the Add-ons view and launching "
+            "Blender with its console. They are still in development and may "
+            "change.")
 
         row = QHBoxLayout()
         row.addWidget(QLabel(tr("Experimental options")))
         row.addStretch()
         self.experimental_switch = SwitchPill(
-            self.settings.experimental_features,
-            tooltip=tr("Show the experimental features: the Migration, Recent "
-                       "files and Add-ons views, and launching Blender with "
-                       "its console. They are still in development and may "
-                       "change."))
+            self.settings.experimental_features, tooltip=explanation)
         self.experimental_switch.toggled.connect(self._on_experimental_toggled)
         row.addWidget(self.experimental_switch)
         lay.addLayout(row)
 
         # El aviso va debajo, en apagado: el interruptor por sí solo no dice
         # que lo que se activa está a medias.
-        hint = QLabel(tr(
-            "Show the experimental features: the Migration, Recent files and "
-            "Add-ons views, and launching Blender with its console. They are "
-            "still in development and may change."))
+        hint = QLabel(explanation)
         hint.setObjectName("Muted")
         hint.setWordWrap(True)
         lay.addWidget(hint)
@@ -558,6 +556,7 @@ class SettingsViewMixin:
             self.console_row.setVisible(value)
         # El botón de consola de las tarjetas depende de lo mismo.
         self._rebuild_installed()
+        self._rebuild_store()
         if not value and self.view in EXPERIMENTAL_VIEWS:
             self.set_view("installed" if self.installed else "store")
 
@@ -668,5 +667,6 @@ class SettingsViewMixin:
         """Cambió el valor por defecto (Ajustes > Launch)."""
         self.settings.launch_console = value
         self.settings.save()
+        # Las dos listas enseñan el botón (la tienda, en las ya instaladas).
         self._rebuild_installed()
-        self._rebuild_installed()
+        self._rebuild_store()

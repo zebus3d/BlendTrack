@@ -20,7 +20,7 @@ está en ``services/``.
 """
 
 from PySide6.QtCore import QEvent, QRect, Qt, QTimer, Signal
-from PySide6.QtGui import QKeySequence, QShortcut
+from PySide6.QtGui import QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (QApplication, QButtonGroup, QFrame,
                                QHBoxLayout, QLabel,
                                QLineEdit, QProgressBar, QSizePolicy,
@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (QApplication, QButtonGroup, QFrame,
 
 import i18n
 from i18n import tr
+from paths import ASSETS_DIR
 from services import detector, updater
 from services import installed as installed_service
 from services import settings as settings_service
@@ -35,7 +36,7 @@ from services.downloader import Downloader
 from services.launcher import Launcher
 from ui import icons
 from ui import theme as t
-from ui.fonts import icon_font
+from ui.fonts import glyph_icon, icon_font
 from ui.widgets.addons import AddonsView
 from ui.widgets.build_lists import BuildListsMixin
 from ui.widgets.buttons import CardButton, SideButton
@@ -46,15 +47,15 @@ from ui.widgets.folder_library import FolderLibraryMixin
 from ui.widgets.migrate import MigrateView
 from ui.widgets.recent import RecentView
 from ui.widgets.settings_view import SettingsViewMixin
-# Se reexportan las tablas y los topes de zoom: son de la ventana aunque
-# vivan en ``shell`` (que existe solo para romper la circularidad), y hay
-# código y tests que los piden aquí, que es donde se espera encontrarlos.
-from ui.widgets.shell import (ARCH_LABELS, CHANNELS, DEFAULT_WINDOW_HEIGHT,
+from ui.widgets.shell import (ARCH_LABELS, DEFAULT_WINDOW_HEIGHT,
                               DEFAULT_WINDOW_WIDTH, EXPERIMENTAL_VIEWS,
-                              LANGUAGE_IDS, MAX_ZOOM, MIN_WINDOW_HEIGHT,
-                              MIN_WINDOW_WIDTH, MIN_ZOOM, PLATFORM_LABELS,
-                              PLATFORMS, SECTION_TITLES, ZOOM_STEP,
-                              ZoomSlider)
+                              MAX_ZOOM, MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH,
+                              MIN_ZOOM, PLATFORM_LABELS, PLATFORMS,
+                              SECTION_TITLES, ZoomSlider)
+# Estas dos no se usan aquí: se reexportan porque son de la ventana aunque
+# vivan en ``shell`` (que existe solo para romper la circularidad), y hay
+# tests que las piden aquí, que es donde se espera encontrarlas.
+from ui.widgets.shell import CHANNELS, ZOOM_STEP  # noqa: F401
 from ui.widgets.tray import TrayIcon
 from ui.widgets.updates import UpdateFlowMixin
 
@@ -65,14 +66,13 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
     # Señales para marshar el resultado de los hilos al hilo de la interfaz.
     # (QTimer.singleShot desde un hilo de Python NO es fiable para esto.)
     builds_loaded = Signal(object)
-    download_done = Signal(str, object)   # path, build
     download_error = Signal(str)
     extract_done = Signal(str)
     dmg_manual = Signal(str)   # macOS: no se pudo instalar, se revela a mano
     update_result = Signal(str, object, bool)
     update_applied = Signal(str)
     update_manual = Signal()   # descargada, pero hay que instalarla a mano
-    source_chosen = Signal(object, object)   # build, Source
+    source_chosen = Signal(int, object, object)   # petición, build, Source
     source_update_done = Signal(bool, str)
     release_notes_result = Signal(bool)   # abierta o no
     folder_move_progress = Signal(int, int, str)   # hechas, total, nombre
@@ -81,6 +81,11 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
     # Índice de la pestaña "Carpetas" dentro de Ajustes (va la segunda, justo
     # después de Descargas, porque es lo que más se toca de las dos).
     FOLDERS_TAB = 1
+
+    # Ancho MÍNIMO que necesita una tarjeta de rejilla para no recortarse
+    # (medido: 227 px con el logo, las etiquetas y el botón). Si se piden más
+    # columnas que las que caben a ese ancho, la última se sale del viewport.
+    MIN_CARD_WIDTH = 230
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -149,7 +154,10 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
 
         self.downloader = Downloader()
         self.update_downloader = Downloader()
-        self._update_assets = []
+        # Elección de fuente en curso (ver ``downloads.install_build``): el
+        # número de la última petición y el de la que se espera, o None.
+        self._source_request = 0
+        self._pending_source = None
         self.launcher = Launcher()
 
         self.builds = []
@@ -209,7 +217,6 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
 
         # Conectamos las señales de los hilos ANTES de montar la UI.
         self.builds_loaded.connect(self._on_builds_loaded)
-        self.download_done.connect(self._on_download_done)
         self.download_error.connect(self._on_download_error)
         self.extract_done.connect(self._on_extract_done)
         self.dmg_manual.connect(self._on_dmg_manual)
@@ -220,7 +227,7 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
         self.release_notes_result.connect(self._on_release_notes_result)
         self.folder_move_progress.connect(self._on_folder_move_progress)
         self.folder_move_done.connect(self._on_folder_move_done)
-        self.source_chosen.connect(self._start_download)
+        self.source_chosen.connect(self._on_source_chosen)
 
         self._build_ui()
         # Los temporizadores llevan ``self`` de contexto: si la ventana se
@@ -268,7 +275,7 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
         root.addLayout(body, 1)
 
         root.addWidget(self._build_footer())
-        self._set_view(self.view, animate=False)
+        self._set_view(self.view)
         # La vista de instaladas no se rellena sola: hay que poblarla al arrancar
         # (si no, al abrir en esa pestaña se vería vacía hasta el primer refresco).
         self._rebuild_installed()
@@ -299,9 +306,6 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
         lay.setSpacing(14)
 
         logo = QLabel()
-        from PySide6.QtGui import QPixmap
-        from paths import ASSETS_DIR
-
         pix = QPixmap(str(ASSETS_DIR / "images" / "app_icon.png"))
         if not pix.isNull():
             logo.setPixmap(pix.scaled(52, 52, Qt.KeepAspectRatio, Qt.SmoothTransformation))
@@ -345,14 +349,11 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
         self.search_input.setFixedWidth(240)
         self.search_input.textChanged.connect(self._on_search_text)
         # Icono de lupa dentro del campo, como en la versión original.
-        from ui.fonts import glyph_icon
-
         self.search_input.addAction(
             glyph_icon(icons.SEARCH, 14, t.MUTED), QLineEdit.LeadingPosition)
         tools.addWidget(self.search_input)
         lay.addWidget(self.header_tools, 0, Qt.AlignRight)
         return header
-
 
     def _build_sidebar(self) -> QFrame:
         sidebar = QFrame()
@@ -408,32 +409,6 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
         lay.addWidget(settings_btn)
         self.side_buttons["settings"] = settings_btn
         return sidebar
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     def _build_footer(self) -> QFrame:
         footer = QFrame()
@@ -512,7 +487,6 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
         lay.addWidget(self.zoom_box, 0, Qt.AlignRight)
         return footer
 
-
     # -------------------------------------------------------------- estado
     def _set_status(self, text: str, timeout: int = 0) -> None:
         self.status_label.setText(text)
@@ -545,10 +519,6 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
         builds ya venían normalizadas a ``x86_64`` y no coincidían con el filtro.
         """
         return self.arch_label
-
-
-
-
 
     def set_view(self, view: str) -> None:
         """Cambia entre la tienda, las instaladas y los ajustes.
@@ -596,7 +566,7 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
             self.addons_view.set_installed(self.installed)
             self.addons_view.read()
 
-    def _set_view(self, view: str, animate: bool = True) -> None:
+    def _set_view(self, view: str) -> None:
         # Tienda e Instaladas comparten la zona de listas (con sus filtros); lo
         # que cambia entre ellas es la página del sub-stack.
         if view in ("store", "installed"):
@@ -610,8 +580,7 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
             show_tools = False
         for key, btn in self.side_buttons.items():
             btn.setChecked(key == view)
-        if hasattr(self, "section_label"):
-            self.section_label.setText(tr(SECTION_TITLES.get(view, "")))
+        self.section_label.setText(tr(SECTION_TITLES.get(view, "")))
         # El buscador y el zoom del pie solo aplican a las listas; en Migración,
         # Recientes y Ajustes se ocultan (no arrastran salto: van en la cabecera
         # y el pie).
@@ -635,20 +604,6 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
             self.refresh_installed()
         else:
             self.refresh(force=True)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     def showEvent(self, event):
         """Deja el icono en la bandeja mientras la ventana esté a la vista.
@@ -750,7 +705,6 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
 
     def _quit_from_tray(self) -> None:
         """Salir de verdad desde el menú de la bandeja."""
-        self._force_quit = True
         self._quit_app()
 
     def _quit_app(self) -> None:
@@ -760,6 +714,7 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
         actualización o un ``git pull``), que sin esto se quedarían escondidos
         en la bandeja en vez de terminar.
         """
+        self._force_quit = True
         if self._tray is not None:
             self._tray.hide()
         self.close()
@@ -880,94 +835,9 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
         self.resize(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)
         self.center_on_screen()
 
-
-
-    # Ancho MÍNIMO que necesita una tarjeta de rejilla para no recortarse
-    # (medido: 227 px con el logo, las etiquetas y el botón). Si se piden más
-    # columnas que las que caben a ese ancho, la última se sale del viewport.
-    MIN_CARD_WIDTH = 230
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     def set_snapshot_keep(self, value: int) -> None:
         """Recuerda cuántas copias guardadas se conservan por versión."""
         self.settings.snapshot_keep = int(value)
         self.settings.save()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 

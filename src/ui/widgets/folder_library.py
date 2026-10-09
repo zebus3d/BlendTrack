@@ -359,6 +359,11 @@ class FolderLibraryMixin:
         self._move_dialog.set_text(
             tr("Moving {name} ({done} of {total})",
                name=moves[0].entry.name, done=1, total=len(moves)))
+        # Cancelar (o Esc) cierra el diálogo; sin esto el traslado seguía en
+        # segundo plano, ya sin el modal que impide tocar la lista mientras.
+        # ``move_build`` mira la marca entre fichero y fichero y deja el origen
+        # intacto si no llegó a completar la copia.
+        self._move_dialog.rejected.connect(self._move_cancel.set)
 
         def worker():
             moved = failed = 0

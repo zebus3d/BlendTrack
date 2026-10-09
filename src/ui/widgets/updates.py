@@ -138,7 +138,6 @@ class UpdateFlowMixin:
         download_log(f"update check: instalada={self.current_version} "
                      f"ultima={tag} hay_nueva={nueva}")
         if nueva:
-            self._update_assets = assets
             # El usuario puede haber pedido no volver a saber de esta versión:
             # los chequeos automáticos la callan (el manual la muestra igual).
             silenced = not manual and tag == self.settings.skipped_version
@@ -147,7 +146,7 @@ class UpdateFlowMixin:
             # a "Más tarde". Si sale una versión aún más nueva, sí se avisa.
             if not silenced and (manual or tag != self._offered_update_tag):
                 self._offered_update_tag = tag
-                self._show_update_available(tag, asset)
+                self._show_update_available(tag, asset, assets)
         elif manual:
             self._show_message(tr("You already have the latest version ({version}).",
                                  version=self.current_version), 6)
@@ -217,11 +216,11 @@ class UpdateFlowMixin:
         if dialog is not None:
             dialog.accept()
         # Reiniciar es salir de verdad: no puede quedarse en la bandeja.
-        self._force_quit = True
-        self.close()
+        self._quit_app()
 
-    def _show_update_available(self, tag: str, asset) -> None:
-        update_available(self, tag, lambda: self._do_update(asset),
+    def _show_update_available(self, tag: str, asset, assets) -> None:
+        """Ofrece la versión ``tag``; ``assets`` hace falta para su checksum."""
+        update_available(self, tag, lambda: self._do_update(asset, assets),
                          on_skip=lambda: self.skip_update_version(tag))
 
     def skip_update_version(self, tag: str) -> None:
@@ -235,7 +234,16 @@ class UpdateFlowMixin:
         self._show_message(
             tr("You will not be reminded about {version}.", version=tag), 8)
 
-    def _do_update(self, asset) -> None:
+    def _do_update(self, asset, assets) -> None:
+        """Baja la versión nueva de la app comprobando su SHA-256.
+
+        Lo que se descarga aquí se **ejecuta** después, así que no se instala
+        nada que no cuadre con el ``checksums.txt`` de la misma release. Si la
+        release no lo trae (o no se puede leer), se rechaza la actualización y
+        se ofrece la página de releases: mejor un paso a mano que ejecutar un
+        binario sin verificar. El checksum se pide en un hilo porque es una
+        petición de red.
+        """
         self._set_status(tr("Downloading..."))
         self._set_downloading(True)
         bridge = WorkerBridge()
@@ -244,13 +252,23 @@ class UpdateFlowMixin:
         # El error de la actualización no es el de una descarga de Blender: aquí
         # hay que ofrecer la salida manual, no un "Download failed" a secas.
         bridge.error.connect(self._on_update_download_error)
-        self._bridge = bridge
-        self.update_downloader.start(
-            asset["url"], str(updater.updates_dir()), asset["name"],
-            on_progress=lambda done, total: bridge.progress.emit(done, total),
-            on_done=lambda path: bridge.done.emit(str(path)),
-            on_error=lambda msg: bridge.error.emit(msg),
-        )
+
+        def worker():
+            checksum = updater.checksum_for(assets, asset["name"])
+            if not checksum:
+                download_log(f"update: sin checksum para {asset['name']}; "
+                             "no se instala")
+                bridge.error.emit("checksum")
+                return
+            self.update_downloader.start(
+                asset["url"], str(updater.updates_dir()), asset["name"],
+                checksum,
+                on_progress=lambda done, total: bridge.progress.emit(done, total),
+                on_done=lambda path: bridge.done.emit(str(path)),
+                on_error=lambda msg: bridge.error.emit(msg),
+            )
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def _on_update_download_error(self, message: str) -> None:
         """No se pudo bajar la actualización: ofrecer instalarla a mano.
@@ -267,11 +285,12 @@ class UpdateFlowMixin:
             self._set_status(tr("Cancelled"), 5)
             return
         download_log(f"update download failed: {message}")
+        reason = tr("Checksum error") if message == "checksum" else message
         self._set_status(tr("Download failed"), 8)
         dialog = AppDialog(
             self, tr("Download failed"),
             tr("Could not download the update automatically:")
-            + "\n\n" + message + "\n\n"
+            + "\n\n" + reason + "\n\n"
             + tr("You can download it from the releases page and install it manually."))
         dialog.add_button(tr("Close"), on_click=dialog.reject)
         dialog.add_button(

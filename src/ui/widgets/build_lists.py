@@ -162,9 +162,10 @@ class BuildListsMixin:
         grid = self.layout_mode == "grid"
         cards = []
         for index, build in enumerate(builds):
-            entry = next((e for e in self.installed
-                          if e.version == build.version
-                          and getattr(e, "fork", "") == build.fork), None)
+            # La misma regla que al pulsar (``install_build``): en las diarias
+            # también cuenta el hash, o una diaria nueva de la misma versión
+            # saldría como "Instalada" y al pulsarla se descargaría.
+            entry = installed_service.find_installed(self.installed, build)
             installed = entry is not None
             # La cebra es para la lista (filas contiguas); en rejilla las
             # tarjetas van sueltas sobre el fondo y alternar el gris solo
@@ -583,6 +584,11 @@ class BuildListsMixin:
         self.settings.arch = label
         self.settings.save()
         self._rebuild_store()
+        # Los avisos de parche de las instaladas se calculan para una
+        # arquitectura: sin esto seguían siendo los de la anterior (la
+        # plataforma sí recalculaba, vía ``refresh_installed``).
+        self._recompute_updates()
+        self._rebuild_installed()
 
     def _build_filters(self) -> QFrame:
         bar = QFrame()

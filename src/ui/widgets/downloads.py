@@ -35,7 +35,8 @@ class DownloadFlowMixin:
         if installed is not None:
             self.launch_installed(installed)
             return
-        if self.downloader.running:
+        if self._download_busy():
+            self._show_message(tr("A download is already in progress"), 4)
             return
         self._set_downloading(True)
         self.progress.setValue(0)
@@ -43,11 +44,34 @@ class DownloadFlowMixin:
         # una medición de red, así que va en un hilo y vuelve por señal: en el
         # hilo de la interfaz congelaría la ventana un par de segundos.
         self._set_status(tr("Choosing the fastest source..."))
+        # Cada elección lleva su número. Si el usuario cancela mientras se mide
+        # (o la respuesta llega tarde), ``_on_source_chosen`` ve que el número
+        # ya no es el que se espera y la descarta, en vez de arrancar una
+        # descarga que nadie ha pedido.
+        self._source_request += 1
+        self._pending_source = self._source_request
+        request = self._source_request
 
         def worker():
-            self.source_chosen.emit(build, sources.choose(build))
+            self.source_chosen.emit(request, build, sources.choose(build))
 
         threading.Thread(target=worker, daemon=True).start()
+
+    def _download_busy(self) -> bool:
+        """True si hay una descarga de Blender en marcha o eligiendo fuente.
+
+        ``downloader.running`` solo se enciende cuando empieza a bajar; mientras
+        se mide qué fuente es más rápida (unos segundos) vale False, y dos clics
+        seguidos colaban dos descargas a la vez.
+        """
+        return self.downloader.running or self._pending_source is not None
+
+    def _on_source_chosen(self, request: int, build, source) -> None:
+        """Llega la fuente elegida: arranca la descarga si sigue pedida."""
+        if request != self._pending_source:
+            return
+        self._pending_source = None
+        self._start_download(build, source)
 
     def _start_download(self, build, source) -> None:
         """Arranca la descarga desde la fuente ya elegida."""
@@ -76,16 +100,20 @@ class DownloadFlowMixin:
             return
         self._set_status(tr("Downloading..."))
         download_log(f"downloading {build.filename} from {source.label}")
-        self._bridge = WorkerBridge()
-        self._bridge.progress.connect(self._set_progress)
-        self._bridge.done.connect(lambda path: self._on_download_done(path, build))
-        self._bridge.error.connect(self._on_download_error)
+        # Un puente **propio** de esta descarga, capturado por las lambdas. Antes
+        # se guardaba en ``self._bridge``, que también usaba la actualización de
+        # la app: si se actualizaba la app con un Blender bajando, al acabar el
+        # Blender se "aplicaba" su .tar.xz como si fuera la actualización.
+        bridge = WorkerBridge()
+        bridge.progress.connect(self._set_progress)
+        bridge.done.connect(lambda path: self._on_download_done(path, build))
+        bridge.error.connect(self._on_download_error)
         self.downloader.start(
             source.url, destination,
             build.filename, source.checksum,
-            on_progress=lambda done, total: self._bridge.progress.emit(done, total),
-            on_done=lambda path: self._bridge.done.emit(str(path)),
-            on_error=lambda msg: self._bridge.error.emit(msg),
+            on_progress=lambda done, total: bridge.progress.emit(done, total),
+            on_done=lambda path: bridge.done.emit(str(path)),
+            on_error=lambda msg: bridge.error.emit(msg),
             headers=source.headers,
         )
 
@@ -95,8 +123,17 @@ class DownloadFlowMixin:
         self.percent.setText(f"{value} %")
 
     def cancel_download(self) -> None:
-        """Cancela la descarga en curso."""
+        """Cancela lo que esté en curso: la de Blender o la de la propia app.
+
+        El botón del pie es el mismo para las dos, así que cancela ambas. Si
+        aún se estaba eligiendo la fuente, no hay hilo que parar: se olvida la
+        petición (``_on_source_chosen`` la descartará) y se recoge la barra.
+        """
         self.downloader.cancel()
+        self.update_downloader.cancel()
+        if self._pending_source is not None:
+            self._pending_source = None
+            self._set_downloading(False)
         # Si la descarga era un "Reemplazar", ya no se borra nada.
         self._replace_entry = None
         self._set_status(tr("Cancelled"))
@@ -215,6 +252,11 @@ class DownloadFlowMixin:
         # Si el borrado falla, la nueva queda igualmente instalada y se avisa.
         if self._replace_entry is not None:
             old, self._replace_entry = self._replace_entry, None
+            if self._is_read_only(old):
+                # El candado pudo cerrarse mientras se descargaba: la nueva
+                # se queda instalada y la vieja, intacta.
+                self._rebuild_store()
+                return
             try:
                 shutil.rmtree(old.path)
             except OSError as error:
@@ -249,11 +291,14 @@ class DownloadFlowMixin:
             on_click=lambda: (choice.update(replace=False), dialog.accept()),
             tooltip=tr("Keep the version you have and add the new one next to "
                        "it."))
-        dialog.add_button(
-            tr("Replace"), variant="accent",
-            on_click=lambda: (choice.update(replace=True), dialog.accept()),
-            tooltip=tr("Delete the installed version and put the new one in its "
-                       "place."))
+        # En una carpeta con el candado cerrado no se borra nada (AGENTS.md:
+        # "solo lectura" no admite excepciones), así que solo cabe la copia.
+        if not self._is_read_only(entry):
+            dialog.add_button(
+                tr("Replace"), variant="accent",
+                on_click=lambda: (choice.update(replace=True), dialog.accept()),
+                tooltip=tr("Delete the installed version and put the new one "
+                           "in its place."))
         dialog.add_button(
             tr("Never"),
             on_click=lambda: (choice.update(never=True), dialog.reject()),
@@ -336,12 +381,14 @@ class DownloadFlowMixin:
         self._set_status(tr("Download failed"), 8)
         show_error(self, tr("Download failed"), reason)
 
-    def launch_installed(self, entry, blend_file=None) -> bool:
+    def launch_installed(self, entry, blend_file=None,
+                         console: bool | None = None) -> bool:
         """Abre una versión instalada (Blender sigue vivo al cerrar el gestor).
 
         Es el **único** camino para lanzar Blender desde la interfaz: aplica
         los argumentos de Ajustes > Launch y la consola de esa versión. Con
-        ``blend_file`` abre ese fichero (lo usa Recientes). Devuelve si
+        ``blend_file`` abre ese fichero (lo usa Recientes); con ``console``
+        se fuerza la consola para esta vez sin tocar lo guardado. Devuelve si
         arrancó.
         """
         executable = getattr(entry, "executable", None)
@@ -351,7 +398,8 @@ class DownloadFlowMixin:
             args = shlex.split(self.launch_args or "")
             if blend_file is not None:
                 args.append(str(blend_file))
-            console = self._console_state(entry)
+            if console is None:
+                console = self._console_state(entry)
             if console and not launcher.terminal_available():
                 self._set_status(tr("No terminal found; launching without "
                                     "console."), 6)
@@ -364,14 +412,23 @@ class DownloadFlowMixin:
             return False
         return True
 
+    @staticmethod
+    def _console_key(entry) -> str:
+        """Clave con la que se recuerda la consola de una versión.
+
+        La serie (``favorite_key``) si la tiene, para que la tienda y la
+        instalada compartan elección; si no, la ruta de la instalación.
+        """
+        return getattr(entry, "favorite_key", "") or str(
+            getattr(entry, "path", ""))
+
     def _console_state(self, entry) -> bool:
         """Si esa versión concreta se lanza con consola.
 
         El botón de cada tarjeta manda sobre esa versión; el ajuste de
         Ajustes > Launch es el valor por defecto de las que no tienen elección.
         """
-        key = getattr(entry, "favorite_key", "") or str(
-            getattr(entry, "path", ""))
+        key = self._console_key(entry)
         overrides = self.settings.launch_console_overrides
         return bool(overrides.get(key, self.settings.launch_console))
 
@@ -380,8 +437,7 @@ class DownloadFlowMixin:
 
         No es un ajuste global: encenderlo en una tarjeta no toca las demás.
         """
-        key = getattr(entry, "favorite_key", "") or str(
-            getattr(entry, "path", ""))
+        key = self._console_key(entry)
         if not key:
             return
         self.settings.launch_console_overrides[key] = bool(value)
@@ -392,15 +448,7 @@ class DownloadFlowMixin:
 
     def _launch_with_console(self, entry) -> None:
         """Lanza esa versión con consola sin cambiar el ajuste guardado."""
-        executable = getattr(entry, "executable", None)
-        if not executable:
-            return
-        try:
-            args = shlex.split(self.launch_args or "")
-            self.launcher.launch(executable, args=args, console=True,
-                                 env=launcher.parse_env(self.launch_env))
-        except Exception as error:
-            download_log(f"launch failed: {error}")
+        self.launch_installed(entry, console=True)
 
     def _is_read_only(self, entry) -> bool:
         """True si esa instalación vive en una carpeta con el candado cerrado."""
