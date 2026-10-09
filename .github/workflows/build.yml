@@ -28,6 +28,13 @@ concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: true
 
+# Permisos mínimos para todos los jobs: leer el repo. Solo el que publica la
+# release (``release``) pide escribir, en su propio bloque. Sin esto, los jobs
+# de compilar (que ejecutan pip y PyInstaller, código de terceros) heredaban
+# los permisos por defecto del token, que pueden ser de escritura.
+permissions:
+  contents: read
+
 jobs:
   # Calcula la version que se inyecta en los binarios y el tag de la release.
   #
@@ -71,6 +78,12 @@ jobs:
             MINOR="$(echo "$BASE" | sed -E 's/^v?[0-9]+\.([0-9]+).*/\1/')"
             VERSION="${MAJOR}.$((MINOR + 1)).0"
             NAME="v${VERSION} (build ${GITHUB_RUN_NUMBER})"
+          fi
+          # Defensa en profundidad: la versión acaba en nombres de fichero y
+          # en órdenes de los otros jobs, así que solo se admite X.Y.Z.
+          if [[ ! "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Versión no válida: ${VERSION}" >&2
+            exit 1
           fi
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
@@ -116,7 +129,11 @@ jobs:
           python-version: "3.12"
       - name: Inyectar version
         shell: bash
-        run: python packaging/inject_version.py "${{ needs.version.outputs.version }}"
+        # La versión pasa por el entorno, no interpolada en el script: es el
+        # patrón que recomienda GitHub contra la inyección de órdenes.
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: python packaging/inject_version.py "$VERSION"
       - name: Dependencias del sistema (plugin xcb de Qt)
         run: |
           sudo apt-get update
@@ -160,18 +177,32 @@ jobs:
   windows:
     needs: version
     runs-on: windows-latest
-    # El token es un secreto y en los `if` no se pueden usar secretos
-    # directamente: se pasan por entorno y el paso comprueba el entorno.
-    env:
-      SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+      # En los `if` no se pueden usar secretos. Antes el token se exponía como
+      # `env` a TODO el job (pip y PyInstaller incluidos, código de terceros);
+      # ahora solo lo ve este paso, que publica si existe, y el de firmar.
+      - name: Comprobar si hay SignPath
+        id: signpath
+        shell: bash
+        env:
+          TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+        run: |
+          if [ -n "$TOKEN" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - name: Inyectar version
         shell: bash
-        run: python packaging/inject_version.py "${{ needs.version.outputs.version }}"
+        # La versión pasa por el entorno, no interpolada en el script: es el
+        # patrón que recomienda GitHub contra la inyección de órdenes.
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: python packaging/inject_version.py "$VERSION"
       - name: Compilar binario portable
         run: |
           python -m pip install --upgrade pip
@@ -183,7 +214,7 @@ jobs:
       # salta y el .exe queda sin firmar (o con la autofirmada de abajo).
       - name: Subir el .exe sin firmar (para SignPath)
         id: unsigned
-        if: ${{ env.SIGNPATH_API_TOKEN != '' }}
+        if: steps.signpath.outputs.enabled == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: BlenderManager-windows-unsigned
@@ -192,7 +223,7 @@ jobs:
           archive: false
           retention-days: 1
       - name: Firmar con SignPath
-        if: ${{ env.SIGNPATH_API_TOKEN != '' }}
+        if: steps.signpath.outputs.enabled == 'true'
         uses: signpath/github-action-submit-signing-request@v3
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
@@ -211,7 +242,7 @@ jobs:
       # malware rara vez va firmado y puede suavizar heuristicos. Best-effort:
       # si el runner no deja firmar, el release sigue con el .exe sin firmar.
       - name: Firmar el ejecutable (autofirmado, sin SignPath)
-        if: ${{ env.SIGNPATH_API_TOKEN == '' }}
+        if: steps.signpath.outputs.enabled != 'true'
         continue-on-error: true
         shell: powershell
         run: |
@@ -249,7 +280,11 @@ jobs:
           python-version: "3.12"
       - name: Inyectar version
         shell: bash
-        run: python packaging/inject_version.py "${{ needs.version.outputs.version }}"
+        # La versión pasa por el entorno, no interpolada en el script: es el
+        # patrón que recomienda GitHub contra la inyección de órdenes.
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: python packaging/inject_version.py "$VERSION"
       - name: Compilar bundle .app
         run: |
           python -m pip install --upgrade pip

@@ -1,3 +1,9 @@
 # Dependencias para generar los binarios portables.
+#
+# Aquí las versiones van FIJADAS (en requirements.txt, rangos): así dos builds
+# del mismo commit salen iguales, y una versión nueva de PySide6 o PyInstaller
+# no rompe el CI de un día para otro. Se suben a mano, probando la GUI
+# empaquetada (ver AGENTS.md: el smoke test no basta).
 -r requirements.txt
-pyinstaller>=6.6
+PySide6-Essentials==6.11.2
+pyinstaller==6.22.3
