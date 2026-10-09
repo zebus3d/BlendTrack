@@ -38,10 +38,10 @@ class UndefinedNameTest(unittest.TestCase):
 
     # Dunders que el propio intérprete inyecta. ``__conditional_annotations__``
     # es de la maquinaria de PEP 649 y solo aparece en 3.14.
-    INTERNAL = {
+    INTERNAL = frozenset({
         "__file__", "__name__", "__doc__", "__builtins__", "__spec__",
         "__package__", "__loader__", "__path__", "__conditional_annotations__",
-    }
+    })
 
     def _undefined(self, path):
         """Nombres globales que el módulo referencia y nadie define en él."""

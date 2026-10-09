@@ -66,21 +66,19 @@ class CoberturaTests(unittest.TestCase):
         cargar el JSON eso ya no se ve, así que se lee el fichero a mano.
         """
         import json
+        from collections import Counter
 
         for language in i18n.SUPPORTED:
             path = i18n.LOCALE_DIR / f"{language}.json"
             if not path.exists():
                 continue
-            vistas, repetidas = set(), []
-
-            def anota(pares):
-                for key, value in pares:
-                    if key in vistas:
-                        repetidas.append(key)
-                    vistas.add(key)
-                return dict(pares)
-
-            json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=anota)
+            # ``object_pairs_hook=list`` devuelve los pares tal cual vienen en
+            # el fichero, repetidos incluidos (un ``dict`` se quedaría solo con
+            # el último).
+            pares = json.loads(path.read_text(encoding="utf-8"),
+                               object_pairs_hook=list)
+            cuenta = Counter(key for key, _ in pares)
+            repetidas = sorted(key for key, n in cuenta.items() if n > 1)
             self.assertEqual(repetidas, [], language)
 
     def test_no_quedan_claves_sin_usar(self):

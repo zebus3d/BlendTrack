@@ -15,7 +15,17 @@ from unittest import mock
 # El plugin offscreen tiene que estar fijado ANTES de crear QApplication.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+# Solo la ausencia de PySide6 salta los tests de UI. Antes el ``try`` abarcaba
+# también los imports de ``ui.widgets``, así que cualquier ImportError de la
+# propia app (un nombre mal escrito en un widget) saltaba los 212 tests en
+# silencio y el CI salía en verde.
 try:
+    import PySide6  # noqa: F401
+    HAVE_QT = True
+except ImportError:  # sin PySide6 (p. ej. el job de tests sin deps)
+    HAVE_QT = False
+
+if HAVE_QT:
     from PySide6.QtWidgets import QApplication
 
     # Las partes de la ventana principal (mixins): los tests parchean en el
@@ -24,10 +34,6 @@ try:
     # repetir la línea cincuenta veces.
     from ui.widgets import downloads, folder_library, main_window
     from ui.widgets import settings_view, updates
-
-    HAVE_QT = True
-except ImportError:  # sin PySide6 (p. ej. el job de tests sin deps)
-    HAVE_QT = False
 
 from model.build import Build
 
