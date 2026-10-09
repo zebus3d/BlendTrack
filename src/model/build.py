@@ -204,15 +204,6 @@ class InstalledBuild:
         return fork_label(self.fork)
 
     @property
-    def is_lts(self) -> bool:
-        """True si la versión es LTS.
-
-        Las instaladas no guardan el 'risk' de Blender,
-        así que aquí se mira solo el número de versión.
-        """
-        return minor_of(self.version) in LTS_MINORS
-
-    @property
     def can_launch(self) -> bool:
         """True si encontramos el ejecutable de esta versión."""
         return self.executable is not None

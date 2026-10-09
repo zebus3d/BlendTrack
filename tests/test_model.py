@@ -57,7 +57,8 @@ class ModelTests(unittest.TestCase):
 
     def test_installed_build(self):
         entry = InstalledBuild("blender-4.5.13-linux-x64", "/tmp/x", "4.5.13", "/tmp/x/blender")
-        self.assertTrue(entry.is_lts)
+        self.assertEqual(entry.fork_name, "Blender")
+        self.assertEqual(entry.favorite_key, "|4.5.13")
         self.assertTrue(entry.can_launch)
 
 
