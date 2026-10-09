@@ -32,6 +32,15 @@ from services.downloader import log
 from services.opener import clean_env
 
 
+# Tiempo máximo de cada comando (segundos). Ninguno debería tardar tanto:
+# montar el ``.dmg`` verifica su suma (unos segundos) y copiar el bundle con
+# ``ditto`` mueve ~1 GB. Pero un ``hdiutil`` que se queda esperando (un volumen
+# que no se suelta, un disco de red que no contesta) colgaría el hilo de la
+# instalación para siempre, y con él el botón de la tarjeta. El tope es
+# generoso a propósito: un disco lento no debe confundirse con uno colgado.
+COMMAND_TIMEOUT = 900
+
+
 def available() -> bool:
     """True solo en macOS, que es donde existen ``hdiutil`` y ``ditto``."""
     return sys.platform == "darwin"
@@ -41,16 +50,21 @@ class DmgError(Exception):
     """Fallo montando o copiando el ``.dmg``, con el motivo listo para el log."""
 
 
-def _run(command, check: bool = True):
-    """Ejecuta un comando del sistema con el entorno limpio.
+def _run(command, check: bool = True, timeout: float = COMMAND_TIMEOUT):
+    """Ejecuta un comando del sistema con el entorno limpio y un tiempo máximo.
 
     ``hdiutil`` y ``ditto`` son programas de fuera: hay que pasarles
     ``clean_env()`` o cargarían las librerías del bundle (ver ``services.opener``).
+    Si se pasa de ``timeout``, ``subprocess.run`` mata el proceso y aquí se
+    convierte en ``DmgError``, como cualquier otro fallo.
     """
     try:
         result = subprocess.run(command, env=clean_env(),
                                 stdin=subprocess.DEVNULL,
-                                capture_output=True, text=True, check=False)
+                                capture_output=True, text=True, check=False,
+                                timeout=timeout)
+    except subprocess.TimeoutExpired as error:
+        raise DmgError(f"{command[0]} no terminó en {timeout} s") from error
     except OSError as error:
         raise DmgError(f"no se pudo ejecutar {command[0]}: {error}") from error
     if check and result.returncode != 0:
@@ -130,19 +144,33 @@ def install(dmg_path, dest_folder, version_hint: str = "",
         arch = arch_hint or platform.machine() or "arm64"
         folder = _unique(dest / f"{prefix}-{version}-macos-{arch}")
         folder.mkdir(parents=True)
-        for bundle in apps:
-            target_app = folder / bundle.name
-            _run(["/usr/bin/ditto", str(bundle), str(target_app)])
-            # Gatekeeper: si el .dmg venía marcado (p. ej. bajado antes con el
-            # navegador), el bundle hereda el atributo de cuarentena y macOS no
-            # deja ejecutarlo. Se quita; Blender está notarizado, así que no se
-            # debilita nada real. Lo mismo que hace Blender Launcher V2.
-            _run(["/usr/bin/xattr", "-r", "-d", "com.apple.quarantine",
-                  str(target_app)], check=False)
+        try:
+            for bundle in apps:
+                target_app = folder / bundle.name
+                _run(["/usr/bin/ditto", str(bundle), str(target_app)])
+                # Gatekeeper: si el .dmg venía marcado (p. ej. bajado antes con
+                # el navegador), el bundle hereda el atributo de cuarentena y
+                # macOS no deja ejecutarlo. Se quita; Blender está notarizado,
+                # así que no se debilita nada real. Lo mismo que hace Blender
+                # Launcher V2.
+                _run(["/usr/bin/xattr", "-r", "-d", "com.apple.quarantine",
+                      str(target_app)], check=False)
+        except BaseException:
+            # Una copia cortada deja un ``.app`` a medias que el escaneo
+            # tomaría por una versión instalada (y que no arranca). Se quita
+            # la carpeta entera antes de propagar el error.
+            shutil.rmtree(folder, ignore_errors=True)
+            raise
         log(f"dmg instalado: {folder}")
         return folder
     finally:
         # Desmontar y limpiar SIEMPRE, aunque falle la copia: si no, el volumen
         # se queda montado y el siguiente intento falla con "resource busy".
-        _run(["/usr/bin/hdiutil", "detach", str(mount), "-force"], check=False)
+        # Si el desmontaje falla (o se pasa de tiempo) se anota y se sigue: un
+        # error aquí no puede tapar el de la copia, que es el que importa.
+        try:
+            _run(["/usr/bin/hdiutil", "detach", str(mount), "-force"],
+                 check=False)
+        except DmgError as error:
+            log(f"dmg: no se pudo desmontar {mount}: {error}")
         shutil.rmtree(mount, ignore_errors=True)
