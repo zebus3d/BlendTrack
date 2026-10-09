@@ -5741,5 +5741,59 @@ class ForkNameTextTests(SettingsIsolated, unittest.TestCase):
         self.assertNotIn("Blender", text)
 
 
+
+@unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
+class ReadOnlyCardTests(unittest.TestCase):
+    """Una instalada con el candado cerrado no ofrece borrar ni renombrar."""
+
+    app = None
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def setUp(self):
+        import i18n
+
+        self.addCleanup(i18n.set_language, i18n.get_language())
+        i18n.set_language("en")
+
+    def _cards(self, read_only):
+        from ui.widgets.cards import GridInstalledCard, InstalledCard
+
+        entry = _fake_installed("5.2.2")
+        return (InstalledCard(entry, False, read_only=read_only),
+                GridInstalledCard(entry, False, read_only=read_only))
+
+    @staticmethod
+    def _delete_button(card):
+        from ui import icons
+        from ui.widgets.buttons import CardButton
+
+        return next(button for button in card.findChildren(CardButton)
+                    if button.text() == icons.DELETE)
+
+    def test_solo_lectura_apaga_la_papelera_y_el_renombrado(self):
+        from ui.widgets.labels import EditableLabel
+
+        for card in self._cards(read_only=True):
+            delete = self._delete_button(card)
+            self.assertFalse(delete.isEnabled())
+            self.assertIn("lock closed", delete.toolTip())
+            title = card.findChild(EditableLabel)
+            title.start_editing()
+            self.assertIsNone(title._editor)
+            self.assertNotIn("rename", title.toolTip().split("\n")[0].lower())
+
+    def test_sin_candado_todo_sigue_igual(self):
+        from ui.widgets.labels import EditableLabel
+
+        for card in self._cards(read_only=False):
+            self.assertTrue(self._delete_button(card).isEnabled())
+            title = card.findChild(EditableLabel)
+            title.start_editing()
+            self.assertIsNotNone(title._editor)
+
+
 if __name__ == "__main__":
     unittest.main()

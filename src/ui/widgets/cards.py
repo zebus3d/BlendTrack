@@ -245,6 +245,27 @@ def _dim_unless(label, installed: bool) -> None:
     label.setProperty("dim", "false" if installed else "true")
 
 
+def _read_only_reason() -> str:
+    """Por qué una instalada de una carpeta con candado no se borra ni renombra."""
+    return tr("This version lives in a folder with the lock closed.\n"
+              "You can launch it and use it to migrate add-ons, but the app\n"
+              "will not delete or rename it.")
+
+
+def _protect(title, delete, read_only: bool) -> None:
+    """Apaga renombrar y borrar si la carpeta es de solo lectura.
+
+    Lanzar y migrar siguen funcionando (AGENTS.md: "solo lectura significa que
+    la app no escribe NADA ahí"). Los controles se apagan en vez de ocultarse:
+    así la tarjeta mide y se ve igual que las demás, y el tooltip dice por qué.
+    """
+    if not read_only:
+        return
+    title.set_editable(False, _read_only_reason())
+    delete.setEnabled(False)
+    delete.setToolTip(_read_only_reason())
+
+
 def _logo_label(size: int, dim: bool, fork: str = FORK_BLENDER) -> QLabel:
     label = QLabel()
     pix = _logo_pixmap(size, dim, fork)
@@ -538,10 +559,7 @@ class InstalledCard(_HoverCard, QFrame):
         meta = ElidedLabel(detail, Qt.ElideRight)
         meta.setObjectName("Muted")
         if read_only:
-            meta.setToolTip(tr(
-                "This version lives in a folder with the lock closed.\n"
-                "You can launch it and use it to migrate add-ons, but the app\n"
-                "will not delete or rename it."))
+            meta.setToolTip(_read_only_reason())
         text_col.addWidget(meta)
         lay.addLayout(text_col, 1)
 
@@ -578,6 +596,7 @@ class InstalledCard(_HoverCard, QFrame):
         delete.setFixedWidth(46)
         delete.clicked.connect(lambda: self.delete_clicked.emit(entry))
         lay.addWidget(delete)
+        _protect(title, delete, read_only)
 
 
 class GridInstalledCard(_HoverCard, QFrame):
@@ -593,7 +612,7 @@ class GridInstalledCard(_HoverCard, QFrame):
 
     def __init__(self, entry, zebra: bool, zoom: float = 1.0,
                  marked: bool = False, parent=None, update=None,
-                 console: bool | None = None):
+                 console: bool | None = None, read_only: bool = False):
         super().__init__(parent)
         self.entry = entry
         self.fork = getattr(entry, "fork", FORK_BLENDER) or FORK_BLENDER
@@ -625,9 +644,16 @@ class GridInstalledCard(_HoverCard, QFrame):
             lambda name: self.rename_requested.emit(self.entry, name))
         lay.addWidget(title)
 
-        meta = ElidedLabel(f"{self.program} {entry.version}", Qt.ElideRight)
+        detail = f"{self.program} {entry.version}"
+        if read_only:
+            # Como en la lista: en la línea que ya existe, no en una nueva
+            # (las tarjetas de la rejilla tienen que medir todas lo mismo).
+            detail += "  ·  " + tr("Read-only")
+        meta = ElidedLabel(detail, Qt.ElideRight)
         meta.setObjectName("Muted")
         meta.setAlignment(Qt.AlignHCenter)
+        if read_only:
+            meta.setToolTip(_read_only_reason())
         lay.addWidget(meta)
 
         # El aviso va como texto elidido (no pide ancho y no ensancha la
@@ -683,6 +709,7 @@ class GridInstalledCard(_HoverCard, QFrame):
         delete.clicked.connect(lambda: self.delete_clicked.emit(entry))
         row.addWidget(delete)
         lay.addLayout(row)
+        _protect(title, delete, read_only)
 
 
 class GripCard(QFrame):

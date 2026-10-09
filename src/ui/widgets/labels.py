@@ -107,21 +107,40 @@ class EditableLabel(ElidedLabel):
     renamed = Signal(str)
 
     def __init__(self, text: str = "", mode=Qt.ElideRight, parent=None):
+        # Antes de ``super().__init__``: el constructor base ya llama a
+        # ``_update_tooltip``, que lo consulta.
+        self._editable = True
         super().__init__(text, mode, parent)
         self._editor = None
 
+    def set_editable(self, editable: bool, reason: str = "") -> None:
+        """Permite o no renombrar; ``reason`` dice por qué no (en el tooltip).
+
+        Una instalada en una carpeta de solo lectura no se puede renombrar: el
+        doble clic no hace nada y el tooltip lo explica en vez de prometer
+        "doble clic para renombrar".
+        """
+        self._editable = editable
+        self._reason = reason
+        self._update_tooltip()
+
     def _update_tooltip(self) -> None:
         """Texto completo (si se recorta) + la pista de que se puede renombrar."""
-        hint = tr("Double-click to rename")
-        self.setToolTip(f"{self.text()}\n{hint}" if self.is_elided() else hint)
+        if self._editable:
+            hint = tr("Double-click to rename")
+        else:
+            hint = getattr(self, "_reason", "")
+        full = self.text() if self.is_elided() else ""
+        self.setToolTip("\n".join(part for part in (full, hint) if part))
 
     def mouseDoubleClickEvent(self, event):
-        self.start_editing()
+        if self._editable:
+            self.start_editing()
         event.accept()
 
     def start_editing(self) -> None:
         """Cambia la etiqueta por un campo de texto con el nombre actual."""
-        if self._editor is not None:
+        if self._editor is not None or not self._editable:
             return
         editor = _InlineEditor(self)
         editor.setObjectName("InlineEdit")
