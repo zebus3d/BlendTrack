@@ -17,7 +17,7 @@ import tempfile
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-from model.build import version_tuple
+from model.build import FORK_BFORARTISTS, FORK_UPBGE, version_tuple
 from paths import APP_DIR
 from services import channels
 
@@ -155,6 +155,10 @@ DEFAULT_UPDATE_INTERVAL = 30
 # nadie mire más allá de las últimas. 0 = sin límite (ver ``Settings``).
 FORK_VERSION_LIMITS = (0, 10, 25, 50)
 DEFAULT_FORK_VERSION_LIMIT = 10
+
+# Cuántos ajustes guardados (instantáneas) se conservan por versión si el
+# usuario no dice otra cosa (Migración). 0 = sin límite.
+DEFAULT_SNAPSHOT_KEEP = 5
 
 
 # Versión del esquema de ``settings.json``. Sube cuando cambia la forma del
@@ -362,8 +366,8 @@ def _clean_snapshot_keep(value) -> int:
     Un valor no numérico o negativo editado a mano cae al de fábrica; no puede
     dejar la poda en un número absurdo.
     """
-    keep = _int(value, 5)
-    return keep if keep >= 0 else 5
+    keep = _int(value, DEFAULT_SNAPSHOT_KEEP)
+    return keep if keep >= 0 else DEFAULT_SNAPSHOT_KEEP
 
 
 @dataclass
@@ -478,7 +482,7 @@ class Settings:
     fork_version_limit: int = DEFAULT_FORK_VERSION_LIMIT
     # Cuántos ajustes guardados (instantáneas) se conservan por versión. Al
     # crear uno nuevo se borran los más viejos. 0 = sin límite.
-    snapshot_keep: int = 5
+    snapshot_keep: int = DEFAULT_SNAPSHOT_KEEP
 
     @classmethod
     def load(cls) -> "Settings":
@@ -602,8 +606,6 @@ class Settings:
         Es lo que se pasa a ``api.get_builds`` para descargar solo sus listados
         y a la interfaz para enseñar solo sus pestañas y casillas.
         """
-        from model.build import FORK_BFORARTISTS, FORK_UPBGE
-
         forks = []
         if self.enable_bforartists:
             forks.append(FORK_BFORARTISTS)
