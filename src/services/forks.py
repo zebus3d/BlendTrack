@@ -40,11 +40,10 @@ from datetime import datetime
 from email.utils import parsedate_to_datetime
 
 from model.build import FORK_BFORARTISTS, FORK_UPBGE, Build
-from services import tls
+from services import net, tls
 from services.downloader import log
 from services.settings import cache_dir, write_json_atomic
 
-USER_AGENT = "BlenderManager (+https://github.com/zebus3d/BlenderManager)"
 
 # Cuántas peticiones WebDAV se lanzan a la vez al listar Bforartists. Con una
 # versión por petición (más de 30), hacerlas en serie tardaba decenas de
@@ -99,7 +98,7 @@ def _propfind(url: str, timeout: int) -> bytes:
     request = urllib.request.Request(
         url, method="PROPFIND",
         headers={
-            "User-Agent": USER_AGENT,
+            "User-Agent": net.USER_AGENT,
             "Depth": "1",
             "Authorization": "Basic " + BFA_AUTH,
         })
@@ -115,7 +114,7 @@ def _http_get_json(url: str, timeout: int, etag: str | None = None):
     ``(None, etag)`` y quien llame reutiliza la caché (y en GitHub además no le
     cuenta la petición contra el límite).
     """
-    headers = {"User-Agent": USER_AGENT, "Accept": "application/vnd.github+json"}
+    headers = {"User-Agent": net.USER_AGENT, "Accept": "application/vnd.github+json"}
     if etag:
         headers["If-None-Match"] = etag
     request = urllib.request.Request(url, headers=headers)

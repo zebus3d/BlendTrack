@@ -19,7 +19,7 @@ from dataclasses import asdict, fields
 
 from model.build import FORK_BFORARTISTS, FORK_UPBGE, Build
 from services.downloader import log
-from services import channels, forks as forks_service, tls
+from services import channels, forks as forks_service, net, tls
 from services.settings import cache_dir, write_json_atomic
 
 API_URL = "https://builder.blender.org/download/daily/?format=json&v=2"
@@ -38,7 +38,6 @@ VALID_EXTENSIONS = {"xz", "zip", "dmg", "tar", "gz", "bz2"}
 # en Windows y dmg en macOS.
 PREFERRED_EXTENSION = {"linux": "xz", "windows": "zip", "darwin": "dmg"}
 
-USER_AGENT = "BlenderManager/0.2 (+https://github.com/zebus3d/BlenderManager)"
 
 
 def cache_path():
@@ -53,7 +52,7 @@ def _fetch_json(url: str, timeout: int = 20, etag: str | None = None):
     cambiado), ``datos`` es ``None`` y se reutiliza la caché. Así, refrescar no
     vuelve a bajarse un listado que ya tenemos.
     """
-    headers = {"User-Agent": USER_AGENT}
+    headers = {"User-Agent": net.USER_AGENT}
     if etag:
         headers["If-None-Match"] = etag
     request = urllib.request.Request(url, headers=headers)

@@ -12,10 +12,9 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from services import tls
+from services import net, tls
 from services.settings import cache_dir
 
-USER_AGENT = "BlenderManager/0.2 (+https://github.com/zebus3d/BlenderManager)"
 CHUNK_SIZE = 1024 * 256  # 256 KiB por lectura
 
 # Tiempo máximo para conectar (incluye el handshake TLS), y reintentos de la
@@ -108,7 +107,7 @@ class Downloader:
         extra = dict(headers or {})
         for attempt in range(1, CONNECT_ATTEMPTS + 1):
             try:
-                base = {"User-Agent": USER_AGENT}
+                base = {"User-Agent": net.USER_AGENT}
                 base.update(extra)
                 request = urllib.request.Request(url, headers=base)
                 # Con contexto explicito: si no, en Arch no encuentra las CAs y

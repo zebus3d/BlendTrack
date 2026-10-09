@@ -29,7 +29,7 @@ import urllib.request
 from typing import NamedTuple, Optional
 
 from model.build import minor_of
-from services import forks, tls
+from services import forks, net, tls
 from services.downloader import log
 
 RELEASE_BASE = "https://download.blender.org/release"
@@ -45,10 +45,6 @@ RELEASE_NAMES = {
     ("darwin", "arm64"): ("macos-arm64", "dmg"),
 }
 
-# El servidor de Blender rechaza el User-Agent por defecto de urllib
-# ("Python-urllib", 403 Forbidden), así que mandamos uno propio como el resto de
-# la aplicación.
-USER_AGENT = "BlenderManager (+https://github.com/zebus3d/BlenderManager)"
 
 # Para elegir fuente: 4 MB. Con 1 MB pesaba demasiado el arranque de la conexión
 # (DNS + TLS) y la medida salía dominada por la latencia, no por la velocidad.
@@ -104,7 +100,7 @@ def release_checksum(build, timeout: int = 15) -> Optional[str]:
     sha_url = f"{RELEASE_BASE}/Blender{minor_of(build.version)}/" \
               f"blender-{build.version}.sha256"
     request = urllib.request.Request(sha_url,
-                                      headers={"User-Agent": USER_AGENT})
+                                      headers={"User-Agent": net.USER_AGENT})
     try:
         with urllib.request.urlopen(request, timeout=timeout,
                                     context=tls.ssl_context()) as response:
@@ -126,7 +122,7 @@ def _speed(url: str, timeout: int = PROBE_TIMEOUT) -> Optional[float]:
     leyendo solo eso, no el fichero entero.
     """
     request = urllib.request.Request(
-        url, headers={"User-Agent": USER_AGENT,
+        url, headers={"User-Agent": net.USER_AGENT,
                       "Range": f"bytes=0-{PROBE_BYTES - 1}"})
     started = time.monotonic()
     try:
