@@ -51,21 +51,64 @@ def _load(language: str) -> dict:
 _current = DEFAULT
 
 
+# Regiones donde el chino se escribe en caracteres **tradicionales**. Nuestro
+# ``zh`` es chino simplificado (el de China continental), y enseñárselo a quien
+# pidió tradicional es como dar un texto en otra ortografía: se entiende a
+# medias y se nota que no es lo suyo. Mientras no haya un ``zh_TW``, esas
+# regiones se quedan en inglés, que es lo que hace también Blender cuando le
+# falta un idioma.
+_TRADITIONAL_CHINESE_REGIONS = {"TW", "HK", "MO"}
+
+
+def _supported_code(value: str) -> str | None:
+    """Código de ``SUPPORTED`` para un locale (``pt_BR.UTF-8``), o ``None``.
+
+    Primero se prueba el idioma **con su región** (``pt_BR``) y luego solo el
+    idioma (``es`` para ``es_MX``). En ese orden porque hay idiomas que solo
+    tenemos en una variante regional: ``pt_BR.UTF-8`` buscaba ``pt``, que no
+    existe, y la interfaz salía en inglés a un usuario brasileño.
+
+    Acepta las formas que se ven por ahí: con codificación (``.UTF-8``), con
+    modificador (``@euro``), con guion en vez de guion bajo (``pt-BR``, la de
+    macOS) y con escritura (``zh_Hant_TW``).
+    """
+    tag = value.split(":")[0].split(".")[0].split("@")[0].replace("-", "_")
+    parts = [part for part in tag.split("_") if part]
+    if not parts:
+        return None
+    language = parts[0].lower()
+    region = parts[-1].upper() if len(parts) > 1 else ""
+    by_lower = {code.lower(): code for code in SUPPORTED}
+    if region and f"{language}_{region}".lower() in by_lower:
+        return by_lower[f"{language}_{region}".lower()]
+    traditional = language == "zh" and (
+        region in _TRADITIONAL_CHINESE_REGIONS
+        or any(part.lower() == "hant" for part in parts))
+    if traditional:
+        return None
+    return by_lower.get(language)
+
+
 def detect_language() -> str:
-    """Idioma según las variables de entorno (LANG, LC_ALL...)."""
+    """Idioma según las variables de entorno (LC_ALL, LC_MESSAGES, LANG).
+
+    Se miran en el orden en que manda POSIX (la primera definida gana) y, si
+    ninguna da un idioma que tengamos, el locale del sistema (en Windows no hay
+    ``LANG``). Si nada encaja, inglés.
+    """
     for var in ("LC_ALL", "LC_MESSAGES", "LANG"):
         value = os.environ.get(var)
         if value:
-            code = value.split(":")[0].split(".")[0].split("_")[0].lower()
-            if code in SUPPORTED:
+            code = _supported_code(value)
+            if code:
                 return code
     try:
         detected = locale.getlocale()[0]
     except (ValueError, TypeError):
         detected = None
     if detected:
-        code = detected.split("_")[0].lower()
-        if code in SUPPORTED:
+        code = _supported_code(detected)
+        if code:
             return code
     return DEFAULT
 

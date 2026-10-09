@@ -1,4 +1,5 @@
 import unittest
+from unittest import mock
 
 import i18n
 
@@ -48,6 +49,35 @@ class I18nTests(unittest.TestCase):
 if __name__ == "__main__":
     unittest.main()
 
+
+
+class DetectLanguageTests(unittest.TestCase):
+    """El idioma se deduce del locale del sistema."""
+
+    def _detect(self, lang):
+        env = {"LANG": lang}
+        with mock.patch.dict(i18n.os.environ, env, clear=True), \
+                mock.patch.object(i18n.locale, "getlocale",
+                                  return_value=(None, None)):
+            return i18n.detect_language()
+
+    def test_portugues_de_brasil(self):
+        """``pt_BR.UTF-8`` buscaba ``pt`` (que no existe) y salía en inglés."""
+        self.assertEqual(self._detect("pt_BR.UTF-8"), "pt_BR")
+        self.assertEqual(self._detect("pt-BR"), "pt_BR")
+
+    def test_variante_regional_cae_al_idioma(self):
+        self.assertEqual(self._detect("es_MX.UTF-8"), "es")
+        self.assertEqual(self._detect("ru_RU.UTF-8"), "ru")
+        self.assertEqual(self._detect("zh_CN.UTF-8"), "zh")
+
+    def test_chino_tradicional_no_cae_al_simplificado(self):
+        for value in ("zh_TW.UTF-8", "zh_HK", "zh_Hant_TW"):
+            self.assertEqual(self._detect(value), "en", value)
+
+    def test_idioma_desconocido_es_ingles(self):
+        self.assertEqual(self._detect("fr_FR.UTF-8"), "en")
+        self.assertEqual(self._detect("C"), "en")
 
 class CoberturaTests(unittest.TestCase):
     """Que no se cuele una cadena sin traducir al español.
