@@ -1,8 +1,9 @@
 """Extracción segura de los archivos comprimidos de Blender.
 
 Soportamos .tar.xz / .tar.gz / .tar.bz2 (Linux y macOS) y .zip (Windows)
-con la biblioteca estándar. Antes de extraer validamos que ninguna entrada
-intente salirse de la carpeta destino (ataque "zip slip").
+con la biblioteca estándar. Ninguna entrada puede salirse de la carpeta
+destino (ataque "zip slip"): en los tar lo impide el filtro ``data`` de
+``tarfile`` y en los zip lo comprobamos nosotros antes de extraer.
 """
 
 import tarfile
@@ -28,21 +29,35 @@ def _within(base: Path, target: Path) -> bool:
 
 
 def _safe_extract_tar(archive: tarfile.TarFile, dest: Path) -> None:
-    for member in archive.getmembers():
-        target = dest / member.name
-        if not _within(dest, target):
-            raise ValueError("unsafe path in archive: " + member.name)
-        # También validamos los enlaces simbólicos.
-        if member.issym() or member.islnk():
-            link_target = target.parent / member.linkname
-            if not _within(dest, link_target):
-                raise ValueError("unsafe link in archive: " + member.name)
-    # Pedimos el filtro "data" explícitamente: sin él, Python 3.12/3.13 usan
-    # "fully_trusted" (con DeprecationWarning) y 3.14 ya usa "data" por
-    # defecto, así que el comportamiento cambiaría según con qué versión se
-    # empaquete. Nuestras comprobaciones de arriba siguen siendo la primera
-    # barrera; esta es la segunda.
-    archive.extractall(dest, filter="data")
+    """Extrae un tar con el filtro ``data`` de la biblioteca estándar.
+
+    El filtro ``data`` (PEP 706) ya hace todo lo que hace falta y lo hace
+    bien: rechaza rutas absolutas, rutas con ``..`` que salgan del destino y
+    enlaces simbólicos **o duros** que apunten fuera, y además quita bits
+    peligrosos (setuid) y no crea dispositivos. Antes había una comprobación
+    propia delante que sobraba por dos motivos:
+
+    * llamaba a ``getmembers()``, que lee el archivo entero para listarlo; un
+      flujo ``xz`` no se puede rebobinar, así que el ``.tar.xz`` de Blender
+      (unos 300 MB) se descomprimía **dos veces**;
+    * y resolvía mal los enlaces duros: su ``linkname`` es relativo a la raíz
+      del tar, no a la carpeta del miembro, así que dejaba pasar alguno que
+      salía fuera (lo paraba el filtro, que era quien de verdad protegía).
+
+    Se pide ``data`` explícitamente porque Python 3.12/3.13 usan
+    ``fully_trusted`` por defecto y 3.14 ya ``data``: así el comportamiento no
+    cambia según con qué Python se empaquete. El error del filtro se traduce a
+    ``ValueError``, el mismo que da el zip, para que quien llame vea un único
+    tipo de "archivo peligroso".
+
+    Si el miembro peligroso no es el primero, los anteriores ya se habrán
+    escrito (dentro del destino, que es lo que importa): es el precio de leer
+    de una sola pasada.
+    """
+    try:
+        archive.extractall(dest, filter="data")
+    except tarfile.FilterError as error:
+        raise ValueError(f"unsafe member in archive: {error}") from error
 
 
 def _safe_extract_zip(archive: zipfile.ZipFile, dest: Path) -> None:

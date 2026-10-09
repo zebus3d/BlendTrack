@@ -629,6 +629,67 @@ class ExtractorTests(unittest.TestCase):
         self.assertTrue(is_archive("blender-5.2.1-linux.tar.xz"))
         self.assertTrue(is_archive("blender-5.2.1-windows.zip"))
 
+    def _tar_malicioso(self, path, *infos):
+        """Un .tar.gz con un fichero bueno y los miembros trampa de ``infos``."""
+        import io
+
+        with tarfile.open(path, "w:gz") as archive:
+            good = tarfile.TarInfo("blender-1.0/blender")
+            good.size = 3
+            archive.addfile(good, io.BytesIO(b"bin"))
+            for info in infos:
+                payload = b"nope" if info.isfile() else b""
+                info.size = len(payload)
+                archive.addfile(info, io.BytesIO(payload))
+
+    def test_un_tar_malicioso_no_escribe_fuera_del_destino(self):
+        """Rutas con ``..`` y enlaces que salen: todos rechazados."""
+        traversal = tarfile.TarInfo("../evil.txt")
+        symlink = tarfile.TarInfo("blender-1.0/link")
+        symlink.type = tarfile.SYMTYPE
+        symlink.linkname = "../../outside"
+        # El ``linkname`` de un enlace duro es relativo a la **raíz** del tar,
+        # no a la carpeta del miembro: la comprobación vieja lo resolvía mal.
+        hardlink = tarfile.TarInfo("blender-1.0/a/b/hard")
+        hardlink.type = tarfile.LNKTYPE
+        hardlink.linkname = "../outside"
+        for trap in (traversal, symlink, hardlink):
+            with self.subTest(member=trap.name), \
+                    tempfile.TemporaryDirectory() as tmp:
+                archive_path = Path(tmp) / "evil.tar.gz"
+                self._tar_malicioso(archive_path, trap)
+                dest = Path(tmp) / "nivel1" / "out"
+                with self.assertRaises(ValueError):
+                    extract(archive_path, dest)
+                self.assertFalse((Path(tmp) / "evil.txt").exists())
+                self.assertFalse((Path(tmp) / "nivel1" / "evil.txt").exists())
+                self.assertFalse((Path(tmp) / "outside").exists())
+                self.assertFalse((Path(tmp) / "nivel1" / "outside").exists())
+
+    def test_una_ruta_absoluta_del_tar_cae_dentro_del_destino(self):
+        """El filtro ``data`` le quita la barra inicial: no sale del destino."""
+        name = "blendermanager-test-absoluta.txt"
+        with tempfile.TemporaryDirectory() as tmp:
+            archive_path = Path(tmp) / "abs.tar.gz"
+            self._tar_malicioso(archive_path,
+                                tarfile.TarInfo(f"{tmp}/fuera/{name}"))
+            dest = Path(tmp) / "out"
+            extract(archive_path, dest)
+            self.assertFalse((Path(tmp) / "fuera" / name).exists())
+            self.assertTrue(list(dest.rglob(name)))
+
+    def test_el_tar_se_lee_de_una_sola_pasada(self):
+        """``getmembers()`` antes de extraer obligaba a descomprimir el .tar.xz
+        entero dos veces (unos 300 MB de Blender): una para listar y otra
+        para extraer, porque un flujo xz no se puede rebobinar."""
+        with tempfile.TemporaryDirectory() as tmp:
+            archive_path = Path(tmp) / "build.tar.xz"
+            self._make_tar(archive_path, "blender-9.9.9-linux-x64")
+            with mock.patch.object(tarfile.TarFile, "getmembers",
+                                   side_effect=AssertionError("dos pasadas")):
+                target = extract(archive_path, Path(tmp) / "out")
+            self.assertTrue((target / "blender").is_file())
+
     def test_extract_rejects_traversal(self):
         with tempfile.TemporaryDirectory() as tmp:
             archive_path = Path(tmp) / "evil.zip"
