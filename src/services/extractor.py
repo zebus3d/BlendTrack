@@ -32,8 +32,9 @@ def _safe_extract_tar(archive: tarfile.TarFile, dest: Path) -> list[str]:
     """Extrae un tar con el filtro ``data`` y devuelve los nombres extraídos.
 
     El filtro ``data`` (PEP 706) ya hace todo lo que hace falta y lo hace
-    bien: rechaza rutas absolutas, rutas con ``..`` que salgan del destino y
-    enlaces simbólicos **o duros** que apunten fuera, y además quita bits
+    bien: rechaza rutas con ``..`` que salgan del destino y enlaces
+    simbólicos **o duros** que apunten fuera, a las rutas absolutas les quita
+    la barra inicial (así caen dentro del destino), y además quita bits
     peligrosos (setuid) y no crea dispositivos. Antes había una comprobación
     propia delante que sobraba por dos motivos:
 
