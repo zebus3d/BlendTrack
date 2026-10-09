@@ -5830,3 +5830,27 @@ class HiDpiPixmapTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
+class FocusAfterViewChangeTests(SettingsIsolated, unittest.TestCase):
+    """Al esconder el buscador, el foco no puede caer en un botón lateral.
+
+    Qt pasa el foco al siguiente control al esconder el que lo tiene, y el
+    aro de foco del primer botón de la barra lateral parecía una selección
+    (se veía al entrar en Migración o en Ajustes).
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def test_entrar_en_migracion_no_enfoca_la_barra_lateral(self):
+        from ui.widgets.buttons import SideButton
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.show()
+        window.search_input.setFocus()
+        window.set_view("migrate")
+        self.assertNotIsInstance(window.focusWidget(), SideButton)

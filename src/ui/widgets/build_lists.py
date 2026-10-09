@@ -222,7 +222,8 @@ class BuildListsMixin:
                        if self.settings.experimental_features else None)
             if grid:
                 card = GridInstalledCard(entry, zebra, self.zoom, marked,
-                                         update=update, console=console)
+                                         update=update, console=console,
+                                         read_only=self._is_read_only(entry))
             else:
                 card = InstalledCard(entry, zebra, marked, update=update,
                                      read_only=self._is_read_only(entry),
@@ -649,16 +650,16 @@ class BuildListsMixin:
         # refresca **lo que se ve**, la nube o las instaladas, y el tooltip lo
         # dice según la vista (``_update_refresh_tooltip``).
         self.refresh_btn = IconFlatButton(icons.REFRESH)
-        self.refresh_btn.setFont(icon_font(16))
+        self.refresh_btn.setFont(icon_font())
         self.refresh_btn.clicked.connect(self.refresh_current)
         lay.addWidget(self.refresh_btn)
 
         self.layout_group = QButtonGroup(bar)
         self.layout_group.setExclusive(True)
         self.grid_btn = Pill(icons.GRID, tr("Show the versions as a grid of icons."))
-        self.grid_btn.setFont(icon_font(14))
+        self.grid_btn.setFont(icon_font())
         self.list_btn = Pill(icons.LIST, tr("Show the versions as a list of rows."))
-        self.list_btn.setFont(icon_font(14))
+        self.list_btn.setFont(icon_font())
         for btn, mode in ((self.grid_btn, "grid"), (self.list_btn, "list")):
             self.layout_group.addButton(btn)
             # Misma altura que los tags de canal: la fila queda a ras.

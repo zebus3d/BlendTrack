@@ -384,7 +384,7 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
             # como una **ventana suelta** (se veía un cuadradito en el centro de
             # la pantalla al arrancar, que desaparecía al colocarse el botón).
             btn = SideButton(glyph, tip, parent=sidebar)
-            btn.setFont(icon_font(20))
+            btn.setFont(icon_font())
             self.side_group.addButton(btn)
             btn.clicked.connect(lambda _=False, k=key: self.set_view(k))
             lay.addWidget(btn)
@@ -399,13 +399,13 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
         migrate_btn = SideButton(icons.MIGRATE, tr(
             "Copy add-ons, extensions and preferences from one Blender version "
             "to another."), parent=sidebar)
-        migrate_btn.setFont(icon_font(20))
+        migrate_btn.setFont(icon_font())
         self.side_group.addButton(migrate_btn)
         migrate_btn.clicked.connect(lambda: self.set_view("migrate"))
         lay.addWidget(migrate_btn)
         self.side_buttons["migrate"] = migrate_btn
         settings_btn = SideButton(icons.SETTINGS, tr("Settings."))
-        settings_btn.setFont(icon_font(20))
+        settings_btn.setFont(icon_font())
         self.side_group.addButton(settings_btn)
         settings_btn.clicked.connect(lambda: self.set_view("settings"))
         lay.addWidget(settings_btn)
@@ -586,6 +586,11 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
         # El buscador y el zoom del pie solo aplican a las listas; en Migración,
         # Recientes y Ajustes se ocultan (no arrastran salto: van en la cabecera
         # y el pie).
+        if not show_tools and self.focusWidget() is self.search_input:
+            # Al esconder el buscador, Qt pasa el foco al siguiente control
+            # (el primer botón lateral) y su aro de foco parece una selección.
+            # Se deja en la zona de contenido **antes** de esconderlo.
+            self.stack.setFocus(Qt.OtherFocusReason)
         self.header_tools.setVisible(show_tools)
         self.zoom_box.setVisible(show_tools and self.layout_mode == "grid")
         self._update_refresh_tooltip()
