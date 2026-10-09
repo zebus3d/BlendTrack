@@ -19,8 +19,9 @@ src/
   services/          # api, channels, downloader, extractor, installed,
                      # organizer, launcher, recent, addons, detector,
                      # settings, autostart, elevate, opener, sources, tls,
-                     # net (el User-Agent único), forks (Bforartists y
-                     # UPBGE), macos_dmg, updater y la familia blender_*:
+                     # net (el User-Agent único), addon_checks (lo que se
+                     # deduce de los ficheros de un addon al migrarlo),
+                     # forks (Bforartists y UPBGE), macos_dmg, updater y la familia blender_*:
                      #   blender_config    dónde vive la config de cada versión
                      #   blender_addons    migrar addons y ficheros de prefs
                      #   blender_snapshots guardados de "valores de fábrica"
@@ -1029,3 +1030,34 @@ justo tras mover el slider, se guarda), pero en tests y scripts hay que
 redirigir `settings.config_dir` a un directorio temporal (lo hace el mixin
 `SettingsIsolated` de `tests/test_ui.py` y el `with tempfile` del script de
 capturas).
+
+**Nunca un compositor anidado sobre el D-Bus de la sesión.** Hoy no pasa: la
+suite y las capturas usan *offscreen* (no arrancan ningún compositor) y los
+atajos de la app (`Ctrl +`/`Ctrl -`/`Ctrl 0`) son `QShortcut` de la ventana,
+no atajos globales. Pero si algún día hace falta probar algo en Wayland de
+verdad (la bandeja, el minimizado, `detector.session_is_wayland`), **no** se
+lanza `kwin_wayland --virtual` a pelo: cada KWin anidado se registra en el
+`kglobalaccel` del escritorio del usuario y, al salir, deja inactivo el
+componente `kwin`. Alt+Tab, Alt+Q y el resto de atajos de KWin dejan de
+responder mientras los de otros componentes siguen yendo, así que parece que
+"la tecla Alt falla a veces". Pasó en RBDLab y Hurricane el 2026-10-09, y
+`--no-global-shortcuts` solo **no** lo evita. Va siempre con su propio bus:
+
+```bash
+dbus-run-session -- kwin_wayland --virtual --no-global-shortcuts ...
+```
+
+Para saber si ya ha pasado, `qdbus6 org.kde.kglobalaccel /component/kwin
+org.kde.kglobalaccel.Component.isActive` da `false`. Se recupera sin cerrar
+sesión volviendo a marcar los atajos como presentes (conserva las teclas del
+usuario):
+
+```bash
+qdbus6 org.kde.kglobalaccel /component/kwin org.kde.kglobalaccel.Component.shortcutNames |
+  while IFS= read -r n; do busctl --user call org.kde.kglobalaccel /kglobalaccel \
+    org.kde.KGlobalAccel setShortcut asaiu 4 kwin "$n" KWin "$n" 0 2 >/dev/null; done
+```
+
+Es la misma familia que el XWayland forzado de "La bandeja del sistema": todo
+lo que se cuele entre la app y el compositor del usuario acaba rompiendo sus
+atajos globales.
