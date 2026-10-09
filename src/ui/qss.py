@@ -138,6 +138,10 @@ def build_qss() -> str:
         min-width: 50px; max-width: 50px;
         min-height: 50px; max-height: 50px;
         color: {t.TEXT};
+        /* El glifo, a 20 px. El tamaño de un icono en un widget va aquí y no en
+           ``setFont(icon_font(20))``: la regla global de ``QWidget`` pisaría el
+           tamaño (ver ``fonts.icon_font``). */
+        font-size: 20px;
     }}
     QPushButton#SideButton:hover {{ background-color: {t.ACCENT_DARK}; color: {t.TEXT_SEL}; }}
     QPushButton#SideButton:checked {{ background-color: {t.ACCENT}; color: {t.TEXT_SEL}; }}
@@ -252,6 +256,8 @@ def build_qss() -> str:
         background: transparent;
         border: none;
         color: {t.TEXT};
+        /* Glifo a 16 px dentro de la diana de 32 (refrescar, "más opciones"). */
+        font-size: 16px;
         border-radius: 6px;
         min-width: 32px; max-width: 32px;
         min-height: 32px; max-height: 32px;
@@ -376,6 +382,10 @@ def build_qss() -> str:
     QPushButton#CardButton[writable="false"] {{
         color: {t.WARNING};
     }}
+    /* El candado, a 14 px: un poco mayor que el texto para leerse de un
+       vistazo, sin salirse del botón de 46 px. */
+    QPushButton#CardButton[writable="true"],
+    QPushButton#CardButton[writable="false"] {{ font-size: 14px; }}
 
     /* --- Casilla de verificación (migración) ---
        El cuadro y la palomita los pinta ``CheckPill`` con QPainter: por QSS no
@@ -537,6 +547,10 @@ def build_qss() -> str:
         color: {t.INFO_TEXT};
     }}
     QLabel#FieldLabel {{ color: {t.MUTED}; font-size: 12px; }}
+    /* Flechas de Migración: la de la barra "desde → hacia" acompaña al texto
+       (16 px) y la del tablero separa dos columnas, así que va grande. */
+    QLabel#FlowArrow {{ font-size: 16px; }}
+    QLabel#BoardArrow {{ font-size: 28px; }}
 
     /* --- Separadores (filas de ajustes) --- */
     QFrame#RowSeparator {{ background-color: rgba(0,0,0,0.18); max-height: 1px; }}

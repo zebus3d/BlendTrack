@@ -5418,5 +5418,51 @@ class UpdateDialogTextTests(unittest.TestCase):
         self.assertNotIn("manually", texts[0])
 
 
+
+@unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
+class IconSizeTests(unittest.TestCase):
+    """El tamaño de los glifos sale del QSS, que es lo único que manda."""
+
+    app = None
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+        from ui import fonts, qss
+
+        fonts.load()
+        cls.app.setStyleSheet(qss.build_qss())
+
+    @staticmethod
+    def _pixels(widget) -> int:
+        from PySide6.QtGui import QFontInfo
+
+        widget.ensurePolished()
+        return QFontInfo(widget.font()).pixelSize()
+
+    def test_cada_icono_mide_lo_que_dice_su_regla(self):
+        """``setFont(icon_font(28))`` salía a 13 px: lo pisaba el QSS global."""
+        from PySide6.QtWidgets import QLabel
+
+        from ui import icons
+        from ui.fonts import icon_font
+        from ui.widgets.buttons import IconFlatButton, SideButton
+        from ui.widgets.folders import WriteToggle
+
+        cases = []
+        for name, size in (("FlowArrow", 16), ("BoardArrow", 28)):
+            label = QLabel(icons.ARROW_RIGHT)
+            label.setObjectName(name)
+            label.setFont(icon_font())
+            cases.append((label, size))
+        cases.append((IconFlatButton(icons.REFRESH), 16))
+        cases.append((SideButton(icons.SETTINGS), 20))
+        cases.append((WriteToggle(True), 14))
+        for widget, size in cases:
+            widget.setFont(icon_font())
+            self.assertEqual(self._pixels(widget), size, widget.objectName())
+            self.assertIn("Font Awesome", widget.font().family())
+
+
 if __name__ == "__main__":
     unittest.main()

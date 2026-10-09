@@ -33,7 +33,15 @@ def load() -> None:
 
 
 def icon_font(size: int | None = None) -> QFont:
-    """Devuelve un ``QFont`` de la fuente de iconos (o la general si falló)."""
+    """Devuelve un ``QFont`` de la fuente de iconos (o la general si falló).
+
+    ``size`` (en píxeles) solo vale para **pintar a mano** con ``QPainter``
+    (``glyph_icon``). En un widget, ``setFont(icon_font(20))`` deja la familia
+    pero **no el tamaño**: la regla global ``QWidget { font-size: 13px; }`` del
+    QSS gana a lo que fije el widget (medido: pedir 16 o 28 devolvía 13). El
+    tamaño de un glifo en un widget se pone en ``ui/qss.py`` por
+    ``objectName``, como ``#StarButton`` o ``#SideButton``.
+    """
     if _family is None:
         load()
     font = QFont(_family) if _family else QFontDatabase.systemFont(

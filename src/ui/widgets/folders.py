@@ -87,7 +87,7 @@ class WriteToggle(CardButton):
     def __init__(self, writable: bool = True, parent=None):
         super().__init__("", "neutral", parent=parent)
         self.setCheckable(True)
-        self.setFont(icon_font(14))
+        self.setFont(icon_font())    # 14 px, por QSS (``[writable]``)
         self.setFixedWidth(46)
         self.setChecked(writable)
         self._refresh()
@@ -137,7 +137,7 @@ class FolderRow(QFrame):
         top = QHBoxLayout()
         top.setSpacing(8)
         glyph = QLabel(icons.FOLDER)
-        glyph.setFont(icon_font(13))
+        glyph.setFont(icon_font())
         glyph.setObjectName("Muted")
         glyph.setFixedWidth(18)
         top.addWidget(glyph)
@@ -165,7 +165,7 @@ class FolderRow(QFrame):
             "Nothing is deleted from disk: its Blender versions simply stop\n"
             "being listed, and you can add the folder again whenever you want.\n"
             "Any build types it was taking will need a new folder."))
-        remove.setFont(icon_font(13))
+        remove.setFont(icon_font())
         remove.setFixedWidth(46)
         remove.clicked.connect(lambda: self.remove_requested.emit(self.path))
         top.addWidget(remove)

@@ -89,7 +89,7 @@ class _AddonRow(QFrame):
 
         self._menu_btn = IconFlatButton(icons.ELLIPSIS,
                                         tr("More options"))
-        self._menu_btn.setFont(icon_font(16))
+        self._menu_btn.setFont(icon_font())
         self._menu_btn.clicked.connect(self._show_menu_at_button)
         lay.addWidget(self._menu_btn)
 

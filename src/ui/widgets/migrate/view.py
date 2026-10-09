@@ -292,7 +292,8 @@ class MigrateView(AddonsTabMixin, PrefsTabMixin, FactoryTabMixin,
                "is only read, never written."))
         bar.addLayout(left, 1)
         arrow = QLabel(icons.ARROW_RIGHT)
-        arrow.setFont(icon_font(16))
+        arrow.setObjectName("FlowArrow")     # el tamaño lo pone el QSS
+        arrow.setFont(icon_font())
         arrow.setAlignment(Qt.AlignHCenter | Qt.AlignVCenter)
         arrow.setToolTip(tr("The add-ons and settings selected on the left are "
                             "copied to the version on the right."))

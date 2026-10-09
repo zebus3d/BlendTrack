@@ -231,7 +231,8 @@ class AddonsTabMixin:
         column = QVBoxLayout()
         column.addStretch()
         arrow = QLabel(icons.ARROW_RIGHT)
-        arrow.setFont(icon_font(28))
+        arrow.setObjectName("BoardArrow")    # el tamaño lo pone el QSS
+        arrow.setFont(icon_font())
         arrow.setAlignment(Qt.AlignHCenter)
         arrow.setToolTip(tr("The ticked add-ons are copied from left to right. "
                             "Nothing is moved: the source version stays as it "

@@ -82,8 +82,9 @@ class _RecentRow(QFrame):
 
         self._menu_btn = IconFlatButton(
             icons.ELLIPSIS, tr("Open in another version"))
-        # Sin la fuente de iconos el glifo sale como un cuadrado.
-        self._menu_btn.setFont(icon_font(16))
+        # Sin la fuente de iconos el glifo sale como un cuadrado (el tamaño,
+        # 16 px, lo pone el QSS de ``#IconFlat``).
+        self._menu_btn.setFont(icon_font())
         self._menu_btn.clicked.connect(self._show_versions)
         self._menu_btn.setEnabled(not missing)
         lay.addWidget(self._menu_btn)
@@ -161,7 +162,7 @@ class RecentView(QWidget):
         self.refresh_btn = IconFlatButton(icons.REFRESH, tr(
             "Read the recent files again.\n"
             "Blender updates the list when you open or save a file."))
-        self.refresh_btn.setFont(icon_font(16))
+        self.refresh_btn.setFont(icon_font())
         self.refresh_btn.clicked.connect(self.refresh)
         head_lay.addWidget(self.refresh_btn)
         root.addWidget(header)
