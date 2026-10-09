@@ -10,6 +10,7 @@ Prioridad de ubicación:
 """
 
 import json
+import math
 import os
 import sys
 from dataclasses import asdict, dataclass, field
@@ -294,6 +295,37 @@ def _clean_bool_map(value) -> dict:
             if isinstance(key, str) and key}
 
 
+def _int(value, default: int) -> int:
+    """Convierte un valor del JSON en entero o, si no se puede, da ``default``.
+
+    ``settings.json`` es un fichero que la gente edita a mano: un ``"ancho"``
+    donde iba un número, o un ``null``, no pueden impedir que la aplicación
+    arranque. Ante la duda, el valor de fábrica de ese campo.
+    """
+    if value is None or isinstance(value, bool):
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError, OverflowError):
+        return default
+
+
+def _float(value, default: float) -> float:
+    """Como ``_int`` pero para decimales; también rechaza ``nan`` e ``inf``.
+
+    El cero cuenta como "sin valor": los decimales que se guardan (el zoom)
+    no tienen sentido a cero, y así se conserva lo que hacía el antiguo
+    ``float(valor or defecto)``.
+    """
+    if not value or isinstance(value, bool):
+        return default
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return default
+    return number if math.isfinite(number) else default
+
+
 def _version_key(version: str) -> tuple:
     """Clave comparable de una versión para ordenar (``4.5.10`` > ``4.5.9``).
 
@@ -316,10 +348,7 @@ def _clean_fork_limit(value) -> int:
     fábrica: un ``settings.json`` editado a mano no puede dejar la nube sin
     límite cuando el usuario pidió 10, ni al revés.
     """
-    try:
-        limit = int(value)
-    except (TypeError, ValueError):
-        return DEFAULT_FORK_VERSION_LIMIT
+    limit = _int(value, DEFAULT_FORK_VERSION_LIMIT)
     return limit if limit in FORK_VERSION_LIMITS else DEFAULT_FORK_VERSION_LIMIT
 
 
@@ -329,10 +358,7 @@ def _clean_snapshot_keep(value) -> int:
     Un valor no numérico o negativo editado a mano cae al de fábrica; no puede
     dejar la poda en un número absurdo.
     """
-    try:
-        keep = int(value)
-    except (TypeError, ValueError):
-        return 5
+    keep = _int(value, 5)
     return keep if keep >= 0 else 5
 
 
@@ -455,7 +481,9 @@ class Settings:
         """Lee los ajustes del disco.
 
         Si el JSON falta o está roto se usan los valores por defecto:
-        preferimos eso a no arrancar.
+        preferimos eso a no arrancar. Lo mismo campo a campo: un número que no
+        es un número cae a su valor de fábrica (``_int``/``_float``) en vez de
+        tumbar la carga entera.
         """
         path = config_dir() / "settings.json"
         data = {}
@@ -466,11 +494,10 @@ class Settings:
                 # Si el archivo está corrupto preferimos valores por defecto
                 # antes que impedir el arranque.
                 data = {}
-        try:
-            interval = int(data.get("update_interval_min", DEFAULT_UPDATE_INTERVAL))
-        except (TypeError, ValueError):
-            # Un valor no numérico editado a mano no puede impedir el arranque.
-            interval = DEFAULT_UPDATE_INTERVAL
+        if not isinstance(data, dict):
+            # JSON válido pero que no es un objeto (una lista, un número...):
+            # para nosotros es tan ilegible como uno roto.
+            data = {}
         settings = cls(
             language=str(data.get("language") or "auto"),
             delete_archive=bool(data.get("delete_archive", True)),
@@ -480,11 +507,12 @@ class Settings:
             launch_console_overrides=_clean_bool_map(
                 data.get("launch_console_overrides")),
             layout_mode=str(data.get("layout_mode") or "grid"),
-            zoom=float(data.get("zoom") or DEFAULT_ZOOM),
-            reset_zoom=float(data.get("reset_zoom") or DEFAULT_ZOOM),
+            zoom=_float(data.get("zoom"), DEFAULT_ZOOM),
+            reset_zoom=_float(data.get("reset_zoom"), DEFAULT_ZOOM),
             auto_update=bool(data.get("auto_update", True)),
             periodic_update=bool(data.get("periodic_update", True)),
-            update_interval_min=interval,
+            update_interval_min=_int(data.get("update_interval_min"),
+                                     DEFAULT_UPDATE_INTERVAL),
             skipped_version=str(data.get("skipped_version") or ""),
             ignored_blender_series=_clean_string_list(
                 data.get("ignored_blender_series")),
@@ -492,10 +520,10 @@ class Settings:
             minimize_to_tray=bool(data.get("minimize_to_tray", False)),
             tray_hint_shown=bool(data.get("tray_hint_shown", False)),
             start_minimized=bool(data.get("start_minimized", False)),
-            window_width=int(data.get("window_width") or 0),
-            window_height=int(data.get("window_height") or 0),
-            window_x=int(data.get("window_x") or 0),
-            window_y=int(data.get("window_y") or 0),
+            window_width=_int(data.get("window_width"), 0),
+            window_height=_int(data.get("window_height"), 0),
+            window_x=_int(data.get("window_x"), 0),
+            window_y=_int(data.get("window_y"), 0),
             window_pos_saved=bool(data.get("window_pos_saved", False)),
             platform=str(data.get("platform") or ""),
             arch=str(data.get("arch") or ""),
@@ -513,7 +541,7 @@ class Settings:
         # viejo. El número de versión es lo que distingue "vengo de una app
         # anterior" de "me he quedado sin carpetas": sin él, alguien que las
         # borrara todas se las vería reaparecer en el siguiente arranque.
-        if data and int(data.get("settings_version") or 1) < SETTINGS_VERSION:
+        if data and _int(data.get("settings_version"), 1) < SETTINGS_VERSION:
             settings.folders = folders_from_legacy(data)
             # Viene de una versión anterior: se le explica una vez. Una
             # instalación nueva (``data`` vacío) no ve nada.

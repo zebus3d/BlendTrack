@@ -795,6 +795,41 @@ class SettingsTests(unittest.TestCase):
         return settings_module.Folder(path=path, types=list(types),
                                       writable=writable)
 
+    def _write_settings(self, text):
+        (Path(self.tmp.name) / "settings.json").write_text(text,
+                                                           encoding="utf-8")
+
+    def test_un_json_que_no_es_un_objeto_da_los_valores_de_fabrica(self):
+        """Un ``settings.json`` editado a mano no puede impedir el arranque."""
+        for text in ("[1, 2, 3]", '"hola"', "42", "null"):
+            with self.subTest(text=text):
+                self._write_settings(text)
+                loaded = settings_module.Settings.load()
+                self.assertEqual(loaded.language, "auto")
+                self.assertEqual(loaded.zoom, settings_module.DEFAULT_ZOOM)
+                self.assertTrue(loaded.folders)
+
+    def test_numeros_que_no_son_numeros_caen_al_valor_por_defecto(self):
+        self._write_settings(json.dumps({
+            "settings_version": "dos",
+            "window_width": "ancho",
+            "window_height": [1],
+            "window_x": {"a": 1},
+            "window_y": None,
+            "zoom": "mucho",
+            "reset_zoom": "nan",
+            "update_interval_min": "a menudo",
+        }))
+        loaded = settings_module.Settings.load()
+        self.assertEqual(loaded.window_width, 0)
+        self.assertEqual(loaded.window_height, 0)
+        self.assertEqual(loaded.window_x, 0)
+        self.assertEqual(loaded.window_y, 0)
+        self.assertEqual(loaded.zoom, settings_module.DEFAULT_ZOOM)
+        self.assertEqual(loaded.reset_zoom, settings_module.DEFAULT_ZOOM)
+        self.assertEqual(loaded.update_interval_min,
+                         settings_module.DEFAULT_UPDATE_INTERVAL)
+
     def test_roundtrip(self):
         settings = settings_module.Settings(
             folders=[
