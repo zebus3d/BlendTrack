@@ -289,7 +289,7 @@ class MainWindowTests(SettingsIsolated, unittest.TestCase):
         with mock.patch.object(downloads.opener, "open_url",
                                side_effect=lambda url: abiertas.append(url) or True):
             window.open_release_notes("5.2.1")
-            QTest.qWait(200)
+            _wait_until(lambda: abiertas)
 
         self.assertEqual(abiertas, [api.release_notes_url("5.2.1")])
         self.assertTrue(abiertas[0].endswith("/release_notes/5.2/"))
@@ -307,11 +307,13 @@ class MainWindowTests(SettingsIsolated, unittest.TestCase):
         # para que no pise el mensaje que estamos comprobando.
         with mock.patch.object(downloads.api, "get_builds", return_value=[]):
             window = MainWindow()
-            QTest.qWait(300)
+            _wait_until(lambda: window._refresh_request > 0
+                        and window.busy_bar.isHidden())
             with mock.patch.object(downloads.opener, "open_url",
                                    return_value=False):
                 window.open_release_notes("5.2.1")
-                QTest.qWait(200)
+                _wait_until(lambda: window.status_label.text()
+                            == tr("Could not open the browser"))
 
         self.assertEqual(window.status_label.text(),
                          tr("Could not open the browser"))
@@ -2243,9 +2245,9 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
                                return_value=elegida), \
                 mock.patch.object(window.downloader, "start") as arranque:
             window.install_build(window.builds[0])
-            # La eleccion va en un hilo y vuelve por senal: hay que dejar correr
-            # el bucle de eventos para que llegue.
-            QTest.qWait(300)
+            # La elección va en un hilo y vuelve por señal: hay que dejar correr
+            # el bucle de eventos hasta que llegue (no un tiempo fijo).
+            _wait_until(lambda: arranque.called)
 
         self.assertTrue(arranque.called)
         url, _destino, _nombre, checksum = arranque.call_args.args
@@ -2500,7 +2502,7 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
                                       return_value=carpeta):
                 window._on_download_done(str(archivo), build)
                 # La extracción va en un hilo: hay que dejarle terminar.
-                QTest.qWait(300)
+                _wait_until(lambda: installed.read_marker(carpeta))
             marcador = installed.read_marker(carpeta)
         self.assertEqual(marcador.get("version"), "5.2.1")
         self.assertEqual(marcador.get("hash"), "abc123")
@@ -2565,7 +2567,7 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
                                       return_value=carpeta) as instalar, \
                     mock.patch.object(downloads.opener, "reveal") as revelar:
                 window._on_download_done(str(dmg), build)
-                QTest.qWait(300)
+                _wait_until(lambda: installed.read_marker(carpeta))
             marcador = installed.read_marker(carpeta)
         instalar.assert_called_once()
         revelar.assert_not_called()
@@ -2598,7 +2600,7 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
                                       return_value=True) as revelar, \
                     mock.patch.object(window, "_show_message") as aviso:
                 window._on_download_done(str(dmg), build)
-                QTest.qWait(300)
+                _wait_until(lambda: aviso.called)
         revelar.assert_called_once()
         self.assertIn(tr("Open it to install Blender manually."),
                       aviso.call_args.args[0])
