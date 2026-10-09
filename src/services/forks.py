@@ -170,14 +170,14 @@ def _parse_multistatus(data: bytes) -> list:
     return entries
 
 
-def _bfa_platform_arch(name: str, platform: str) -> str:
-    """Arquitectura de un fichero de Bforartists (solo importa en macOS)."""
-    if platform != "darwin":
-        return "arm64" if any(k in name.lower() for k in BFA_MAC_ARM) else "x86_64"
+def _bfa_platform_arch(name: str) -> str:
+    """Arquitectura de un fichero de Bforartists, por las pistas de su nombre.
+
+    Hoy solo macOS publica dos (Intel y Silicon), pero la regla vale igual
+    para cualquier plataforma: si el nombre no dice ARM, es x86_64.
+    """
     lower = name.lower()
-    if any(key in lower for key in BFA_MAC_ARM):
-        return "arm64"
-    return "x86_64"
+    return "arm64" if any(key in lower for key in BFA_MAC_ARM) else "x86_64"
 
 
 def _bfa_builds_from(entries: list, version: str) -> list:
@@ -200,7 +200,7 @@ def _bfa_builds_from(entries: list, version: str) -> list:
                 branch=FORK_BFORARTISTS,
                 risk="stable",
                 platform=platform,
-                arch=_bfa_platform_arch(name, platform),
+                arch=_bfa_platform_arch(name),
                 url=BFA_ORIGIN + entry["href"],
                 filename=name,
                 size=entry["size"],

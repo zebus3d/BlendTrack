@@ -96,9 +96,10 @@ def release_checksum(build, timeout: int = 15) -> Optional[str]:
     url = release_url(build)
     if not url:
         return None
-    name = url.rsplit("/", 1)[-1]
-    sha_url = f"{RELEASE_BASE}/Blender{minor_of(build.version)}/" \
-              f"blender-{build.version}.sha256"
+    # El .sha256 vive en la misma carpeta que el fichero: se saca de su URL
+    # en vez de volver a montarla (dos copias de la ruta acaban divergiendo).
+    folder, name = url.rsplit("/", 1)
+    sha_url = f"{folder}/blender-{build.version}.sha256"
     request = urllib.request.Request(sha_url,
                                       headers={"User-Agent": net.USER_AGENT})
     try:
