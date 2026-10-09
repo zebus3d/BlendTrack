@@ -5613,5 +5613,51 @@ class KeyboardFocusTests(unittest.TestCase):
             self.assertIn(selector, sheet)
 
 
+
+@unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
+class LongTextRowTests(unittest.TestCase):
+    """Un texto largo se recorta; no ensancha su fila (AGENTS.md)."""
+
+    app = None
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+        from ui import fonts, qss
+
+        fonts.load()
+        cls.app.setStyleSheet(qss.build_qss())
+
+    def test_la_rama_larga_de_una_experimental_no_ensancha_la_tarjeta(self):
+        from ui.widgets.cards import BuildCard
+
+        build = _build("5.3.0", "geometry-nodes-" + "x" * 120, "alpha")
+        build.experimental = True
+        card = BuildCard(build, installed=False, zebra=False)
+        self.assertLess(card.minimumSizeHint().width(), 700)
+
+    def test_la_casilla_recorta_su_texto(self):
+        from ui.widgets.buttons import CheckPill
+
+        check = CheckPill("Una preferencia con un nombre larguísimo " * 4)
+        check.resize(160, 24)
+        self.assertTrue(check.displayed_text().endswith("…"))
+        check.resize(4000, 24)
+        self.assertEqual(check.displayed_text(), check.text())
+
+    def test_el_titulo_de_un_guardado_se_recorta(self):
+        """Fecha · origen va en ``ElidedLabel``: no empuja los botones."""
+        from ui.widgets.labels import ElidedLabel
+        from ui.widgets.migrate.factory_tab import _SnapshotRow
+
+        row = _SnapshotRow("/tmp/config-20260918-152704-v5.2.2", {},
+                           on_restore=print, on_delete=print,
+                           on_details=print)
+        labels = [label for label in row.findChildren(ElidedLabel)
+                  if "2026-09-18" in label.text()]
+        self.assertEqual(len(labels), 1)
+        self.assertEqual(labels[0].minimumSizeHint().width(), 0)
+
+
 if __name__ == "__main__":
     unittest.main()

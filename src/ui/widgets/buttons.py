@@ -11,9 +11,9 @@ tienen el foco, y con el foco por clic ese aro se quedaría encendido en el
 último botón pulsado, que es justo lo que la web evita con ``:focus-visible``.
 """
 
-from PySide6.QtCore import QRectF, Qt
+from PySide6.QtCore import QEvent, QRectF, Qt
 from PySide6.QtGui import QColor, QPainter, QPen
-from PySide6.QtWidgets import QCheckBox, QPushButton
+from PySide6.QtWidgets import QCheckBox, QPushButton, QToolTip
 
 from ui import icons
 from ui import theme as t
@@ -256,13 +256,39 @@ class CheckPill(QCheckBox):
 
         # El texto (y solo el texto) con el color del QSS. ``QCheckBox`` no tiene
         # ``alignment()``, así que se pinta a la izquierda y centrado a mano.
+        # Recortado con "…" si no cabe: en las filas de "Preferencias en
+        # detalle" la columna tiene ancho fijo y el texto se salía por encima
+        # del valor de al lado.
         if self.text():
-            text_rect = self.rect().adjusted(
-                int(box.right()) + self.GAP, 0, 0, 0)
             painter.setPen(self.palette().color(self.foregroundRole()))
-            painter.drawText(text_rect,
-                             Qt.AlignLeft | Qt.AlignVCenter, self.text())
+            painter.drawText(self._text_rect(), Qt.AlignLeft | Qt.AlignVCenter,
+                             self.displayed_text())
         painter.end()
+
+    def _text_rect(self):
+        """Hueco del texto: a la derecha del cuadro y su separación."""
+        return self.rect().adjusted(
+            int(self._box_rect().right()) + self.GAP, 0, 0, 0)
+
+    def displayed_text(self) -> str:
+        """El texto tal como se pinta ahora (con "…" si no cabe)."""
+        return self.fontMetrics().elidedText(self.text(), Qt.ElideRight,
+                                             self._text_rect().width())
+
+    def event(self, event):
+        """Con el texto recortado, el tooltip empieza por el texto entero.
+
+        No se sustituye el tooltip que tuviera (suele explicar para qué es la
+        casilla): se le pone delante lo que no se ve, como hace ``ElidedLabel``.
+        """
+        if (event.type() == QEvent.ToolTip and self.text()
+                and self.displayed_text() != self.text()):
+            tip = self.toolTip()
+            QToolTip.showText(event.globalPos(),
+                              f"{self.text()}\n\n{tip}" if tip else self.text(),
+                              self)
+            return True
+        return super().event(event)
 
     def _draw_focus(self, painter: QPainter, box: QRectF) -> None:
         """Aro de foco de teclado (como el de ``SwitchPill``).

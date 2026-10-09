@@ -221,6 +221,19 @@ def _with_opacity(pix: QPixmap, opacity: float) -> QPixmap:
     return result
 
 
+def _natural_width(label: ElidedLabel) -> ElidedLabel:
+    """Tope de ancho en lo que mide su texto entero, para usarla con estirado.
+
+    Un ``ElidedLabel`` no pide ancho, así que en una fila con ``addStretch``
+    se quedaba a 0 px. Con factor de estirado y este tope ocupa lo que mide su
+    texto (y lo que tenga detrás va pegado); si no cabe, se recorta con "…".
+    """
+    label.ensurePolished()
+    label.setMaximumWidth(
+        label.fontMetrics().horizontalAdvance(label.text()) + 6)
+    return label
+
+
 def _dim_unless(label, installed: bool) -> None:
     """Atenúa el título de una versión que no tienes (regla ``[dim]`` del QSS).
 
@@ -313,10 +326,16 @@ class BaseBuildCard(_HoverCard, QFrame):
         details.append(build.arch)
         self.meta_text = "  ·  ".join(details)
 
-    def _badge(self) -> QLabel:
-        label = QLabel(self.channel_text)
+    def _badge(self) -> ElidedLabel:
+        """Insignia del canal ("LTS", "Alfa"... o la rama de una experimental).
+
+        Una rama experimental puede tener un nombre larguísimo: con un
+        ``QLabel`` pedía su ancho entero y deformaba la fila. Se usa con
+        ``_natural_width`` (ver ``BuildCard``).
+        """
+        label = ElidedLabel(self.channel_text, Qt.ElideRight)
         label.setObjectName("Warning" if self.is_lts else "Info")
-        return label
+        return _natural_width(label)
 
     def _info(self) -> IconLinkButton:
         return _info_button(self.build, self.notes_clicked)
@@ -360,11 +379,9 @@ class BuildCard(BaseBuildCard):
         # quedaba a 0 px y en modo lista solo se veía la insignia ("LTS",
         # "Alfa"), sin la versión. Con factor de estirado **y** tope en su
         # ancho natural ocupa lo que mide su texto y la insignia va pegada.
-        title.ensurePolished()
-        title.setMaximumWidth(
-            title.fontMetrics().horizontalAdvance(title.text()) + 6)
-        top.addWidget(title, 1)
-        top.addWidget(self._badge())
+        # La insignia, igual: si no caben las dos, se recortan las dos.
+        top.addWidget(_natural_width(title), 1)
+        top.addWidget(self._badge(), 1)
         top.addStretch()
         text_col.addLayout(top)
         meta = ElidedLabel(self.meta_text, Qt.ElideRight)

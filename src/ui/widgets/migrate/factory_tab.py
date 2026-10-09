@@ -12,6 +12,7 @@ en ``services/blender_config.py``; leer qué ajustes trae cada uno, en
 import threading
 from pathlib import Path
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QComboBox, QFrame, QHBoxLayout, QLabel,
                                QSizePolicy, QVBoxLayout, QWidget)
 
@@ -23,6 +24,7 @@ from services import blender_prefs as bprefs
 from ui.widgets.buttons import CardButton
 from ui.widgets.cards import settings_card
 from ui.widgets import dialogs
+from ui.widgets.labels import ElidedLabel
 from ui.widgets.layouts import (CornerGrip, FittedList, clear_layout,
                                 list_scroll)
 from ui.widgets.migrate.common import (SNAPSHOT_MIN_HEIGHT,
@@ -88,10 +90,17 @@ class _SnapshotRow(QFrame):
         title_row.setSpacing(8)
         date = bsnap.snapshot_date(self.snapshot) or self.snapshot.name
         origin = _snapshot_origin(self.snapshot)
-        title = QLabel(f"{date}  ·  {origin}")
+        # ``ElidedLabel`` y no ``QLabel``: la frase de origen es larga (y más
+        # en otros idiomas) y un ``QLabel`` pediría su ancho entero, empujando
+        # los botones fuera de la fila. Con estirado y tope en su ancho natural
+        # ocupa lo que mide y la insignia queda pegada (como en ``BuildCard``).
+        title = ElidedLabel(f"{date}  ·  {origin}", Qt.ElideRight)
         title.setToolTip(tr("Saved on {date}. {origin}", date=date,
                             origin=origin))
-        title_row.addWidget(title)
+        title.ensurePolished()
+        title.setMaximumWidth(
+            title.fontMetrics().horizontalAdvance(title.text()) + 6)
+        title_row.addWidget(title, 1)
         self.badge = QLabel("")
         self.badge.setObjectName("Info")
         title_row.addWidget(self.badge)
