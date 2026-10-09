@@ -183,15 +183,18 @@ class Downloader:
             log(f"downloaded {final_path}")
             if on_done:
                 on_done(final_path)
-        except DownloadError as error:
-            if str(error) == "cancelled":
-                part_path.unlink(missing_ok=True)
-            else:
-                log(f"download error ({url}): {error}")
-            if on_error:
-                on_error(str(error))
         except Exception as error:
-            part_path.unlink(missing_ok=True)
-            log(f"download error ({url}): {error}")
+            # Un ``.part`` solo sirve mientras se escribe: no se reanudan
+            # descargas, así que uno que se quede (cancelada, red caída o un
+            # checksum que no cuadra) son cientos de MB de basura. Se borra en
+            # **todos** los fallos; antes el del checksum se quedaba en disco.
+            try:
+                part_path.unlink(missing_ok=True)
+            except OSError as cleanup_error:
+                log(f"could not remove {part_path}: {cleanup_error}")
+            cancelled = (isinstance(error, DownloadError)
+                         and str(error) == "cancelled")
+            if not cancelled:
+                log(f"download error ({url}): {error}")
             if on_error:
                 on_error(str(error))

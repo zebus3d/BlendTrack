@@ -1814,6 +1814,24 @@ class DownloaderRetryTests(unittest.TestCase):
             self.assertIs(d._connect("https://x/asset.zip"), exito)
         self.assertEqual(abrir.call_count, 2)
 
+    def test_un_checksum_que_no_cuadra_no_deja_el_part(self):
+        """El ``.part`` de una descarga corrupta no puede quedarse en disco:
+        ocupa cientos de MB y nadie lo va a reanudar."""
+        import io
+
+        class _Respuesta(io.BytesIO):
+            headers = {"Content-Length": "4"}
+
+        d = self.downloader.Downloader()
+        errores = []
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.object(d, "_connect",
+                                  return_value=_Respuesta(b"data")):
+            d._run("https://x/b.tar.xz", tmp, "b.tar.xz", "0" * 64,
+                   None, None, errores.append)
+            self.assertEqual(errores, ["checksum"])
+            self.assertEqual(list(Path(tmp).iterdir()), [])
+
     def test_retry_after_con_valor_raro_usa_el_respaldo(self):
         import urllib.error
 
