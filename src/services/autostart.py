@@ -13,8 +13,10 @@ Cada sistema guarda esto a su manera y no hay una API común:
   programa colarse en el arranque.
 * **macOS**: un *LaunchAgent* en ``~/Library/LaunchAgents/`` y
   ``launchctl bootstrap``. Lo moderno sería ``SMAppService`` (macOS 13+), pero
-  exige una app empaquetada como ``.app`` y lo que distribuimos es un binario
-  suelto en un ``.zip``.
+  es una API de Objective-C/Swift (``ServiceManagement``): desde Python haría
+  falta una dependencia más (``pyobjc``) solo para esto, y dejaría fuera los
+  macOS anteriores al 13. El LaunchAgent es un ``plist`` que escribimos con la
+  biblioteca estándar y apunta al ejecutable de dentro de nuestro ``.app``.
 
 El fichero que deja el autoarranque **solo lanza la aplicación**; que arranque
 oculta en la bandeja lo decide el ajuste ``start_minimized`` (así el mismo
@@ -68,18 +70,32 @@ def _exec_command() -> list[str]:
 
 
 def _quote_desktop(part: str) -> str:
-    """Escapa una parte del ``Exec=`` según el Desktop Entry Specification.
+    """Escribe una parte del ``Exec=`` según la Desktop Entry Specification.
 
     Una ruta con espacios sin comillas se parte en varios argumentos y el
-    autoarranque falla (o, peor, ejecuta otra cosa). Se entrecomilla y se
-    escapan los caracteres reservados.
+    autoarranque falla (o, peor, ejecuta otra cosa). La especificación pide
+    tres capas, y el orden importa porque quien lee las deshace al revés:
+
+    1. **Códigos de campo**: ``%f``, ``%u``... los sustituye el escritorio, así
+       que un ``%`` literal (una carpeta ``100%``) se escribe ``%%``.
+    2. **Comillas**: si hay espacios o caracteres reservados, el argumento va
+       entre comillas dobles y dentro se escapan ``"``, la comilla invertida,
+       ``$`` y ``\\``.
+    3. **Escape de cadena**: el valor de la clave es de tipo *string*, cuyo
+       escape se aplica *antes* que el de las comillas al leer. Por eso cada
+       ``\\`` del paso 2 se vuelve a doblar, y una barra literal acaba
+       escrita como cuatro (es el ejemplo que da la propia especificación).
+       Lo mismo con un salto de línea o un tabulador, que se escriben ``\\n``
+       y ``\\t``.
     """
+    part = part.replace("%", "%%")
     reserved = ' \t\n"\'\\><~|&;$*?#()`'
     if not part or any(char in part for char in reserved):
         escaped = (part.replace("\\", "\\\\").replace('"', '\\"')
                    .replace("`", "\\`").replace("$", "\\$"))
-        return f'"{escaped}"'
-    return part
+        part = f'"{escaped}"'
+    return (part.replace("\\", "\\\\").replace("\n", "\\n")
+            .replace("\t", "\\t").replace("\r", "\\r"))
 
 
 def _desktop_entry(command: list[str]) -> str:
