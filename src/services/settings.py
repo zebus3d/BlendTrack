@@ -17,6 +17,7 @@ import tempfile
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+from model.build import version_tuple
 from paths import APP_DIR
 from services import channels
 
@@ -344,21 +345,6 @@ def _float(value, default: float) -> float:
     return number if math.isfinite(number) else default
 
 
-def _version_key(version: str) -> tuple:
-    """Clave comparable de una versión para ordenar (``4.5.10`` > ``4.5.9``).
-
-    ``Build.sort_key`` es texto y compara "5.10" < "5.9"; aquí hace falta el
-    número de verdad para recortar las últimas versiones de un fork.
-    """
-    parts = []
-    for piece in (version or "").split("."):
-        try:
-            parts.append(int(piece))
-        except ValueError:
-            break
-    return tuple(parts) or (0,)
-
-
 def _clean_fork_limit(value) -> int:
     """Normaliza cuántas versiones de un fork se enseñan (0 = todas).
 
@@ -641,25 +627,27 @@ class Settings:
         if not self.fork_version_limit:
             return builds
         keep = self.fork_version_limit
-        forks = [build for build in builds if build.fork]
-        if not forks:
+        # Para cada fork, sus versiones distintas con la fecha de la build más
+        # reciente de cada una: {fork: {(5, 2, 0): mtime}}. Se compara con
+        # ``version_tuple`` (números de verdad), así 4.5.10 va después de 4.5.9.
+        newest = {}
+        for build in builds:
+            if not build.fork:
+                continue
+            versions = newest.setdefault(build.fork, {})
+            key = version_tuple(build.version)
+            if build.mtime > versions.get(key, -1):
+                versions[key] = build.mtime
+        if not newest:
             return builds
-        # Lista de versiones distintas por fork, de la más nueva a la más vieja.
-        versiones = {}
-        for build in forks:
-            versiones.setdefault(build.fork, {})
-            clave = _version_key(build.version)
-            actual = versiones[build.fork].get(clave)
-            if actual is None or build.mtime > actual:
-                versiones[build.fork][clave] = build.mtime
-        recortadas = {}
-        for fork, vistas in versiones.items():
-            ordenadas = sorted(vistas, key=lambda clave: (clave, vistas[clave]),
-                               reverse=True)
-            recortadas[fork] = set(ordenadas[:keep])
+        kept = {}
+        for fork, versions in newest.items():
+            ordered = sorted(versions, key=lambda key: (key, versions[key]),
+                             reverse=True)
+            kept[fork] = set(ordered[:keep])
         return [build for build in builds
                 if not build.fork
-                or _version_key(build.version) in recortadas.get(build.fork, set())]
+                or version_tuple(build.version) in kept.get(build.fork, set())]
 
     def active_build_types(self) -> tuple:
         """Tipos de carpeta con sentido con los forks que hay activados."""
