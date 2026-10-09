@@ -6,7 +6,8 @@ plataforma 'linux' | 'windows' | 'darwin' y arquitectura 'x86_64' | 'amd64' | 'a
 
 import os
 import platform
-from typing import Mapping, NamedTuple
+from typing import NamedTuple
+from collections.abc import Mapping
 
 OS_IDS = {"Linux": "linux", "Windows": "windows", "Darwin": "darwin"}
 OS_LABELS = {"linux": "GNU/Linux", "windows": "Windows", "darwin": "macOS"}

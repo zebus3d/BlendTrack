@@ -1,0 +1,17 @@
+# Configuración de herramientas. El proyecto no se instala como paquete (se
+# ejecuta con ``src/main.py`` o empaquetado con PyInstaller), así que aquí solo
+# hay lo que leen las herramientas.
+
+[tool.ruff]
+# El CI y los binarios usan Python 3.12 (ver AGENTS.md: el Python local puede
+# ser más nuevo y eso esconde fallos de anotaciones).
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+# Pocas reglas y todas de "esto es un fallo", no de gusto:
+# F   pyflakes: imports y variables sin usar, nombres sin definir.
+# E9  errores de sintaxis.
+# B   bugbear: cierres que capturan la variable del bucle, raise sin from...
+# UP035 imports de typing que ya viven en collections.abc.
+select = ["F", "E9", "B", "UP035"]

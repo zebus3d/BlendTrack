@@ -6,7 +6,6 @@ que el destino está completo). Los demás están para que ese siga teniendo
 sentido.
 """
 
-import os
 import shutil
 import tempfile
 import unittest

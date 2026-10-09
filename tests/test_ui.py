@@ -32,7 +32,7 @@ if HAVE_QT:
     # módulo donde **se usa** el nombre, no donde se define, que es lo que
     # exige ``mock.patch``. Se importan aquí y no dentro de cada test para no
     # repetir la línea cincuenta veces.
-    from ui.widgets import downloads, folder_library, main_window
+    from ui.widgets import downloads, folder_library
     from ui.widgets import settings_view, updates
 
 from model.build import Build
@@ -98,7 +98,6 @@ class SettingsIsolated:
         # modal de "serie nueva" a mitad de un ``QTest.qWait`` de OTRO test (el
         # temporizador vive en la ventana vieja), y la suite se quedaba colgada
         # esperando a que alguien pulsara un botón. Cada test inyecta sus builds.
-        from ui.widgets import main_window
 
         network = mock.patch.object(downloads.api, "get_builds", return_value=[])
         network.start()
@@ -278,10 +277,8 @@ class MainWindowTests(SettingsIsolated, unittest.TestCase):
         """
         from unittest import mock
 
-        from PySide6.QtTest import QTest
 
         from services import api
-        from ui.widgets import main_window
         from ui.widgets.main_window import MainWindow
 
         window = MainWindow()
@@ -298,9 +295,7 @@ class MainWindowTests(SettingsIsolated, unittest.TestCase):
         from unittest import mock
 
         from i18n import tr
-        from PySide6.QtTest import QTest
 
-        from ui.widgets import main_window
         from ui.widgets.main_window import MainWindow
 
         # Se deja pasar el refresco de arranque (a los 100 ms pone "Cargando...")
@@ -524,7 +519,6 @@ class ForkUiTests(SettingsIsolated, unittest.TestCase):
         self.assertEqual(card.channel_text, "Bforartists")
 
     def test_las_notas_de_un_fork_usan_su_url(self):
-        from ui.widgets import downloads
         from ui.widgets.cards import _info_button
 
         class _Sig:
@@ -1212,7 +1206,6 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         que desaparecía enseguida.
         """
         import json
-        from unittest import mock
 
         from PySide6.QtCore import QEvent, QObject
         from PySide6.QtWidgets import QWidget
@@ -1683,7 +1676,6 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         from unittest import mock
 
         from services import settings as settings_service
-        from ui.widgets import main_window
         from ui.widgets.main_window import MainWindow
 
         window = MainWindow()
@@ -1790,7 +1782,6 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         """Sin esto el usuario se quedaba encerrado: ni cambiarla ni quitarla."""
         from unittest import mock
 
-        from ui.widgets import main_window
         from ui.widgets.main_window import MainWindow
 
         window = MainWindow()
@@ -2085,7 +2076,6 @@ class SourceUpdateUiTests(SettingsIsolated, unittest.TestCase):
     def test_modo_fuente_no_descarga_binario(self):
         from unittest import mock
 
-        from ui.widgets import main_window
         from ui.widgets.main_window import MainWindow
 
         window = MainWindow()
@@ -2100,7 +2090,6 @@ class SourceUpdateUiTests(SettingsIsolated, unittest.TestCase):
     def test_fuente_sin_git_abre_la_release(self):
         from unittest import mock
 
-        from ui.widgets import main_window
         from ui.widgets.main_window import MainWindow
 
         window = MainWindow()
@@ -2229,10 +2218,8 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
     def test_descarga_desde_la_fuente_elegida(self):
         from unittest import mock
 
-        from PySide6.QtTest import QTest
 
         from services.sources import Source
-        from ui.widgets import main_window
         from ui.widgets.main_window import MainWindow
 
         window = MainWindow()
@@ -2272,7 +2259,6 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
         from unittest import mock
 
         from services.sources import Source
-        from ui.widgets import main_window
         from ui.widgets.main_window import MainWindow
 
         window = MainWindow()
@@ -2292,7 +2278,6 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
         from unittest import mock
 
         from services.sources import Source
-        from ui.widgets import main_window
         from ui.widgets.main_window import MainWindow
 
         window = MainWindow()
@@ -2366,7 +2351,6 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
     def test_pide_permiso_de_administrador(self):
         from unittest import mock
 
-        from ui.widgets import main_window
         from ui.widgets.main_window import MainWindow
 
         window = MainWindow()
@@ -2387,7 +2371,6 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
         from unittest import mock
 
         from i18n import tr
-        from ui.widgets import main_window
         from ui.widgets.main_window import MainWindow
 
         window = MainWindow()
@@ -2403,7 +2386,6 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
     def test_el_error_de_descarga_muestra_el_motivo(self):
         from unittest import mock
 
-        from ui.widgets import main_window
         from ui.widgets.main_window import MainWindow
 
         window = MainWindow()
@@ -2416,7 +2398,6 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
         from unittest import mock
 
         from i18n import tr
-        from ui.widgets import main_window
         from ui.widgets.main_window import MainWindow
 
         window = MainWindow()
@@ -2428,7 +2409,6 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
         from unittest import mock
 
         from i18n import tr
-        from ui.widgets import main_window
         from ui.widgets.main_window import MainWindow
 
         window = MainWindow()
@@ -2449,7 +2429,6 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
         from pathlib import Path as _Path
 
         from i18n import tr
-        from ui.widgets import main_window
         from ui.widgets.main_window import MainWindow
 
         window = MainWindow()
@@ -2480,10 +2459,8 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
         import tempfile
         from pathlib import Path as _Path
 
-        from PySide6.QtTest import QTest
 
         from services import installed
-        from ui.widgets import main_window
         from ui.widgets.main_window import MainWindow
 
         window = MainWindow()
@@ -2515,7 +2492,6 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
         siendo una vía, así que se ofrece la página de releases.
         """
         from i18n import tr
-        from ui.widgets import main_window
         from ui.widgets.main_window import MainWindow
 
         window = MainWindow()
@@ -2544,10 +2520,8 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
         import tempfile
         from pathlib import Path as _Path
 
-        from PySide6.QtTest import QTest
 
         from services import installed
-        from ui.widgets import main_window
         from ui.widgets.main_window import MainWindow
 
         window = MainWindow()
@@ -2578,10 +2552,8 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
         import tempfile
         from pathlib import Path as _Path
 
-        from PySide6.QtTest import QTest
 
         from i18n import tr
-        from ui.widgets import main_window
         from ui.widgets.main_window import MainWindow
 
         window = MainWindow()
@@ -2708,7 +2680,6 @@ class UninstallTests(SettingsIsolated, unittest.TestCase):
         cls.app.setStyleSheet(qss.build_qss())
 
     def _entrada(self, carpeta):
-        from pathlib import Path
 
         from services.installed import InstalledBuild
 
@@ -2722,7 +2693,6 @@ class UninstallTests(SettingsIsolated, unittest.TestCase):
         import tempfile
         from unittest import mock
 
-        from ui.widgets import main_window
         from ui.widgets.main_window import MainWindow
         from i18n import tr
 
@@ -2741,7 +2711,6 @@ class UninstallTests(SettingsIsolated, unittest.TestCase):
         from pathlib import Path
         from unittest import mock
 
-        from ui.widgets import main_window
         from ui.widgets.main_window import MainWindow
         from i18n import tr
 
@@ -2765,7 +2734,6 @@ class UninstallTests(SettingsIsolated, unittest.TestCase):
         from pathlib import Path
         from unittest import mock
 
-        from ui.widgets import main_window
         from ui.widgets.main_window import MainWindow
 
         window = MainWindow()
@@ -2968,7 +2936,6 @@ class PeriodicUpdateTests(SettingsIsolated, unittest.TestCase):
     def test_el_aviso_no_se_muestra_dos_veces(self):
         from unittest import mock
 
-        from ui.widgets import main_window
         from ui.widgets.main_window import MainWindow
 
         window = MainWindow()
@@ -2988,7 +2955,6 @@ class PeriodicUpdateTests(SettingsIsolated, unittest.TestCase):
     def test_saltar_una_version_la_silencia(self):
         from unittest import mock
 
-        from ui.widgets import main_window
         from ui.widgets.main_window import MainWindow
 
         window = MainWindow()
@@ -3233,7 +3199,6 @@ class RenameTests(SettingsIsolated, unittest.TestCase):
         from unittest import mock
 
         from services.installed import InstalledBuild
-        from ui.widgets import main_window
         from ui.widgets.main_window import MainWindow
 
         window = MainWindow()
@@ -3268,7 +3233,6 @@ class TrayTests(SettingsIsolated, unittest.TestCase):
         cls.app.setStyleSheet(qss.build_qss())
 
     def _window(self, available=True):
-        from ui.widgets import main_window
         from ui.widgets.main_window import MainWindow
         from ui.widgets.tray import TrayIcon
 
@@ -3398,7 +3362,6 @@ class TrayTests(SettingsIsolated, unittest.TestCase):
         self.assertTrue(window._force_quit)
 
     def test_el_reinicio_del_fuente_no_se_queda_en_la_bandeja(self):
-        from ui.widgets import main_window
 
         window = self._window()
         with mock.patch.object(updates.updater, "relaunch_source",
@@ -3425,7 +3388,6 @@ class TrayTests(SettingsIsolated, unittest.TestCase):
 
     def test_sin_soporte_no_se_ofrece_minimizar_a_la_bandeja(self):
         """Sin poder detectar el minimizado, 'cerrar' sigue; 'minimizar' no."""
-        from ui.widgets import main_window
 
         with mock.patch.object(settings_view.detector,
                                "minimize_to_tray_supported", return_value=False):
@@ -3435,7 +3397,6 @@ class TrayTests(SettingsIsolated, unittest.TestCase):
         self.assertFalse(window.minimize_tray_switch.isEnabled())
 
     def test_en_wayland_no_se_ofrece_minimizar_a_la_bandeja(self):
-        from ui.widgets import main_window
 
         with mock.patch.object(settings_view.detector, "session_is_wayland",
                                return_value=True):
@@ -3474,7 +3435,6 @@ class TrayTests(SettingsIsolated, unittest.TestCase):
         self.assertTrue(Settings.load().start_minimized)
 
     def test_el_autoarranque_se_registra_y_se_revierte_si_falla(self):
-        from ui.widgets import main_window
 
         window = self._window()
         with mock.patch.object(settings_view.autostart, "enable",
@@ -3494,7 +3454,6 @@ class TrayTests(SettingsIsolated, unittest.TestCase):
         self.assertTrue(window.autostart_switch.isChecked())
 
     def test_sin_soporte_de_autoarranque_el_interruptor_se_deshabilita(self):
-        from ui.widgets import main_window
 
         with mock.patch.object(settings_view.autostart, "supported",
                                return_value=False):
@@ -3600,8 +3559,6 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
         """
         from model.build import minor_of
         from services import blender_config as bc
-        from services import blender_addons as baddons
-        from services import blender_snapshots as bsnap
 
         def fake_config_for(version, platform, env=None, fork=""):
             series = minor_of(version)
@@ -4132,7 +4089,6 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
         """
         from services import blender_snapshots as bsnap
         from unittest import mock as _mock
-        from services import blender_config as bc
 
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config(tmp, "5.2.0")
@@ -4275,7 +4231,6 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
         usuario la abría con otra versión y no encontraba nada.
         """
         from services import blender_snapshots as bsnap
-        from services import blender_config as bc
 
         with tempfile.TemporaryDirectory() as tmp:
             source = self._config(tmp, "5.2.2")
@@ -4300,7 +4255,6 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
         from services import blender_snapshots as bsnap
         from unittest import mock as _mock
 
-        from services import blender_config as bc
 
         with tempfile.TemporaryDirectory() as tmp:
             config = self._config(tmp, "5.2.2")
@@ -4356,7 +4310,6 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
         """El gestor: una fila por guardado, con análisis y borrado individual."""
         from services import blender_snapshots as bsnap
         from unittest import mock as _mock
-        from services import blender_config as bc
         from services import blender_prefs as bprefs
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -4411,7 +4364,6 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
         """"Ver ajustes" abre un diálogo con las claves de ese guardado."""
         from services import blender_snapshots as bsnap
         from unittest import mock as _mock
-        from services import blender_config as bc
         from services import blender_prefs as bprefs
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -4570,7 +4522,6 @@ class AddonsViewTests(SettingsIsolated, unittest.TestCase):
 
     def _state(self, kind="legacy", module="mi_addon", name="Mi Addon",
                enabled=False, path="/tmp/mi_addon"):
-        from services import blender_addons as baddons
         from services import addons as ap
 
         addon = ap.baddons.Addon(kind=kind, module=module, name=name, version="1.0",

@@ -458,6 +458,10 @@ X11, Windows y macOS no cambia nada. **No volver a forzar XWayland.**
 # Tests (la UI corre sin pantalla, con QT_QPA_PLATFORM=offscreen)
 .venv/bin/python -m unittest discover -t . -s tests -v
 
+# Lint (lo mismo que corre el CI; reglas en pyproject.toml)
+.venv/bin/python -m pip install -r requirements-dev.txt
+.venv/bin/ruff check src tests packaging
+
 # Build local (one-folder; --appimage añade el AppImage en Linux)
 python3 packaging/inject_version.py 1.2.3   # opcional: fija la versión local
 packaging/build.sh
