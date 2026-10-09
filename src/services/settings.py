@@ -13,6 +13,7 @@ import json
 import math
 import os
 import sys
+import tempfile
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -26,16 +27,33 @@ PORTABLE_MARKERS = ("portable", "portable.txt", ".portable")
 def write_json_atomic(path: Path, payload, indent=None) -> Path:
     """Guarda un JSON sin dejar el archivo a medias si algo falla.
 
-    Escribimos primero en un ``.tmp`` al lado y solo entonces lo movemos encima
+    Escribimos primero en un temporal al lado y solo entonces lo movemos encima
     del definitivo: ``os.replace`` es atómico dentro del mismo sistema de
     archivos, así que un corte de luz o un disco lleno dejan intacto el
     contenido anterior en lugar de un JSON truncado.
+
+    El temporal lo crea ``tempfile.mkstemp`` en la misma carpeta (tiene que
+    ser el mismo sistema de archivos para que el ``replace`` sea atómico) y
+    con un nombre **único**: con uno fijo (``datos.json.tmp``), dos hilos que
+    guardaran a la vez se pisaban el temporal. Si algo falla, se borra.
     """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(path.name + ".tmp")
-    temporary.write_text(json.dumps(payload, indent=indent), encoding="utf-8")
-    os.replace(temporary, path)
+    handle, temporary = tempfile.mkstemp(dir=path.parent,
+                                         prefix=f".{path.name}.",
+                                         suffix=".tmp")
+    try:
+        with os.fdopen(handle, "w", encoding="utf-8") as stream:
+            stream.write(json.dumps(payload, indent=indent))
+        os.replace(temporary, path)
+    except BaseException:
+        # BaseException y no Exception: un Ctrl+C a mitad tampoco debe dejar
+        # el temporal suelto. El error se vuelve a lanzar tal cual.
+        try:
+            os.unlink(temporary)
+        except OSError:
+            pass
+        raise
     return path
 
 

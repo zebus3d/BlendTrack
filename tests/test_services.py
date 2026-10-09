@@ -878,6 +878,43 @@ class SettingsMigrationTests(unittest.TestCase):
         self.assertFalse(data["separate_lts"])
 
 
+class WriteJsonAtomicTests(unittest.TestCase):
+    """``settings.write_json_atomic``: o el JSON nuevo entero, o el viejo."""
+
+    def test_un_fallo_no_deja_temporales_ni_toca_el_original(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "datos.json"
+            path.write_text('{"viejo": true}', encoding="utf-8")
+            with mock.patch.object(settings_module.os, "replace",
+                                   side_effect=OSError("disco lleno")):
+                with self.assertRaises(OSError):
+                    settings_module.write_json_atomic(path, {"nuevo": True})
+            self.assertEqual([entry.name for entry in Path(tmp).iterdir()],
+                             ["datos.json"])
+            self.assertEqual(json.loads(path.read_text(encoding="utf-8")),
+                             {"viejo": True})
+
+    def test_dos_escrituras_no_comparten_temporal(self):
+        """Dos hilos que guardan el mismo fichero no pueden pisarse el
+        temporal: con un nombre fijo (``.tmp``) uno movía el del otro."""
+        temporales = []
+        real = settings_module.os.replace
+
+        def apuntar(src, dst):
+            temporales.append(Path(src).name)
+            return real(src, dst)
+
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.object(settings_module.os, "replace",
+                                  side_effect=apuntar):
+            path = Path(tmp) / "datos.json"
+            settings_module.write_json_atomic(path, {"a": 1})
+            settings_module.write_json_atomic(path, {"a": 2})
+            self.assertEqual(json.loads(path.read_text(encoding="utf-8")),
+                             {"a": 2})
+        self.assertEqual(len(set(temporales)), 2)
+
+
 class SettingsTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
