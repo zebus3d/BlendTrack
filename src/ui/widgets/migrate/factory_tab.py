@@ -667,10 +667,14 @@ class FactoryTabMixin:
         snapshots = bsnap.all_snapshots(config)
         if not snapshots:
             return
+        entry = self._factory_entry()
         if not dialogs.confirm(
                 self, tr("Delete saved settings"),
-                tr("Delete all saved settings of this version for good? You "
-                   "will not be able to restore them."),
+                tr("Delete the {count} saved copies of {program} {version} "
+                   "for good? You will not be able to restore them.",
+                   count=len(snapshots),
+                   program=fork_label(getattr(entry, "fork", "")),
+                   version=getattr(entry, "version", "")),
                 accept_text=tr("Delete"), danger=True):
             return
         failed = [snapshot for snapshot in snapshots
@@ -698,7 +702,9 @@ class FactoryTabMixin:
                 tr("Blender {version} will start clean on next launch.\n\nYour "
                    "settings are saved aside, so you can put them back from "
                    "this same screen.", version=version),
-                accept_text=tr("Reset"), danger=True):
+                accept_text=tr("Reset"),
+                accept_tooltip=tr("Nothing is deleted: you can put your "
+                                  "settings back from this screen.")):
             return
         try:
             snapshot = bsnap.set_config_aside(config, label=f"v{version}",

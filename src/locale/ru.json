@@ -136,7 +136,6 @@
   "Delete all saved settings": "Удалить все сохранённые настройки",
   "Delete every saved copy of this version for good.": "Удалить навсегда все сохранённые копии этой версии.",
   "Delete the settings saved on {date} for good? You will not be able to restore them.": "Удалить навсегда настройки, сохранённые {date}? Восстановить их будет невозможно.",
-  "Delete all saved settings of this version for good? You will not be able to restore them.": "Удалить навсегда все сохранённые настройки этой версии? Восстановить их будет невозможно.",
   "Useful when something misbehaves and you want to find out why: if the problem disappears on a clean Blender, it comes from your settings or add-ons, not from Blender itself. From there you put your settings back and enable things one at a time until it breaks again. It is also the fair way to report a bug, and a way to record a tutorial with the interface everyone else sees. Nothing is lost: your settings are saved aside and go back with one click.": "Полезно, когда что-то идёт не так и вы хотите выяснить почему: если с чистым Blender проблема исчезает, значит, дело в ваших настройках или аддонах, а не в самом Blender. После этого вы возвращаете настройки и включаете вещи по одной, пока снова не сломается. Это ещё и честный способ сообщить об ошибке, и способ записать урок с тем интерфейсом, который видят все. Ничего не теряется: настройки сохраняются отдельно и возвращаются одним кликом.",
   "This app has the settings of Blender {version} saved aside from a previous reset. To put them back, open the \"Factory settings\" tab and pick Blender {version} there.": "В этом приложении сохранены отдельно настройки Blender {version} от предыдущего сброса. Чтобы вернуть их, откройте вкладку «Настройки по умолчанию» и выберите там Blender {version}.",
   "Your Blender folders": "Ваши папки Blender",
@@ -552,5 +551,7 @@
   "{count} saved copies could not be deleted. Close any program that is using them and try again.": "Не удалось удалить сохранённые копии: {count}. Закройте программы, которые их используют, и попробуйте снова.",
   "Could not save the current settings aside, so nothing was reset:\n{error}": "Не удалось отложить текущие настройки, поэтому ничего не сброшено:\n{error}",
   "Could not put the saved settings back:\n{error}": "Не удалось вернуть сохранённые настройки:\n{error}",
-  "Copying the add-ons...": "Копирование аддонов..."
+  "Copying the add-ons...": "Копирование аддонов...",
+  "Delete the {count} saved copies of {program} {version} for good? You will not be able to restore them.": "Удалить навсегда сохранённые копии {program} {version} ({count})? Восстановить их будет нельзя.",
+  "Nothing is deleted: you can put your settings back from this screen.": "Ничего не удаляется: настройки можно вернуть на этом же экране."
 }

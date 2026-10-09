@@ -5256,6 +5256,28 @@ class FactorySafetyTests(SettingsIsolated, unittest.TestCase):
             self.assertEqual(view.snapshot_keep, 3)
 
 
+    def test_restablecer_no_dice_que_no_se_pueda_deshacer(self):
+        """Restablecer aparta la config: el botón no puede avisar de lo contrario."""
+        with tempfile.TemporaryDirectory() as tmp:
+            view, config = self._factory_view(tmp, copies=0)
+            config.config_dir.mkdir(parents=True)
+            with mock.patch("ui.widgets.dialogs.confirm",
+                            return_value=False) as ask:
+                view.reset_to_factory()
+            self.assertFalse(ask.call_args.kwargs.get("danger"))
+            self.assertIn("Nothing is deleted",
+                          ask.call_args.kwargs.get("accept_tooltip"))
+
+    def test_borrar_todos_dice_cuantos_y_de_que_version(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            view, _ = self._factory_view(tmp, copies=3)
+            with mock.patch("ui.widgets.dialogs.confirm",
+                            return_value=False) as ask:
+                view.delete_all_snapshots()
+            message = ask.call_args[0][2]
+            self.assertIn("3", message)
+            self.assertIn("Blender 5.2.2", message)
+
     def test_si_no_se_puede_borrar_un_guardado_lo_dice(self):
         """``delete_snapshot`` devuelve False: no se anuncia "borrado"."""
         with tempfile.TemporaryDirectory() as tmp:

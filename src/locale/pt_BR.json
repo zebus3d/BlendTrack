@@ -136,7 +136,6 @@
   "Delete all saved settings": "Excluir todas as configurações salvas",
   "Delete every saved copy of this version for good.": "Exclui definitivamente todas as cópias salvas desta versão.",
   "Delete the settings saved on {date} for good? You will not be able to restore them.": "Excluir definitivamente as configurações salvas em {date}? Você não poderá restaurá-las.",
-  "Delete all saved settings of this version for good? You will not be able to restore them.": "Excluir definitivamente todas as configurações salvas desta versão? Você não poderá restaurá-las.",
   "Useful when something misbehaves and you want to find out why: if the problem disappears on a clean Blender, it comes from your settings or add-ons, not from Blender itself. From there you put your settings back and enable things one at a time until it breaks again. It is also the fair way to report a bug, and a way to record a tutorial with the interface everyone else sees. Nothing is lost: your settings are saved aside and go back with one click.": "Útil para descartar: se algo dá errado e com um Blender limpo deixa de acontecer, o problema está nas suas configurações ou nos seus add-ons, não no Blender. A partir daí você recupera suas configurações e vai ativando as coisas uma a uma até que volte a falhar. Também é a forma honesta de reportar um erro, e a maneira de gravar um tutorial com a interface que todo mundo vê. Você não perde nada: suas configurações ficam guardadas à parte e voltam com um clique.",
   "This app has the settings of Blender {version} saved aside from a previous reset. To put them back, open the \"Factory settings\" tab and pick Blender {version} there.": "Este aplicativo tem as configurações do Blender {version} guardadas à parte de uma redefinição anterior. Para recuperá-las, abra a aba \"Padrões de fábrica\" e escolha o Blender {version} lá.",
   "Your Blender folders": "Suas pastas do Blender",
@@ -552,5 +551,7 @@
   "{count} saved copies could not be deleted. Close any program that is using them and try again.": "Não foi possível excluir {count} cópias salvas. Feche qualquer programa que as esteja usando e tente de novo.",
   "Could not save the current settings aside, so nothing was reset:\n{error}": "Não foi possível guardar à parte as configurações atuais, então nada foi redefinido:\n{error}",
   "Could not put the saved settings back:\n{error}": "Não foi possível restaurar as configurações salvas:\n{error}",
-  "Copying the add-ons...": "Copiando os add-ons..."
+  "Copying the add-ons...": "Copiando os add-ons...",
+  "Delete the {count} saved copies of {program} {version} for good? You will not be able to restore them.": "Excluir para sempre as {count} cópias salvas de {program} {version}? Não será possível recuperá-las.",
+  "Nothing is deleted: you can put your settings back from this screen.": "Nada é excluído: você pode restaurar suas configurações nesta tela."
 }

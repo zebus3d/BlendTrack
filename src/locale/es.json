@@ -136,7 +136,6 @@
   "Delete all saved settings": "Borrar todos los ajustes guardados",
   "Delete every saved copy of this version for good.": "Borra para siempre todas las copias guardadas de esta versión.",
   "Delete the settings saved on {date} for good? You will not be able to restore them.": "¿Borrar para siempre los ajustes guardados el {date}? No podrás recuperarlos.",
-  "Delete all saved settings of this version for good? You will not be able to restore them.": "¿Borrar para siempre todos los ajustes guardados de esta versión? No podrás recuperarlos.",
   "Useful when something misbehaves and you want to find out why: if the problem disappears on a clean Blender, it comes from your settings or add-ons, not from Blender itself. From there you put your settings back and enable things one at a time until it breaks again. It is also the fair way to report a bug, and a way to record a tutorial with the interface everyone else sees. Nothing is lost: your settings are saved aside and go back with one click.": "Sirve para descartar: si algo va mal y con un Blender limpio deja de pasar, el problema está en tus ajustes o en tus addons, no en Blender. A partir de ahí recuperas tus ajustes y vas activando cosas de una en una hasta que vuelve a fallar. También es la forma honesta de reportar un error, y la manera de grabar un tutorial con la interfaz que ve todo el mundo. No pierdes nada: tus ajustes quedan guardados aparte y vuelven con un clic.",
   "This app has the settings of Blender {version} saved aside from a previous reset. To put them back, open the \"Factory settings\" tab and pick Blender {version} there.": "Esta aplicación tiene los ajustes de Blender {version} guardados aparte de un restablecimiento anterior. Para recuperarlos, abre la pestaña «Valores de fábrica» y elige allí Blender {version}.",
   "Your Blender folders": "Tus carpetas de Blender",
@@ -552,5 +551,7 @@
   "{count} saved copies could not be deleted. Close any program that is using them and try again.": "No se pudieron borrar {count} copias guardadas. Cierra cualquier programa que las esté usando y vuelve a intentarlo.",
   "Could not save the current settings aside, so nothing was reset:\n{error}": "No se pudieron apartar los ajustes actuales, así que no se ha restablecido nada:\n{error}",
   "Could not put the saved settings back:\n{error}": "No se pudieron restaurar los ajustes guardados:\n{error}",
-  "Copying the add-ons...": "Copiando los addons..."
+  "Copying the add-ons...": "Copiando los addons...",
+  "Delete the {count} saved copies of {program} {version} for good? You will not be able to restore them.": "¿Borrar para siempre las {count} copias guardadas de {program} {version}? No podrás recuperarlas.",
+  "Nothing is deleted: you can put your settings back from this screen.": "No se borra nada: podrás devolver tus ajustes desde esta pantalla."
 }

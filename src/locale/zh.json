@@ -136,7 +136,6 @@
   "Delete all saved settings": "删除所有已保存的设置",
   "Delete every saved copy of this version for good.": "永久删除此版本的所有已保存副本。",
   "Delete the settings saved on {date} for good? You will not be able to restore them.": "永久删除 {date} 保存的设置？你将无法恢复它们。",
-  "Delete all saved settings of this version for good? You will not be able to restore them.": "永久删除此版本的所有已保存设置？你将无法恢复它们。",
   "Useful when something misbehaves and you want to find out why: if the problem disappears on a clean Blender, it comes from your settings or add-ons, not from Blender itself. From there you put your settings back and enable things one at a time until it breaks again. It is also the fair way to report a bug, and a way to record a tutorial with the interface everyone else sees. Nothing is lost: your settings are saved aside and go back with one click.": "当某些东西出问题而你想找出原因时很有用：如果问题在干净的 Blender 上消失，那它就来自你的设置或插件，而不是 Blender 本身。之后你可以恢复自己的设置，并逐个启用，直到问题再次出现。这也是报告错误的公正方式，以及用别人看到的界面录制教程的方法。什么都不会丢失：你的设置会被另行保存，一键即可恢复。",
   "This app has the settings of Blender {version} saved aside from a previous reset. To put them back, open the \"Factory settings\" tab and pick Blender {version} there.": "此应用保存了 Blender {version} 之前某次重置时另行保存的设置。要恢复它们，请打开「出厂设置」标签页并在那里选择 Blender {version}。",
   "Your Blender folders": "你的 Blender 文件夹",
@@ -552,5 +551,7 @@
   "{count} saved copies could not be deleted. Close any program that is using them and try again.": "有 {count} 份已保存副本无法删除。请关闭正在使用它们的程序后重试。",
   "Could not save the current settings aside, so nothing was reset:\n{error}": "无法将当前设置另存，因此没有进行任何重置：\n{error}",
   "Could not put the saved settings back:\n{error}": "无法恢复已保存的设置：\n{error}",
-  "Copying the add-ons...": "正在复制插件..."
+  "Copying the add-ons...": "正在复制插件...",
+  "Delete the {count} saved copies of {program} {version} for good? You will not be able to restore them.": "要永久删除 {program} {version} 的 {count} 份已保存副本吗？删除后将无法恢复。",
+  "Nothing is deleted: you can put your settings back from this screen.": "不会删除任何内容：你可以在此界面恢复你的设置。"
 }

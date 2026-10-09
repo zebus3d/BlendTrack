@@ -106,22 +106,25 @@ class AppDialog(QDialog):
 
 
 def confirm(parent, title: str, message: str, accept_text: str | None = None,
-            danger: bool = False) -> bool:
+            danger: bool = False, accept_tooltip: str = "") -> bool:
     """Diálogo de confirmación. Devuelve True si el usuario acepta.
 
     ``accept_text`` es el texto del botón que continúa; por convención las
     acciones destructivas lo dicen con el verbo ("Desinstalar"), no con un
-    "Aceptar" genérico. Con ``danger`` el botón va en rojo y avisa de que no
-    hay vuelta atrás.
+    "Aceptar" genérico. Con ``danger`` el botón va en rojo y su tooltip avisa
+    de que no hay vuelta atrás. ``accept_tooltip`` sustituye ese tooltip por
+    defecto cuando no es verdad: una acción reversible no puede decir "no se
+    puede deshacer" (ahuyenta justo lo que se quiere que la gente pruebe).
     """
+    if not accept_tooltip:
+        accept_tooltip = (tr("This cannot be undone.") if danger
+                          else tr("Go ahead."))
     dialog = AppDialog(parent, title, message)
     dialog.add_button(tr("Cancel"), on_click=dialog.reject,
                       tooltip=tr("Do nothing."))
     dialog.add_button(accept_text or tr("Accept"),
                       variant="danger" if danger else "accent",
-                      on_click=dialog.accept,
-                      tooltip=tr("This cannot be undone.") if danger
-                      else tr("Go ahead."))
+                      on_click=dialog.accept, tooltip=accept_tooltip)
     return dialog.exec() == QDialog.Accepted
 
 

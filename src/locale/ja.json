@@ -136,7 +136,6 @@
   "Delete all saved settings": "保存済みの設定をすべて削除",
   "Delete every saved copy of this version for good.": "このバージョンの保存済みコピーをすべて完全に削除します。",
   "Delete the settings saved on {date} for good? You will not be able to restore them.": "{date} に保存した設定を完全に削除しますか？復元できなくなります。",
-  "Delete all saved settings of this version for good? You will not be able to restore them.": "このバージョンの保存済み設定をすべて完全に削除しますか？復元できなくなります。",
   "Useful when something misbehaves and you want to find out why: if the problem disappears on a clean Blender, it comes from your settings or add-ons, not from Blender itself. From there you put your settings back and enable things one at a time until it breaks again. It is also the fair way to report a bug, and a way to record a tutorial with the interface everyone else sees. Nothing is lost: your settings are saved aside and go back with one click.": "何か不具合が起きた原因を突き止めたいときに役立ちます。クリーンな Blender で問題が消えれば、原因は Blender 自体ではなく設定やアドオンにあります。そこから設定を戻し、壊れるまで1つずつ有効にしていきます。バグを報告する際の誠実な方法でもあり、他の人と同じインターフェースでチュートリアルを録画する手段でもあります。何も失いません。設定は別に保存され、ワンクリックで戻ります。",
   "This app has the settings of Blender {version} saved aside from a previous reset. To put them back, open the \"Factory settings\" tab and pick Blender {version} there.": "このアプリには、以前のリセット時に別保存された Blender {version} の設定があります。戻すには「工場出荷時設定」タブを開き、そこで Blender {version} を選択してください。",
   "Your Blender folders": "あなたの Blender フォルダー",
@@ -552,5 +551,7 @@
   "{count} saved copies could not be deleted. Close any program that is using them and try again.": "{count} 件の保存済みコピーを削除できませんでした。それらを使っているプログラムを閉じて、もう一度お試しください。",
   "Could not save the current settings aside, so nothing was reset:\n{error}": "現在の設定を退避できなかったため、何もリセットしていません：\n{error}",
   "Could not put the saved settings back:\n{error}": "保存した設定を元に戻せませんでした：\n{error}",
-  "Copying the add-ons...": "アドオンをコピー中..."
+  "Copying the add-ons...": "アドオンをコピー中...",
+  "Delete the {count} saved copies of {program} {version} for good? You will not be able to restore them.": "{program} {version} の保存済みコピー {count} 件を完全に削除しますか？元に戻すことはできません。",
+  "Nothing is deleted: you can put your settings back from this screen.": "何も削除されません。この画面から設定を元に戻せます。"
 }
