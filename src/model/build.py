@@ -76,12 +76,12 @@ def fork_series(fork: str, version: str) -> str:
 def human_size(size) -> str:
     """Convierte bytes a un texto legible (por ejemplo, '359.8 MB')."""
     value = float(size or 0)
-    for unit in ("B", "KB", "MB", "GB", "TB"):
-        if value < 1024 or unit == "TB":
-            if unit == "B":
-                return f"{value:.0f} {unit}"
-            return f"{value:.1f} {unit}"
+    for unit in ("B", "KB", "MB", "GB"):
+        if value < 1024:
+            # Los bytes no tienen decimales: "512 B", no "512.0 B".
+            return f"{value:.0f} {unit}" if unit == "B" else f"{value:.1f} {unit}"
         value /= 1024
+    # Más allá de 1024 GB se queda en TB, por grande que sea.
     return f"{value:.1f} TB"
 
 
@@ -130,11 +130,6 @@ class Build:
     # release de GitHub de UPBGE, por ejemplo). Para Blender se calcula por
     # serie (``api.release_notes_url``).
     notes_url: str = ""
-
-    @property
-    def is_fork(self) -> bool:
-        """True si no es Blender oficial."""
-        return bool(self.fork)
 
     @property
     def fork_name(self) -> str:
@@ -202,11 +197,6 @@ class InstalledBuild:
     def fork_name(self) -> str:
         """Nombre visible del fork ('Blender', 'Bforartists', 'UPBGE')."""
         return fork_label(self.fork)
-
-    @property
-    def can_launch(self) -> bool:
-        """True si encontramos el ejecutable de esta versión."""
-        return self.executable is not None
 
     @property
     def favorite_key(self) -> str:

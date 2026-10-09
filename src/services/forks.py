@@ -73,7 +73,6 @@ BFA_FILE_RES = {
 # macOS publica un .dmg por arquitectura desde Bforartists 4.5 (Intel y
 # Silicon). Sin esta pista, los dos ficheros caerían en la misma versión.
 BFA_MAC_ARM = ("silicon", "arm64", "aarch64")
-BFA_MAC_INTEL = ("intel", "x86_64", "x64")
 
 DAV = "{DAV:}"
 
@@ -307,7 +306,8 @@ def fetch_bforartists(timeout: int = 20) -> list:
         else:
             pending.append((version, entry))
 
-    def _one(item):
+    def _fetch_version(item):
+        """Pide el contenido de una versión; devuelve ``(versión, guardado)``."""
         version, entry = item
         try:
             data = _propfind(BFA_ORIGIN + entry["href"], timeout)
@@ -315,15 +315,15 @@ def fetch_bforartists(timeout: int = 20) -> list:
         except Exception as error:
             log(f"bforartists {version} unavailable: {error}")
             # La versión que falló se queda con lo que tuviera el caché.
-            return version, entry, cached.get(version)
-        return version, entry, {
+            return version, cached.get(version)
+        return version, {
             "modified": entry["modified"],
             "assets": [asdict(build) for build in builds],
         }
 
     if pending:
         with concurrent.futures.ThreadPoolExecutor(max_workers=BFA_WORKERS) as pool:
-            for version, entry, saved in pool.map(_one, pending):
+            for version, saved in pool.map(_fetch_version, pending):
                 if saved is not None:
                     fresh[version] = saved
 
@@ -363,16 +363,6 @@ def _upbge_version(release: dict, asset_name: str) -> str:
     tag = str(release.get("tag_name") or "").lstrip("v")
     match = re.match(r"(\d+\.\d+(?:\.\d+)?)", tag)
     return match.group(1) if match else ""
-
-
-def _upbge_platform(name: str) -> str:
-    """Plataforma de un asset de UPBGE a partir de su nombre."""
-    lower = name.lower()
-    if "windows" in lower:
-        return "windows"
-    if "macos" in lower or "mac" in lower:
-        return "darwin"
-    return "linux"
 
 
 def _upbge_builds_from(release: dict, weekly: bool) -> list:

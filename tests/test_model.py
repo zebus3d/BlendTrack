@@ -41,10 +41,8 @@ class ModelTests(unittest.TestCase):
     def test_fork_name(self):
         build = Build("5.2.0", "bforartists", "stable", "linux", "x86_64",
                       "u", "f.tar.xz", fork="bforartists")
-        self.assertTrue(build.is_fork)
         self.assertEqual(build.fork_name, "Bforartists")
         plain = Build("5.2.0", "v52", "stable", "linux", "x86_64", "u", "f")
-        self.assertFalse(plain.is_fork)
         self.assertEqual(plain.fork_name, "Blender")
 
     def test_is_lts(self):
@@ -59,7 +57,6 @@ class ModelTests(unittest.TestCase):
         entry = InstalledBuild("blender-4.5.13-linux-x64", "/tmp/x", "4.5.13", "/tmp/x/blender")
         self.assertEqual(entry.fork_name, "Blender")
         self.assertEqual(entry.favorite_key, "|4.5.13")
-        self.assertTrue(entry.can_launch)
 
 
 if __name__ == "__main__":

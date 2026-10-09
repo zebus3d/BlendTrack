@@ -243,7 +243,7 @@ class ChannelFilterTests(unittest.TestCase):
         # "Todas" las incluye (es literalmente todas); los canales concretos no.
         self.assertIn("geometry-nodes",
                       [b.branch for b in api.filter_builds(builds, "all")])
-        for channel in ("lts", "stable", "lts_stable", "daily"):
+        for channel in ("lts", "stable", "daily"):
             selected = api.filter_builds(builds, channel)
             self.assertNotIn("geometry-nodes", [build.branch for build in selected])
 
@@ -251,7 +251,6 @@ class ChannelFilterTests(unittest.TestCase):
         builds = self._builds()
         self.assertEqual(len(api.filter_builds(builds, "lts")), 2)
         self.assertEqual(len(api.filter_builds(builds, "stable")), 0)
-        self.assertEqual(len(api.filter_builds(builds, "lts_stable")), 2)
         self.assertEqual(len(api.filter_builds(builds, "daily")), 1)
         # "Todas" enseña el catálogo entero, experimentales incluidas.
         self.assertEqual(len(api.filter_builds(builds, "all")), 4)
@@ -279,7 +278,7 @@ class ChannelFilterTests(unittest.TestCase):
             {b.fork for b in api.filter_builds(builds, "all")},
             {"", "bforartists", "upbge"})
         # Los canales concretos de Blender no mezclan forks: son otros programas.
-        for channel in ("lts", "stable", "daily", "lts_stable"):
+        for channel in ("lts", "stable", "daily"):
             selected = api.filter_builds(builds, channel)
             self.assertTrue(all(not b.fork for b in selected), channel)
         # El de experimentales tampoco se traga las alfa de UPBGE.
@@ -337,13 +336,14 @@ class InstalledTests(unittest.TestCase):
             folder.mkdir()
             (folder / "blender").write_text("#!/bin/sh\n")
             (root / "not-a-build").mkdir()
-            results = installed.scan(root, "linux")
+            results = installed.scan_folders([root], "linux")
             self.assertEqual(len(results), 1)
             self.assertEqual(results[0].version, "4.5.13")
-            self.assertTrue(results[0].can_launch)
+            self.assertIsNotNone(results[0].executable)
 
     def test_scan_missing_folder(self):
-        self.assertEqual(installed.scan("/nonexistent/path/xyz", "linux"), [])
+        self.assertEqual(
+            installed.scan_folders(["/nonexistent/path/xyz"], "linux"), [])
 
     def test_scan_ignora_carpetas_sin_permiso(self):
         # Al apuntar al home del usuario aparece ~/.gvfs (montaje FUSE): en
@@ -370,7 +370,7 @@ class InstalledTests(unittest.TestCase):
 
             with mock.patch.object(Path, "is_dir", is_dir), \
                     mock.patch.object(Path, "is_file", is_file):
-                results = installed.scan(root, "linux")
+                results = installed.scan_folders([root], "linux")
             # La carpeta ilegible se ignora; la build válida se encuentra igual.
             self.assertEqual([entry.version for entry in results], ["5.2.1"])
 
@@ -404,7 +404,7 @@ class InstalledTests(unittest.TestCase):
             (folder / "blender").write_text("bin")
             installed.write_marker(
                 folder, make_build("5.2.1", "stable", "v52", "f.tar.xz"))
-            results = installed.scan(Path(tmp), "linux")
+            results = installed.scan_folders([Path(tmp)], "linux")
             self.assertEqual([entry.version for entry in results], ["5.2.1"])
 
     def test_scan_encuentra_bforartists_con_su_ejecutable(self):
@@ -418,11 +418,11 @@ class InstalledTests(unittest.TestCase):
             folder = root / "Bforartists-5.2.0-Linux"
             folder.mkdir()
             (folder / "bforartists").write_text("#!/bin/sh\n")
-            results = installed.scan(root, "linux")
+            results = installed.scan_folders([root], "linux")
             self.assertEqual(len(results), 1)
             self.assertEqual(results[0].version, "5.2.0")
             self.assertEqual(results[0].fork, "bforartists")
-            self.assertTrue(results[0].can_launch)
+            self.assertIsNotNone(results[0].executable)
 
     def test_scan_encuentra_upbge(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -430,7 +430,7 @@ class InstalledTests(unittest.TestCase):
             folder = root / "upbge-0.53-alpha-linux-x86_64-2026-09-20"
             folder.mkdir()
             (folder / "blender").write_text("#!/bin/sh\n")
-            results = installed.scan(root, "linux")
+            results = installed.scan_folders([root], "linux")
             self.assertEqual([(e.version, e.fork) for e in results],
                              [("0.53", "upbge")])
 
@@ -470,7 +470,7 @@ class InstalledTests(unittest.TestCase):
                                         branch="v52", build_hash="abc123")
             self.assertEqual(new_path.name, "Mi Blender")
             self.assertFalse(folder.exists())
-            results = installed.scan(Path(tmp), "linux")
+            results = installed.scan_folders([Path(tmp)], "linux")
             self.assertEqual([entry.version for entry in results], ["5.2.1"])
             self.assertEqual(results[0].build_hash, "abc123")
 
@@ -511,11 +511,6 @@ class InstalledTests(unittest.TestCase):
                                         branch="main", build_hash="otro")
             self.assertEqual(installed.read_marker(new_path)["hash"], "original")
 
-    def test_is_version_installed(self):
-        entry = installed.InstalledBuild("b", Path("/tmp/b"), "5.2.0")
-        self.assertTrue(installed.is_version_installed([entry], "5.2.0"))
-        self.assertFalse(installed.is_version_installed([entry], "5.2.1"))
-
     def test_executable_search_is_depth_limited(self):
         # El ejecutable enterrado a tres niveles no cuenta: si no ponemos
         # tope, un escaneo recorre el árbol entero de Blender.
@@ -523,9 +518,9 @@ class InstalledTests(unittest.TestCase):
             deep = Path(tmp) / "blender-5.2.0" / "a" / "b" / "c"
             deep.mkdir(parents=True)
             (deep / "blender").write_text("bin")
-            results = installed.scan(Path(tmp), "linux")
+            results = installed.scan_folders([Path(tmp)], "linux")
             self.assertEqual(len(results), 1)
-            self.assertFalse(results[0].can_launch)
+            self.assertIsNone(results[0].executable)
 
 
 class InstalledFilterTests(unittest.TestCase):
@@ -615,7 +610,7 @@ class FindInstalledTests(unittest.TestCase):
             (folder / "blender").write_text("bin")
             build = make_build("5.3.0", "alpha", "main", "f.tar.xz", build_hash="abc123abc123")
             installed.write_marker(folder, build)
-            scanned = installed.scan(Path(tmp), "linux")
+            scanned = installed.scan_folders([Path(tmp)], "linux")
             self.assertEqual(scanned[0].build_hash, "abc123abc123")
             self.assertIsNone(installed.find_installed(
                 scanned, make_build("5.3.0", "alpha", "main", "f.tar.xz", build_hash="otro")))
@@ -787,14 +782,16 @@ class SettingsMigrationTests(unittest.TestCase):
                           channels.TYPE_EXPERIMENTAL,
                           channels.TYPE_BFORARTISTS, channels.TYPE_UPBGE])
         self.assertEqual(loaded.folders[1].types, [channels.TYPE_LTS])
-        self.assertEqual(loaded.destination_for_type(channels.TYPE_LTS),
-                         "/tmp/ssd")
+        self.assertEqual(
+            channels.resolve_destination(loaded.folders, channels.TYPE_LTS),
+            "/tmp/ssd")
 
     def test_lts_con_el_interruptor_apagado_solo_se_escanea(self):
         loaded = self._viejo(lts_folder="/tmp/ssd", separate_lts=False)
         self.assertEqual(loaded.folders[1].types, [])
-        self.assertEqual(loaded.destination_for_type(channels.TYPE_LTS),
-                         "/tmp/datos")
+        self.assertEqual(
+            channels.resolve_destination(loaded.folders, channels.TYPE_LTS),
+            "/tmp/datos")
         # Pero se sigue mirando: las LTS ya instaladas ahí no desaparecen.
         self.assertIn("/tmp/ssd", loaded.library_roots())
 
@@ -807,8 +804,9 @@ class SettingsMigrationTests(unittest.TestCase):
         loaded = self._viejo(lts_folder="/tmp/datos", separate_lts=True)
         self.assertEqual(len(loaded.folders), 1)
         self.assertEqual(loaded.folders[0].types, list(channels.BUILD_TYPES))
-        self.assertEqual(loaded.destination_for_type(channels.TYPE_LTS),
-                         "/tmp/datos")
+        self.assertEqual(
+            channels.resolve_destination(loaded.folders, channels.TYPE_LTS),
+            "/tmp/datos")
 
     def test_carpeta_extra_encendida_entra_con_el_candado_cerrado(self):
         loaded = self._viejo(extra_folder="/tmp/viejos", use_extra_folder=True)

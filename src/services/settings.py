@@ -588,10 +588,6 @@ class Settings:
         return channels.resolve_destination(self.folders,
                                             channels.type_of_build(build))
 
-    def destination_for_type(self, build_type: str) -> str:
-        """Como ``destination_for`` pero partiendo del tipo ya calculado."""
-        return channels.resolve_destination(self.folders, build_type)
-
     def install_folders(self) -> list[Folder]:
         """Carpetas donde la aplicación instala algo (las que reciben tipos).
 

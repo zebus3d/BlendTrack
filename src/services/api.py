@@ -333,11 +333,6 @@ def filter_builds(builds, channel: str, search: str = "", favorites=()):
                        channels.TYPE_DAILY):
             selected = [build for build in selected
                         if channels.type_of_build(build) == channel]
-        elif channel == "lts_stable":
-            # LTS y estables a la vez (todo lo estable).
-            selected = [build for build in selected
-                        if channels.type_of_build(build) in (
-                            channels.TYPE_LTS, channels.TYPE_STABLE)]
     text = (search or "").strip().lower()
     if text:
         selected = [

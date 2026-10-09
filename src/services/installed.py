@@ -16,7 +16,7 @@ from collections import namedtuple
 from pathlib import Path
 
 from model.build import (FORK_BFORARTISTS, FORK_BLENDER, FORK_UPBGE,
-                         InstalledBuild, fork_label, minor_of, version_tuple)
+                         InstalledBuild, minor_of, version_tuple)
 from services import channels
 
 # Actualización disponible para una versión instalada.
@@ -314,15 +314,6 @@ def scan_folders(folders, platform: str):
     return results
 
 
-def scan(dest_folder, platform: str):
-    """Devuelve las versiones instaladas en una sola carpeta.
-
-    Se mantiene por comodidad (y porque es lo que usan los tests); para varias
-    carpetas está ``scan_folders``.
-    """
-    return scan_folders([dest_folder], platform)
-
-
 def find_installed(installed, build):
     """Devuelve la instalación que corresponde a ``build``, o None.
 
@@ -347,12 +338,6 @@ def find_installed(installed, build):
                 continue
         return entry
     return None
-
-
-def is_version_installed(installed, version: str) -> bool:
-    """Comprueba si una versión concreta ya está instalada."""
-    target = version_tuple(version)
-    return any(version_tuple(build.version) == target for build in installed)
 
 
 def is_experimental(entry) -> bool:
@@ -403,8 +388,6 @@ def filter_installed(entries, channel: str, search: str = "", favorites=()):
                            channels.TYPE_DAILY):
                 selected = [entry for entry in selected
                             if channels.type_of_installed(entry) == channel]
-    # "lts_stable" muestra las que no son experimentales ni de un fork (los
-    # forks tienen su propia pestaña).
     text = (search or "").strip().lower()
     if text:
         selected = [

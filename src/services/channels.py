@@ -18,8 +18,7 @@ import os
 import re
 from pathlib import Path
 
-from model.build import (FORK_BFORARTISTS, FORK_UPBGE, LTS_MINORS,
-                         fork_series, minor_of)
+from model.build import FORK_BFORARTISTS, FORK_UPBGE, LTS_MINORS, minor_of
 
 # Los tipos que puede recibir una carpeta. Son los canales de Blender menos los
 # dos que no describen una compilación: "all" (no filtra) y "favorites" (es
@@ -190,8 +189,3 @@ def active_types(forks=()) -> tuple:
                  if build_type not in FORK_TYPES.values()
                  or build_type in {FORK_TYPES[f] for f in enabled
                                    if f in FORK_TYPES})
-
-
-def config_series(fork: str, version: str) -> str:
-    """Serie de la carpeta de configuración de un fork (ver ``fork_series``)."""
-    return fork_series(fork, version)
