@@ -30,15 +30,14 @@ from PySide6.QtWidgets import (QComboBox, QFrame, QHBoxLayout, QLabel,
 from i18n import tr
 from model.build import fork_label
 from services import blender_config as bc
-from services import blender_runner
 from ui import icons
 from ui import theme as t
 from ui.fonts import icon_font
 from ui.widgets.cards import settings_card
-from ui.widgets import dialogs
 from ui.widgets.layouts import list_scroll
 from ui.widgets.migrate.addons_tab import AddonsTabMixin
 from ui.widgets.migrate.common import (LatestJob, _entry_info, _entry_key,
+                                       blender_is_running, blocked_by_running,
                                        choice_label, newest_per_series)
 from ui.widgets.migrate.factory_tab import FactoryTabMixin
 from ui.widgets.migrate.prefs_tab import PrefsTabMixin
@@ -478,10 +477,7 @@ class MigrateView(AddonsTabMixin, PrefsTabMixin, FactoryTabMixin,
         """
         warning = warning if warning is not None else self.warning
         executable, version = _entry_info(entry)
-        try:
-            running = blender_runner.is_running(executable)
-        except Exception:  # noqa: BLE001 - el aviso no puede tumbar la vista
-            running = False
+        running = blender_is_running(executable)
         self._put_warning(warning,
                           self._running_message(version) if running else "")
 
@@ -490,25 +486,9 @@ class MigrateView(AddonsTabMixin, PrefsTabMixin, FactoryTabMixin,
         return tr("Close Blender {version} before migrating: it would "
                   "overwrite the changes when it quits.", version=version)
 
-    def _blocked_by_running(self, entry=None) -> bool:
-        """True si hay **cualquier** Blender abierto (y avisa); bloquea la acción.
-
-        No se comprueba solo el destino: dos builds de la misma serie (5.2.0 y
-        5.2.2) comparten carpeta de configuración, así que un Blender abierto
-        que no es el elegido también pisaría el cambio al cerrarse. Como no hay
-        forma fiable de saber qué serie tiene abierta cada proceso (en Windows
-        ni se detectan), se cierra todo.
-        """
-        try:
-            running = blender_runner.is_running(None)
-        except Exception:  # noqa: BLE001 - el chequeo no puede tumbar la acción
-            running = False
-        if not running:
-            return False
-        dialogs.show_info(self, tr("Blender is running"), tr(
-            "Close every Blender window before continuing: Blender saves its "
-            "preferences when it quits and would overwrite the changes."))
-        return True
+    def _blocked_by_running(self) -> bool:
+        """True si hay cualquier Blender abierto (ver ``blocked_by_running``)."""
+        return blocked_by_running(self)
 
 
 

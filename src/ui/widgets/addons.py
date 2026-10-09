@@ -27,18 +27,18 @@ from PySide6.QtWidgets import (
 
 from i18n import tr
 from services import addons as addons_service
-from services import blender_runner, opener
+from services import opener
 from services.downloader import log as download_log
 from ui import icons
 from ui.fonts import icon_font
 from ui.widgets.buttons import CardButton, IconFlatButton, SwitchPill
 from ui.widgets.cards import settings_card
-from ui.widgets.dialogs import confirm, show_error, show_info
+from ui.widgets.dialogs import confirm, show_error
 from ui.widgets.labels import ElidedLabel
 from ui.widgets.layouts import clear_layout, list_scroll
 from ui.widgets.menus import card_menu
-from ui.widgets.migrate.common import (_entry_key, choice_label,
-                                       newest_per_series)
+from ui.widgets.migrate.common import (_entry_key, blocked_by_running,
+                                       choice_label, newest_per_series)
 
 # Filtros de tipo de la barra: (clave, etiqueta).
 _TYPE_FILTERS = (
@@ -306,13 +306,20 @@ class AddonsView(QWidget):
         if self.entry is None or payload.get("version") != self.entry.version:
             return
         self._set_enabled_controls(True)
-        if payload.get("error"):
+        error = payload.get("error")
+        if error:
+            # El motivo real va al registro y al tooltip: "no se pudieron
+            # leer" a secas no dice si Blender no arranca, tardó o qué.
+            download_log(f"addons: could not read {payload.get('version')}: "
+                         f"{error}")
             self.addons = []
             self.status.setText(tr("Could not read the add-ons."))
+            self.status.setToolTip(str(error))
             self._fill_rows()
             return
         self.addons = list(payload.get("addons") or [])
         self.status.setText(tr("{count} add-ons.", count=len(self.addons)))
+        self.status.setToolTip("")
         self._fill_rows()
 
     def _fill_rows(self) -> None:
@@ -337,20 +344,18 @@ class AddonsView(QWidget):
 
     # ------------------------------------------------------------- acciones
     def _blocked(self) -> bool:
-        """True si hay cualquier Blender abierto (y avisa)."""
-        try:
-            running = blender_runner.is_running(None)
-        except Exception:  # noqa: BLE001
-            running = False
-        if not running:
-            return False
-        show_info(self, tr("Blender is running"), tr(
-            "Close every Blender window before continuing: Blender saves its "
-            "preferences when it quits and would overwrite the changes."))
-        return True
+        """True si hay cualquier Blender abierto (ver ``blocked_by_running``)."""
+        return blocked_by_running(self)
 
     def _toggle(self, state, enabled: bool) -> None:
+        """El usuario movió el interruptor de un addon: aplicarlo en un hilo.
+
+        Si no se puede (otra operación en marcha, sin versión, Blender
+        abierto), el interruptor **vuelve** a donde estaba: el clic ya lo movió
+        en pantalla, y dejarlo así diría que el addon cambió cuando no.
+        """
         if self._acting or self.entry is None:
+            self._refresh_row(state, not enabled)
             return
         if self._blocked():
             self._refresh_row(state, not enabled)

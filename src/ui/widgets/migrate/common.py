@@ -14,8 +14,11 @@ from model.build import fork_label, fork_series, version_tuple
 from services import blender_config as bc
 from services import blender_addons as baddons
 from services import blender_prefs as bprefs
+from services import blender_runner
+from services.downloader import log as download_log
 from ui import icons
 from ui.fonts import glyph_icon
+from ui.widgets import dialogs
 from ui.widgets.buttons import CardButton
 from ui.widgets.layouts import list_scroll
 
@@ -158,6 +161,41 @@ def choice_label(entry) -> str:
     version = getattr(entry, "version", "") or getattr(entry, "name", "")
     fork = getattr(entry, "fork", "") or ""
     return f"{fork_label(fork)} {version}" if fork else version
+
+
+def blender_is_running(executable=None) -> bool:
+    """``blender_runner.is_running`` sin que un fallo tumbe la interfaz.
+
+    Si no se puede averiguar (``/proc`` ilegible, ``pgrep`` que falla) se
+    responde **False** y se deja constancia en el registro: bloquear para
+    siempre una acción porque la detección falló sería peor que dejarla
+    pasar, y en Windows la detección ni existe (devuelve siempre False). Lo
+    que no puede pasar es que el fallo sea invisible: sin la línea del log,
+    "no me avisó de que Blender estaba abierto" no tendría explicación.
+    """
+    try:
+        return blender_runner.is_running(executable)
+    except Exception as error:  # noqa: BLE001 - ver el docstring
+        download_log(f"could not tell whether Blender is running: {error}")
+        return False
+
+
+def blocked_by_running(parent) -> bool:
+    """True si hay **cualquier** Blender abierto (y lo avisa); bloquea la acción.
+
+    Es la comprobación de todo lo que escribe en la configuración de Blender
+    (Migración y el gestor de Add-ons). No se mira solo la versión de destino:
+    dos builds de la misma serie (5.2.0 y 5.2.2) comparten carpeta, así que un
+    Blender abierto que no es el elegido también pisaría el cambio al cerrarse
+    (Blender guarda sus preferencias al salir). Como no hay forma fiable de
+    saber qué serie tiene abierta cada proceso, se pide cerrarlos todos.
+    """
+    if not blender_is_running(None):
+        return False
+    dialogs.show_info(parent, tr("Blender is running"), tr(
+        "Close every Blender window before continuing: Blender saves its "
+        "preferences when it quits and would overwrite the changes."))
+    return True
 
 
 def _entry_key(entry) -> tuple:

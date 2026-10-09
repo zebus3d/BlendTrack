@@ -681,7 +681,7 @@ class FactoryTabMixin:
         config = self._factory_config()
         if config is None:
             return
-        if self._blocked_by_running(entry):
+        if self._blocked_by_running():
             return
         _, version = _entry_info(entry)
         if not dialogs.confirm(
@@ -726,7 +726,7 @@ class FactoryTabMixin:
         target = Path(snapshot) if snapshot is not None else snapshots[0]
         if target not in snapshots:
             return
-        if self._blocked_by_running(entry):
+        if self._blocked_by_running():
             return
         _, version = _entry_info(entry)
         date = bsnap.snapshot_date(target) or target.name

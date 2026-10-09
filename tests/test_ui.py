@@ -4665,9 +4665,9 @@ class AddonsViewTests(SettingsIsolated, unittest.TestCase):
         from ui.widgets.addons import AddonsView
 
         view = AddonsView()
-        with _mock.patch("ui.widgets.addons.blender_runner.is_running",
+        with _mock.patch("services.blender_runner.is_running",
                          return_value=True), \
-                _mock.patch("ui.widgets.addons.show_info") as info:
+                _mock.patch("ui.widgets.dialogs.show_info") as info:
             self.assertTrue(view._blocked())
         self.assertTrue(info.called)
 
@@ -5261,6 +5261,68 @@ class ProgressDialogTextTests(unittest.TestCase):
                          "Moving blender-5.2 (1 of 2)")
         self.assertFalse(dialog.body_label.isHidden())
         dialog.deleteLater()
+
+
+
+@unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
+class AddonsViewStateTests(SettingsIsolated, unittest.TestCase):
+    """El gestor de addons no miente sobre el estado ni se calla los fallos."""
+
+    app = None
+    _state = AddonsViewTests._state
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def setUp(self):
+        super().setUp()
+        import i18n
+
+        self.addCleanup(i18n.set_language, i18n.get_language())
+        i18n.set_language("en")
+
+    def _view_with_row(self):
+        from ui.widgets.addons import AddonsView
+
+        view = AddonsView()
+        view.entry = _fake_installed("5.2.2")
+        view.addons = [self._state(enabled=False)]
+        view._fill_rows()
+        return view, view._rows[0]
+
+    def test_el_interruptor_vuelve_si_hay_otra_accion_en_marcha(self):
+        """Con otra operación en curso el clic no hace nada: el interruptor
+        tampoco puede quedarse encendido como si lo hubiera hecho."""
+        view, row = self._view_with_row()
+        view._acting = True
+        with mock.patch("ui.widgets.addons.threading") as threads:
+            row.switch.setChecked(True)
+        threads.Thread.assert_not_called()
+        self.assertFalse(row.switch.isChecked())
+        self.assertFalse(row.state.enabled)
+
+    def test_un_fallo_al_leer_dice_el_motivo_y_lo_registra(self):
+        view, _ = self._view_with_row()
+        with mock.patch("ui.widgets.addons.download_log") as log:
+            view._on_addons_loaded({"version": "5.2.2",
+                                    "error": "Blender timed out"})
+        self.assertIn("Could not read", view.status.text())
+        self.assertIn("Blender timed out", view.status.toolTip())
+        self.assertTrue(any("Blender timed out" in str(call)
+                            for call in log.call_args_list))
+
+    def test_si_no_se_sabe_si_blender_esta_abierto_se_registra(self):
+        """Un fallo al detectar Blender no bloquea, pero deja rastro."""
+        from ui.widgets.migrate import common
+
+        with mock.patch("services.blender_runner.is_running",
+                        side_effect=OSError("no /proc")), \
+                mock.patch.object(common, "download_log") as log, \
+                mock.patch("ui.widgets.dialogs.show_info") as info:
+            self.assertFalse(common.blocked_by_running(None))
+        info.assert_not_called()
+        self.assertIn("no /proc", str(log.call_args))
 
 
 if __name__ == "__main__":
