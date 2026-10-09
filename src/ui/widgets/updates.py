@@ -207,6 +207,9 @@ class UpdateFlowMixin:
 
     def _restart_from_source(self) -> None:
         dialog = getattr(self, "_source_dialog", None)
+        # Lo mismo que en ``_apply_update``: el proceso nuevo lee los ajustes
+        # antes de que este termine de cerrarse.
+        self.save_window_state()
         if not updater.relaunch_source():
             if dialog is not None:
                 dialog.body_label.setText(tr("Update downloaded. Restart the app."))
@@ -300,6 +303,10 @@ class UpdateFlowMixin:
 
     def _apply_update(self, path: str) -> None:
         self._set_downloading(False)
+        # ``apply`` arranca ya la versión nueva, y esta no se cierra hasta un
+        # segundo después: el tamaño de la ventana tiene que estar en disco
+        # antes, o la nueva abre con uno viejo (ver ``save_window_state``).
+        self.save_window_state()
 
         def worker():
             quit_app = updater.apply(path)

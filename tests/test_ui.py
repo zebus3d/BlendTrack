@@ -672,6 +672,54 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         self.assertEqual((saved.window_width, saved.window_height),
                          (1234, 777))
 
+    def test_el_tamano_se_guarda_antes_de_relanzar_la_actualizacion(self):
+        """El proceso nuevo tiene que leer el tamaño de ahora, no uno viejo.
+
+        ``updater.apply`` arranca la versión nueva y esta ventana no se cierra
+        hasta un segundo después. Si el tamaño esperaba al ``closeEvent``, la
+        nueva leía ``settings.json`` antes y abría con el de la última vez que
+        se cerró la app de verdad (y, al cerrarse, lo escribía encima).
+        """
+        from services.settings import Settings
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.show()
+        window.resize(1111, 666)
+        self.app.processEvents()
+        en_disco = {}
+
+        def apply(path):
+            saved = Settings.load()
+            en_disco["size"] = (saved.window_width, saved.window_height)
+            return False
+
+        with mock.patch.object(updates.updater, "apply", side_effect=apply):
+            window._apply_update("/tmp/BlenderManager-x86_64.AppImage")
+            _wait_until(lambda: "size" in en_disco)
+        self.assertEqual(en_disco["size"], (1111, 666))
+
+    def test_el_tamano_se_guarda_antes_de_reiniciar_el_fuente(self):
+        """Lo mismo con el ``git pull``: el relanzado lee los ajustes en el acto."""
+        from services.settings import Settings
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.show()
+        window.resize(1111, 666)
+        self.app.processEvents()
+        en_disco = {}
+
+        def relaunch():
+            saved = Settings.load()
+            en_disco["size"] = (saved.window_width, saved.window_height)
+            return False
+
+        with mock.patch.object(updates.updater, "relaunch_source",
+                               side_effect=relaunch):
+            window._restart_from_source()
+        self.assertEqual(en_disco["size"], (1111, 666))
+
     def test_guarda_la_posicion_de_la_ventana(self):
         """Al cerrar se guarda también dónde estaba, para reabrir en el mismo
         monitor (con dos monitores y autoarranque, antes siempre se centraba)."""

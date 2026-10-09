@@ -730,15 +730,37 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
     def closeEvent(self, event):
         """Vuelca el zoom pendiente y la geometría de la ventana.
 
-        El zoom va con retardo, así que si se cierra mientras el slider se mueve
-        el guardado aún no ha corrido. El tamaño y la **posición** se guardan
-        aquí (y no en cada ``resizeEvent``/arrastre) para no escribir el JSON a
-        cada tirón; la próxima vez ``main.py`` arranca con estas medidas y en el
-        mismo monitor.
-
         Si el usuario activó "cerrar a la bandeja", la X **no** cierra: se
         ignora el evento y la ventana se oculta (los ajustes ya se han guardado
-        arriba). Solo se hace si la bandeja existe; si no, cerrar cierra.
+        antes, en ``save_window_state``). Solo se hace si la bandeja existe; si
+        no, cerrar cierra.
+        """
+        self.save_window_state()
+        if (self.close_to_tray and not self._force_quit
+                and TrayIcon.available()):
+            event.ignore()
+            self._hide_to_tray()
+            return
+        # Cierra de verdad: el icono ya no tiene a qué volver, así que se
+        # retira. Sin esto quedaría un fantasma en la bandeja tras cerrar.
+        if self._tray is not None:
+            self._tray.hide()
+        super().closeEvent(event)
+
+    def save_window_state(self) -> None:
+        """Guarda el zoom pendiente, el tamaño y la posición de la ventana.
+
+        El zoom va con retardo, así que si se cierra mientras el slider se mueve
+        el guardado aún no ha corrido. El tamaño y la **posición** se guardan
+        al cerrar (y no en cada ``resizeEvent``/arrastre) para no escribir el
+        JSON a cada tirón; la próxima vez ``main.py`` arranca con estas medidas
+        y en el mismo monitor.
+
+        Lo llama también el auto-update **antes** de relanzar: el proceso nuevo
+        arranca mientras este sigue vivo y lee ``settings.json`` enseguida, así
+        que si el tamaño esperaba al ``closeEvent`` (un segundo después) el
+        nuevo abría con el de la última vez que se cerró la app de verdad y, al
+        cerrarse, lo escribía encima del bueno.
         """
         self._zoom_settle.stop()
         self._zoom_tick.stop()
@@ -761,16 +783,6 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
             changed = True
         if changed:
             self.settings.save()
-        if (self.close_to_tray and not self._force_quit
-                and TrayIcon.available()):
-            event.ignore()
-            self._hide_to_tray()
-            return
-        # Cierra de verdad: el icono ya no tiene a qué volver, así que se
-        # retira. Sin esto quedaría un fantasma en la bandeja tras cerrar.
-        if self._tray is not None:
-            self._tray.hide()
-        super().closeEvent(event)
 
     def _normal_geometry(self):
         """Geometría con la que reabrir: la normal, no la de maximizada.
