@@ -4,11 +4,18 @@ Nunca se arranca Blender: se mockea ``blender_runner._run`` y se comprueba que
 se interpretan bien sus salidas y qué entorno se le pasa.
 """
 
+import contextlib
+import io
 import json
+import os
+import tempfile
+import types
 import unittest
+from pathlib import Path
 from unittest import mock
 
 from services import blender_style as bs
+from tests import fake_bpy
 
 
 def _completed(payload, code=0):
@@ -39,6 +46,49 @@ class ExportStyleTest(unittest.TestCase):
         self.assertEqual(result["theme"], "")
         self.assertTrue(result["errors"])
 
+
+
+class ExportScriptExecTest(unittest.TestCase):
+    """El guion de exportación, ejecutado con un ``bpy`` de mentira."""
+
+    def test_si_la_copia_falla_no_deja_el_preset_temporal(self):
+        """El preset temporal se quita del origen aunque la copia reviente."""
+        with tempfile.TemporaryDirectory() as tmp:
+            scripts = Path(tmp) / "scripts"
+            presets = scripts / "presets" / "interface_theme"
+            out_dir = Path(tmp) / "out"
+            out_dir.mkdir()
+
+            def preset_add(name):
+                presets.mkdir(parents=True, exist_ok=True)
+                (presets / f"{name}.xml").write_text("<theme/>")
+
+            def preset_remove(name):
+                (presets / f"{name}.xml").unlink()
+
+            bpy = types.SimpleNamespace(
+                utils=types.SimpleNamespace(user_resource=lambda kind: str(scripts)),
+                ops=types.SimpleNamespace(
+                    wm=types.SimpleNamespace(
+                        interface_theme_preset_add=preset_add,
+                        interface_theme_preset_remove=preset_remove),
+                    preferences=types.SimpleNamespace(
+                        keyconfig_export=lambda filepath: None)))
+            env = {"BLENDERMANAGER_STYLE_DIR": str(out_dir),
+                   "BLENDERMANAGER_STYLE_TMP": bs._TMP_THEME}
+            restore = fake_bpy.install(bpy)
+            out = io.StringIO()
+            try:
+                with mock.patch.dict(os.environ, env), \
+                        mock.patch("shutil.copyfile",
+                                   side_effect=OSError("disco lleno")), \
+                        contextlib.redirect_stdout(out):
+                    exec(bs._EXPORT_SCRIPT, {"__name__": "__main__"})  # noqa: S102
+            finally:
+                restore()
+            self.assertEqual(list(presets.iterdir()), [])
+            self.assertIn("BLENDERMANAGER_RESULT=", out.getvalue())
+            self.assertIn("disco lleno", out.getvalue())
 
 class ImportStyleTest(unittest.TestCase):
     def test_instala_y_parsea(self):

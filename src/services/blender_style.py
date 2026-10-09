@@ -46,17 +46,25 @@ theme_path = ""
 keymap_path = ""
 errors = []
 
-# Tema: se anade el tema actual como preset (escribe un .xml en la carpeta de
-# presets del usuario), se copia fuera y se quita el temporal.
+# Tema: se añade el tema actual como preset (escribe un .xml en la carpeta de
+# presets del usuario), se copia fuera y se quita el temporal. El ``finally``
+# es lo que garantiza que no quede rastro en la versión de origen: si la copia
+# fallaba (disco lleno, carpeta sin permiso), el preset temporal se quedaba
+# para siempre en la lista de temas del usuario.
 try:
     bpy.ops.wm.interface_theme_preset_add(name=tmp_name)
-    root = bpy.utils.user_resource("SCRIPTS")
-    for base, _dirs, files in os.walk(root):
-        for name in files:
-            if name == tmp_name + ".xml":
-                theme_path = os.path.join(out_dir, "theme.xml")
-                shutil.copyfile(os.path.join(base, name), theme_path)
-    bpy.ops.wm.interface_theme_preset_remove(name=tmp_name)
+    try:
+        root = bpy.utils.user_resource("SCRIPTS")
+        for base, _dirs, files in os.walk(root):
+            for name in files:
+                if name == tmp_name + ".xml":
+                    # La ruta solo se anuncia cuando la copia ha terminado: una
+                    # copia cortada no puede pasar por un tema exportado.
+                    copied = os.path.join(out_dir, "theme.xml")
+                    shutil.copyfile(os.path.join(base, name), copied)
+                    theme_path = copied
+    finally:
+        bpy.ops.wm.interface_theme_preset_remove(name=tmp_name)
 except Exception as exc:
     errors.append("theme: " + str(exc))
 
