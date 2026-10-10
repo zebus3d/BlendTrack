@@ -573,6 +573,9 @@ def build_qss() -> str:
     }}
     QComboBox:hover {{ background-color: {t.ACCENT_DARK}; color: {t.TEXT_SEL}; }}
     QComboBox::drop-down {{ border: none; width: 18px; }}
+    /* La flecha del desplegable la pinta ``ChevronCombo.paintEvent`` con el
+       glifo de la fuente de iconos (el truco del triángulo con bordes sale un
+       bloque): Qt deja de dibujarla en cuanto ``::drop-down`` va con QSS. */
     QComboBox QAbstractItemView {{
         background-color: {t.SURFACE};
         color: {t.TEXT};

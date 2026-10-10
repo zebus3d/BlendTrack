@@ -15,11 +15,12 @@ control que lo tenía) y lo dejaba en "Local" o en un interruptor de Ajustes.
 
 from PySide6.QtCore import QEvent, QRectF, Qt
 from PySide6.QtGui import QColor, QPainter, QPen
-from PySide6.QtWidgets import (QCheckBox, QPushButton, QStyle,
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QPushButton, QStyle,
                                QStyleOptionButton, QStylePainter, QToolTip)
 
 from ui import icons
 from ui import theme as t
+from ui.fonts import icon_font
 from ui.widgets import motion
 from ui.widgets.layouts import repolish
 
@@ -429,3 +430,29 @@ class CheckPill(_FocusRing, QCheckBox):
         hint = super().sizeHint()
         hint.setWidth(hint.width() + self.GAP)
         return hint
+
+
+class ChevronCombo(QComboBox):
+    """Desplegable con una flecha hacia abajo pintada a la derecha.
+
+    Qt **deja de dibujar la flecha** del ``QComboBox`` en cuanto el
+    ``::drop-down`` va estilado por QSS (y el truco del triángulo con bordes
+    sale un bloque relleno, medido), así que el control parecía un campo de
+    texto y no se sabía que se podía desplegar. Se pinta el glifo de chevron con
+    la fuente de iconos: nítido en HiDPI y del color del tema.
+    """
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        painter = QPainter(self)
+        try:
+            painter.setRenderHint(QPainter.Antialiasing)
+            painter.setFont(icon_font(12))
+            painter.setPen(QColor(t.MUTED))
+            # Un poco a la izquierda del borde: dentro del hueco del
+            # desplegable (``::drop-down``, 18 px) y sin pegarse al filo.
+            painter.drawText(self.rect().adjusted(0, 0, -7, 0),
+                             Qt.AlignRight | Qt.AlignVCenter,
+                             icons.CHEVRON_DOWN)
+        finally:
+            painter.end()

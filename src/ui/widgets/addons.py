@@ -14,7 +14,6 @@ from pathlib import Path
 
 from PySide6.QtCore import QPoint, Qt, Signal
 from PySide6.QtWidgets import (
-    QComboBox,
     QFileDialog,
     QFrame,
     QHBoxLayout,
@@ -32,7 +31,7 @@ from services import opener
 from services.downloader import log as download_log
 from ui import icons
 from ui.fonts import icon_font
-from ui.widgets.buttons import CardButton, IconFlatButton, SwitchPill
+from ui.widgets.buttons import CardButton, ChevronCombo, IconFlatButton, SwitchPill
 from ui.widgets.cards import settings_card
 from ui.widgets.dialogs import confirm, show_error
 from ui.widgets.labels import ElidedLabel
@@ -171,7 +170,7 @@ class AddonsView(QWidget):
         header, header_lay = settings_card()
         row = QHBoxLayout()
         row.addWidget(QLabel(tr("Version")))
-        self.version_combo = QComboBox()
+        self.version_combo = ChevronCombo()
         self.version_combo.setSizePolicy(QSizePolicy.Expanding,
                                          QSizePolicy.Fixed)
         self.version_combo.setMinimumWidth(150)
@@ -196,7 +195,7 @@ class AddonsView(QWidget):
         self.search.setToolTip(tr("Filter the list by name or id."))
         self.search.textChanged.connect(lambda _: self._fill_rows())
         toolbar.addWidget(self.search, 1)
-        self.type_combo = QComboBox()
+        self.type_combo = ChevronCombo()
         for key, label in _TYPE_FILTERS:
             self.type_combo.addItem(tr(label), key)
         self.type_combo.setToolTip(tr(

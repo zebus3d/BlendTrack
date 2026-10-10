@@ -207,7 +207,10 @@ def _console_button(checked: bool, entry, signal) -> CardButton:
     button.setChecked(checked)
     _icon_only(button)
     button.setFont(icon_font())
-    button.setFixedWidth(46)
+    # Cuadrada (30×28): con el ancho anterior (46) el glifo quedaba estirado a lo
+    # ancho y parecía una raya. En la rejilla el ancho lo fija el zoom, así que
+    # esto solo manda en la lista.
+    button.setFixedWidth(30)
     button.toggled.connect(lambda on: signal.emit(entry, on))
     button.toggled.connect(
         lambda on: button.set_variant("accent" if on else "neutral"))
@@ -473,11 +476,17 @@ class BuildCard(BaseBuildCard):
         text_col.addWidget(meta)
         lay.addLayout(text_col, 1)
 
-        lay.addWidget(self._star(marked))
-        lay.addWidget(self._info())
+        # Los botones de la derecha van juntos y apretados (6 px entre ellos, no
+        # los 12 de la fila): así el bloque queda pegado al borde y el título y
+        # la ruta (que llevan versiones y carpetas largas) caben mejor.
+        actions = QHBoxLayout()
+        actions.setContentsMargins(0, 0, 0, 0)
+        actions.setSpacing(6)
+        actions.addWidget(self._star(marked))
+        actions.addWidget(self._info())
         console = self._console()
         if console is not None:
-            lay.addWidget(console)
+            actions.addWidget(console)
 
         action = CardButton(
             tr("Launch") if installed else tr("Download"),
@@ -490,7 +499,8 @@ class BuildCard(BaseBuildCard):
         # dentro del texto; en Qt hace falta un QIcon.
         action.setIcon(_launch_icon() if installed else _download_icon())
         action.clicked.connect(lambda: self.action_clicked.emit(self.build))
-        lay.addWidget(action)
+        actions.addWidget(action)
+        lay.addLayout(actions)
 
 
 def _grid_height(zoom: float) -> int:
@@ -637,10 +647,15 @@ class InstalledCard(_HoverCard, QFrame):
 
         # Estrella e "i" van juntas y en ese orden en las cuatro tarjetas
         # (tienda e instaladas, lista y rejilla): así no bailan al cambiar de
-        # pestaña. Detrás, el grupo de acciones.
-        lay.addWidget(_favorite_star(
+        # pestaña. Detrás, el grupo de acciones. Todo el bloque va apretado
+        # (6 px, no los 12 de la fila) y pegado al borde, para que el título y
+        # la ruta (con carpetas largas) tengan más sitio.
+        actions = QHBoxLayout()
+        actions.setContentsMargins(0, 0, 0, 0)
+        actions.setSpacing(6)
+        actions.addWidget(_favorite_star(
             marked, lambda on: self.favorite_toggled.emit(entry, on)))
-        lay.addWidget(_info_button(entry, self.notes_clicked))
+        actions.addWidget(_info_button(entry, self.notes_clicked))
 
         if update is not None:
             update_btn = CardButton(
@@ -650,16 +665,17 @@ class InstalledCard(_HoverCard, QFrame):
             )
             update_btn.clicked.connect(
                 lambda: self.update_clicked.emit(entry, update))
-            lay.addWidget(update_btn)
+            actions.addWidget(update_btn)
 
         if console is not None:
-            lay.addWidget(_console_button(console, entry, self.console_toggled))
+            actions.addWidget(
+                _console_button(console, entry, self.console_toggled))
 
         launch = CardButton(tr("Launch"), variant="dark",
                             tooltip=tr("Launch this installed version"))
         launch.setIcon(_launch_icon())
         launch.clicked.connect(lambda: self.launch_clicked.emit(entry))
-        lay.addWidget(launch)
+        actions.addWidget(launch)
 
         delete = CardButton(icons.DELETE, variant="danger",
                             tooltip=tr("Remove this installed version"))
@@ -667,7 +683,8 @@ class InstalledCard(_HoverCard, QFrame):
         delete.setFont(icon_font())
         delete.setFixedWidth(46)
         delete.clicked.connect(lambda: self.delete_clicked.emit(entry))
-        lay.addWidget(delete)
+        actions.addWidget(delete)
+        lay.addLayout(actions)
         _protect(title, delete, read_only)
 
 

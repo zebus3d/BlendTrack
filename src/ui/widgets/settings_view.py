@@ -15,7 +15,6 @@ pueda leer entero.
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QComboBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -30,7 +29,7 @@ from i18n import tr
 from services import autostart, detector
 from services import settings as settings_service
 from ui import theme as t
-from ui.widgets.buttons import CardButton, SwitchPill
+from ui.widgets.buttons import CardButton, ChevronCombo, SwitchPill
 from ui.widgets.cards import settings_card
 from ui.widgets.dialogs import show_error
 from ui.widgets.labels import ElidedLabel
@@ -236,7 +235,7 @@ class SettingsViewMixin:
         row_limit = QHBoxLayout()
         row_limit.addWidget(QLabel(tr("Versions per fork")))
         row_limit.addStretch()
-        self.fork_limit_combo = QComboBox()
+        self.fork_limit_combo = ChevronCombo()
         for limit in settings_service.FORK_VERSION_LIMITS:
             self.fork_limit_combo.addItem(
                 tr("All") if limit == 0 else tr("Last {count}", count=limit),
@@ -261,7 +260,7 @@ class SettingsViewMixin:
         row3 = QHBoxLayout()
         row3.addWidget(QLabel(tr("Language")))
         row3.addStretch()
-        self.language_combo = QComboBox()
+        self.language_combo = ChevronCombo()
         # El identificador va como **dato** de cada elemento, no en el texto: el
         # texto se traduce (y cambia según el idioma activo), así que buscar por
         # la etiqueta era frágil y con más idiomas dejaba el ajuste en "auto".
@@ -490,7 +489,7 @@ class SettingsViewMixin:
         row_interval = QHBoxLayout()
         row_interval.addWidget(QLabel(tr("Check for updates every")))
         row_interval.addStretch()
-        self.update_interval_combo = QComboBox()
+        self.update_interval_combo = ChevronCombo()
         for minutes in settings_service.UPDATE_INTERVALS:
             self.update_interval_combo.addItem(self._interval_text(minutes), minutes)
         index = self.update_interval_combo.findData(

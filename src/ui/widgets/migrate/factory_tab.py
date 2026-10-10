@@ -13,7 +13,7 @@ import threading
 from pathlib import Path
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (QComboBox, QFrame, QHBoxLayout, QLabel,
+from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel,
                                QSizePolicy, QVBoxLayout, QWidget)
 
 from i18n import tr
@@ -21,7 +21,7 @@ from model.build import human_size
 from services import blender_config as bc
 from services import blender_snapshots as bsnap
 from services import blender_prefs as bprefs
-from ui.widgets.buttons import CardButton
+from ui.widgets.buttons import CardButton, ChevronCombo
 from ui.widgets.cards import settings_card
 from ui.widgets import dialogs
 from ui.widgets.labels import ElidedLabel
@@ -230,7 +230,7 @@ class FactoryTabMixin:
         label = QLabel(tr("Version"))
         label.setToolTip(tr("The version whose settings are reset or restored."))
         column.addWidget(label)
-        self.factory_combo = QComboBox()
+        self.factory_combo = ChevronCombo()
         self.factory_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.factory_combo.setMinimumWidth(150)
         self.factory_combo.setToolTip(tr(
@@ -364,7 +364,7 @@ class FactoryTabMixin:
             "when a new one is saved."))
         keep_row.addWidget(keep_label)
         keep_row.addStretch()
-        self.snapshot_keep_combo = QComboBox()
+        self.snapshot_keep_combo = ChevronCombo()
         for value, label in ((3, "3"), (5, "5"), (10, "10"), (0, tr("All"))):
             self.snapshot_keep_combo.addItem(label, value)
         index = self.snapshot_keep_combo.findData(self.snapshot_keep)

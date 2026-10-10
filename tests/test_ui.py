@@ -257,6 +257,48 @@ class MainWindowTests(SettingsIsolated, unittest.TestCase):
         QTest.keyClick(window, Qt.Key_1, Qt.AltModifier)
         self.assertEqual(window.view, "recent")
 
+    def test_los_tooltips_llevan_su_atajo(self):
+        """Cada sección y cada filtro dice su tecla, para que se sepa que existe."""
+        window = self._window()
+        for key, number in (("installed", 1), ("store", 2), ("recent", 3),
+                            ("addons", 4), ("migrate", 5), ("settings", 6)):
+            self.assertIn(f"[{number}]", window.side_buttons[key].toolTip(),
+                          key)
+        window.set_view("store")
+        tabs = window.channel_tabs
+        visibles = [i for i in range(tabs.count()) if tabs.isTabVisible(i)]
+        for position, index in enumerate(visibles, start=1):
+            self.assertIn(f"[Alt + {position}]", tabs.tabToolTip(index))
+
+    def test_la_m_silencia_y_vuelve_a_sonar(self):
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+
+        window = self._window()
+        window.set_view("store")
+        window.set_ui_sounds(True)
+        QTest.keyClick(window, Qt.Key_M)
+        self.assertFalse(window.settings.ui_sounds)
+        QTest.keyClick(window, Qt.Key_M)   # otra vez: vuelve el sonido
+        self.assertTrue(window.settings.ui_sounds)
+        # En Ajustes no hay altavoz: la M no toca nada.
+        window.set_view("settings")
+        window.set_ui_sounds(True)
+        QTest.keyClick(window, Qt.Key_M)
+        self.assertTrue(window.settings.ui_sounds)
+
+    def test_la_m_escrita_en_el_buscador_no_silencia(self):
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+
+        window = self._window()
+        window.set_view("store")
+        window.set_ui_sounds(True)
+        window.search_input.setFocus()
+        QTest.keyClick(window.search_input, Qt.Key_M)
+        self.assertEqual(window.search_input.text(), "m")
+        self.assertTrue(window.settings.ui_sounds)
+
     def test_el_foco_inicial_sale_del_buscador_vacio(self):
         """El buscador solo toma el foco con clic; entonces 1-6 navegan."""
         from PySide6.QtCore import Qt
@@ -1863,6 +1905,62 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
             self.app.processEvents()
         # Sin barra de scroll: las 3 filas se ven enteras.
         self.assertEqual(window.store_scroll.verticalScrollBar().maximum(), 0)
+
+    def test_el_ancho_de_fabrica_no_corta_la_ultima_pestana(self):
+        """En español, "Favoritos" no debe quedar recortado al ancho de fábrica.
+
+        Al añadir el botón de vista de galería la barra de canales se quedó sin
+        sitio y la última pestaña se cortaba contra el refrescar. El ancho de
+        fábrica subió (940 → 1000) para que vuelva a caber.
+        """
+        import json
+
+        from services import settings as settings_service
+        from ui.widgets.main_window import (
+            DEFAULT_WINDOW_HEIGHT,
+            DEFAULT_WINDOW_WIDTH,
+            MainWindow,
+        )
+
+        path = settings_service.config_dir() / "settings.json"
+        data = json.loads(path.read_text())
+        data["language"] = "es"
+        path.write_text(json.dumps(data))
+
+        window = MainWindow()
+        window.resize(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)
+        window.show()
+        for _ in range(5):
+            self.app.processEvents()
+        tabs = window.channel_tabs
+        visibles = [i for i in range(tabs.count()) if tabs.isTabVisible(i)]
+        self.assertGreaterEqual(len(visibles), 6)
+        self.assertLessEqual(tabs.tabRect(visibles[-1]).right(), tabs.width())
+
+    def test_los_desplegables_llevan_flecha(self):
+        """La flecha de "esto se despliega" se pinta (Qt no la dibuja con QSS)."""
+        from PySide6.QtGui import QColor
+
+        from ui.widgets.buttons import ChevronCombo
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.resize(1000, 690)
+        window.show()
+        for _ in range(5):
+            self.app.processEvents()
+        for combo in (window.platform_combo, window.arch_combo):
+            self.assertIsInstance(combo, ChevronCombo)
+            image = combo.grab().toImage()
+            width, height = image.width(), image.height()
+            light = 0
+            for x in range(width - 15, width - 2):
+                for y in range(height):
+                    colour = QColor(image.pixel(x, y))
+                    if (colour.red() > 150 and colour.green() > 150
+                            and colour.blue() > 150):
+                        light += 1
+            self.assertGreater(light, 3, combo.objectName())
 
     def _folder(self, path, types=(), writable=True):
         from services import settings as settings_service

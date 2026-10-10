@@ -428,23 +428,23 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
         self.side_group = QButtonGroup(sidebar)
         self.side_group.setExclusive(True)
         self.side_buttons = {}
-        for key, glyph, tip in (
+        for key, glyph, tip, hotkey in (
             ("installed", icons.INSTALLED, tr(
-                "Show the versions you already have on this computer.")),
+                "Show the versions you already have on this computer."), 1),
             ("store", icons.STORE, tr(
-                "Show the versions you can download from the cloud.")),
+                "Show the versions you can download from the cloud."), 2),
             ("recent", icons.CLOCK, tr(
                 "Show the .blend files you opened recently, by Blender "
-                "version.")),
+                "version."), 3),
             ("addons", icons.PUZZLE, tr(
                 "Manage the add-ons and extensions of an installed version "
-                "without opening Blender.")),
+                "without opening Blender."), 4),
         ):
             # Con padre desde el principio: un widget sin padre al que se le
             # hace ``setVisible(True)`` antes de entrar en el layout se enseña
             # como una **ventana suelta** (se veía un cuadradito en el centro de
             # la pantalla al arrancar, que desaparecía al colocarse el botón).
-            btn = SideButton(glyph, tip, parent=sidebar)
+            btn = SideButton(glyph, f"{tip}  [{hotkey}]", parent=sidebar)
             btn.setFont(icon_font())
             self.side_group.addButton(btn)
             btn.clicked.connect(lambda _=False, k=key: self.set_view(k))
@@ -459,13 +459,13 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
         # una pestaña de uso diario como la tienda o las instaladas.
         migrate_btn = SideButton(icons.MIGRATE, tr(
             "Copy add-ons, extensions and preferences from one Blender version "
-            "to another."), parent=sidebar)
+            "to another.") + "  [5]", parent=sidebar)
         migrate_btn.setFont(icon_font())
         self.side_group.addButton(migrate_btn)
         migrate_btn.clicked.connect(lambda: self.set_view("migrate"))
         lay.addWidget(migrate_btn)
         self.side_buttons["migrate"] = migrate_btn
-        settings_btn = SideButton(icons.SETTINGS, tr("Settings."))
+        settings_btn = SideButton(icons.SETTINGS, tr("Settings.") + "  [6]")
         settings_btn.setFont(icon_font())
         self.side_group.addButton(settings_btn)
         settings_btn.clicked.connect(lambda: self.set_view("settings"))

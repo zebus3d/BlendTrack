@@ -23,7 +23,7 @@ se ocultan (lo decide ``MainWindow._set_view``).
 """
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import (QComboBox, QFrame, QHBoxLayout, QLabel,
+from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel,
                                QScrollArea,
                                QSizePolicy, QTabWidget, QVBoxLayout, QWidget)
 
@@ -34,6 +34,7 @@ from services import blender_config as bc
 from ui import icons
 from ui import theme as t
 from ui.fonts import icon_font
+from ui.widgets.buttons import ChevronCombo
 from ui.widgets.cards import settings_card
 from ui.widgets.layouts import list_scroll
 from ui.widgets.migrate.addons_tab import AddonsTabMixin
@@ -308,9 +309,9 @@ class MigrateView(AddonsTabMixin, PrefsTabMixin, FactoryTabMixin,
         lay.addLayout(bar)
         return card
 
-    def _version_combo(self, tooltip: str) -> QComboBox:
+    def _version_combo(self, tooltip: str) -> ChevronCombo:
         """Desplegable de versión instalada (en la barra superior)."""
-        combo = QComboBox()
+        combo = ChevronCombo()
         combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         combo.setMinimumWidth(150)
         combo.setToolTip(tooltip)

@@ -13,7 +13,7 @@ sus acciones a los otros mixins (descargar, lanzar, borrar).
 import threading
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox, QFrame,
+from PySide6.QtWidgets import (QApplication, QButtonGroup, QFrame,
                                QGridLayout, QHBoxLayout, QLabel, QMenu,
                                QScrollArea, QTabBar, QStackedWidget,
                                QVBoxLayout, QWidget)
@@ -25,7 +25,7 @@ from services import installed as installed_service
 from services.downloader import log as download_log
 from ui import icons
 from ui.fonts import icon_font
-from ui.widgets.buttons import IconFlatButton, Pill
+from ui.widgets.buttons import ChevronCombo, IconFlatButton, Pill
 from services import sound
 from services import splash as splash_service
 from ui.widgets import gallery
@@ -591,6 +591,20 @@ class BuildListsMixin:
         for index, (key, _label) in enumerate(CHANNELS):
             if key in self._fork_channels():
                 self.channel_tabs.setTabVisible(index, key in enabled)
+        self._update_tab_tooltips()
+
+    def _update_tab_tooltips(self) -> None:
+        """Pone el tooltip de cada canal con su ``[Alt + N]`` (solo las visibles
+        cuentan; se recalcula al encender o apagar un fork, ver ``_select_tab``)."""
+        if not hasattr(self, "channel_tabs"):
+            return
+        tabs = self.channel_tabs
+        visible = [i for i in range(tabs.count()) if tabs.isTabVisible(i)]
+        positions = {index: pos for pos, index in enumerate(visible, start=1)}
+        for index, (key, _) in enumerate(CHANNELS):
+            position = positions.get(index)
+            tail = "" if position is None else f"\n\n[Alt + {position}]"
+            tabs.setTabToolTip(index, tr(CHANNEL_TOOLTIPS[key]) + tail)
 
     def apply_enabled_forks(self) -> None:
         """Reacciona al interruptor de un fork (Ajustes > Descargas).
@@ -913,9 +927,8 @@ class BuildListsMixin:
         self.channel_tabs.setToolTip(tr(
             "Show only one kind of version at a time.\n"
             "\"All\" mixes them; the rest narrow the list down."))
-        for index, (key, label) in enumerate(CHANNELS):
+        for _key, label in CHANNELS:
             self.channel_tabs.addTab(tr(label))
-            self.channel_tabs.setTabToolTip(index, tr(CHANNEL_TOOLTIPS[key]))
         current = next((i for i, (key, _) in enumerate(CHANNELS)
                         if key == self.channel), 0)
         self.channel_tabs.setCurrentIndex(current)
@@ -954,7 +967,7 @@ class BuildListsMixin:
             lay.addWidget(btn)
         self._layout_buttons()[self.layout_mode].setChecked(True)
 
-        self.platform_combo = QComboBox()
+        self.platform_combo = ChevronCombo()
         self.platform_combo.setObjectName("FilterCombo")
         self.platform_combo.addItems(list(PLATFORMS.keys()))
         self.platform_combo.setCurrentText(self.platform_label)
@@ -967,7 +980,7 @@ class BuildListsMixin:
         self.platform_combo.currentTextChanged.connect(self.set_platform)
         lay.addWidget(self.platform_combo)
 
-        self.arch_combo = QComboBox()
+        self.arch_combo = ChevronCombo()
         self.arch_combo.setObjectName("FilterCombo")
         self.arch_combo.addItems(ARCH_LABELS)
         self.arch_combo.setCurrentText(self.arch_label)

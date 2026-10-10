@@ -64,13 +64,16 @@ ZOOM_STEP = 0.1
 # recorte hasta ser inservible.
 
 # Ancho de fábrica. Con los dos forks activos hay ocho pestañas de canal
-# (Todas, LTS, Estable, Diarias, Experimentales, Bforartists, UPBGE, Favoritos;
-# ~718 px solo las pestañas) más el botón de refrescar, los de vista
-# rejilla/lista y los combos de plataforma y arquitectura. Si no basta, Qt
-# **recorta** la última contra el refrescar ("Bforartists" salía como "Bfor...")
-# y parece que el fork no existe; por eso la barra lleva botones de scroll. Lo
-# vigila ``test_todas_las_pestanas_de_canal_son_alcanzables``.
-DEFAULT_WINDOW_WIDTH = 940
+# (Todas, LTS, Estable, Diarias, Experimentales, Bforartists, UPBGE, Favoritos)
+# más el botón de refrescar, los de vista (rejilla/lista/galería) y los combos
+# de plataforma y arquitectura. Si no basta, Qt **recorta** la última contra el
+# refrescar ("Bforartists" salía como "Bfor...") y parece que el fork no existe;
+# por eso la barra lleva botones de scroll. Lo vigila
+# ``test_todas_las_pestanas_de_canal_son_alcanzables``.
+# Subió de 940 a 1000 al añadir el botón de vista de galería: con el tercer
+# botón, en español "Favoritos" quedaba cortado (la barra necesitaba 532 px y
+# tenía 495). Lo vigila ``test_el_ancho_de_fabrica_no_corta_la_ultima_pestana``.
+DEFAULT_WINDOW_WIDTH = 1000
 
 # Alto de fábrica. Deja entrar **tres filas** de tarjetas de rejilla al zoom
 # de fábrica (50 %) con 3 columnas (separaciones y márgenes incluidos). Lleva 35
