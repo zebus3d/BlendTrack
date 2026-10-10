@@ -572,7 +572,7 @@ class GalleryView(GalleryControlsMixin, QWidget):
 
     def _paint(self, painter) -> None:
         painter.setRenderHints(QPainter.Antialiasing | QPainter.SmoothPixmapTransform)
-        painter.fillRect(self.rect(), QColor(t.BG))
+        painter.fillRect(self.rect(), QColor(t.GALLERY_BG))
         if self.style_name == "showcase":
             # El escaparate no lleva foco: su fondo es el splash, y el velo que
             # lo funde acaba en el gris liso (sobre el foco dejaba una franja).
@@ -808,7 +808,7 @@ class GalleryView(GalleryControlsMixin, QWidget):
         self._focus_busy = True
 
         def work():
-            image = dithered_focus(size[0], size[1], t.BG, t.ACCENT)
+            image = dithered_focus(size[0], size[1], t.GALLERY_BG, t.ACCENT)
             try:
                 self._focus_ready.emit(size, image)
             except RuntimeError:
@@ -888,7 +888,7 @@ class GalleryView(GalleryControlsMixin, QWidget):
                                    logo)
                 painter.setOpacity(1.0)
         veil = QLinearGradient(0, height * 0.35, 0, height)
-        base = QColor(t.BG)
+        base = QColor(t.GALLERY_BG)
         base.setAlpha(0)
         veil.setColorAt(0.0, base)
         base.setAlpha(255)

@@ -22,6 +22,9 @@ las constantes ``ACCENT``/``DANGER`` se usan para **bordes e indicadores**
 
 # --- Jerarquía de grises (de más profundo a más elevado) ---
 BG = "#1D1D1D"          # fondo de la ventana (el más oscuro)
+# Fondo de la galería: un gris con un punto de azul (no el neutro de BG), para
+# que el foco de luz se lea azulado y no verdoso.
+GALLERY_BG = "#1A1E28"
 FIELD = "#171717"       # campos de texto (hundidos)
 BUTTON = "#585858"      # botones neutros
 # Botones neutros con texto, al pasar el ratón. Un pelo más oscuro que el

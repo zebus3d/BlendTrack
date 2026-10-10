@@ -1907,6 +1907,22 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         # Sin barra de scroll: las 3 filas se ven enteras.
         self.assertEqual(window.store_scroll.verticalScrollBar().maximum(), 0)
 
+    def test_el_tamano_se_fija_antes_de_montar_las_tarjetas(self):
+        """La rejilla se coloca con el ancho de fábrica, no con el de un QWidget
+        sin dimensionar: si no, las tarjetas pegaban un salto al abrir."""
+        from ui.widgets.main_window import DEFAULT_WINDOW_WIDTH, MainWindow
+
+        window = MainWindow()
+        window.layout_mode = "grid"
+        # El ancho ya es el de fábrica antes de mostrarse.
+        self.assertEqual(window.width(), DEFAULT_WINDOW_WIDTH)
+        before = window._grid_columns(window.store_scroll, window.store_grid, 0)
+        window.show()
+        for _ in range(5):
+            self.app.processEvents()
+        after = window._grid_columns(window.store_scroll, window.store_grid, 0)
+        self.assertEqual(before, after)
+
     def test_los_desplegables_llevan_flecha(self):
         """Los combos usan ``ChevronCombo``, que pinta la flecha (Qt no la dibuja
         con QSS). No se comprueba el píxel: depende de la fuente del sistema."""

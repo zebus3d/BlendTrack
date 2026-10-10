@@ -318,12 +318,11 @@ class BuildListsMixin:
     def _columns_for(self, scroll: QScrollArea, card_width: int) -> int:
         """Número de columnas que caben en el ancho visible (mínimo 1).
 
-        OJO: usamos el ancho del ``QStackedWidget``, no el del ``viewport`` de la
-        página. Un ``QStackedWidget`` da a las páginas NO activas un tamaño
-        reducido (la de ajustes mide 640 en una ventana de 1060), así que el
-        viewport de la tienda miente mientras no está delante.
+        Del ancho de la ventana menos la barra lateral (74 px), no del viewport
+        de una página (el ``QStackedWidget`` da a las no activas un tamaño
+        reducido) ni del stack, que antes de mostrarse mide el de fábrica.
         """
-        width = self.stack.width() if self.stack.width() > 0 else self.width() - 74
+        width = self.width() - 74
         available = width - 28  # margins 14+14
         return max(1, available // max(1, card_width + 10))
 

@@ -248,6 +248,14 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
         self._splash_pending = set()
         self.source_chosen.connect(self._on_source_chosen)
 
+        # La ventana se dimensiona ANTES de montar la interfaz. Las tarjetas de
+        # la rejilla se colocan con el ancho de la ventana; si se redimensiona
+        # después (como hacía ``main.py`` tras crear la ventana), la primera
+        # pasada usa el tamaño de fábrica y las tarjetas pegan un salto al
+        # reflotar en cuanto llega el tamaño/el listado.
+        self.resize(
+            max(MIN_WINDOW_WIDTH, self.settings.window_width or DEFAULT_WINDOW_WIDTH),
+            max(MIN_WINDOW_HEIGHT, self.settings.window_height or DEFAULT_WINDOW_HEIGHT))
         self._build_ui()
         # Los temporizadores llevan ``self`` de contexto: si la ventana se
         # destruye antes de que disparen (pasa en los tests, que crean y

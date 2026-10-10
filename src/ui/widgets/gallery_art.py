@@ -172,8 +172,9 @@ FOCUS_RADIUS = 0.50
 
 # La viñeta: cuánto se oscurece el fondo en las esquinas (0 = nada) y desde
 # qué distancia al centro empieza (0 = centro, 1 = esquina). Junto con el foco,
-# da el contraste: claro detrás de la carta y oscuro hacia los bordes.
-VIGNETTE = 0.50
+# da el contraste: claro detrás de la carta y algo más oscuro hacia los bordes.
+# Suave a propósito (0,35): con 0,50 las esquinas quedaban demasiado negras.
+VIGNETTE = 0.35
 VIGNETTE_FROM = 0.30
 
 
