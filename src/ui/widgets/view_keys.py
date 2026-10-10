@@ -11,8 +11,9 @@ en él nada más abrir, el buscador **no toma el foco solo** (`Qt.ClickFocus`):
 solo cuando el usuario hace clic.
 
 Con la **M** se silencia o se devuelve el sonido (el mismo interruptor del botón
-de altavoz) en las listas. En la galería los números y la M no hacen nada: allí
-el teclado es para pasar cartas.
+de altavoz) en las listas. Los atajos valen en todas las vistas, galería
+incluida (que ya no usa los números para el estilo: eso está en su botón de la
+esquina).
 """
 
 from PySide6.QtCore import Qt
@@ -35,23 +36,16 @@ class ViewKeysMixin:
         prioridad sobre el control con el foco y le robaría las teclas al
         buscador. Este método solo recibe las teclas que ningún control aceptó
         (el ``QLineEdit`` se queda las suyas), así que escribir "4.2" o una "m"
-        en el buscador sigue funcionando. En la galería los números no hacen
-        nada y la M tampoco (no hay listado que silenciar ahí).
+        en el buscador sigue funcionando. Valen en todas las vistas, galería
+        incluida.
         """
         target = self.VIEW_KEYS.get(event.key())
         blocked = Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier
-        if event.modifiers() & blocked:
-            super().keyPressEvent(event)
-            return
-        if target is not None and not self._numbers_navigate():
-            self.set_view(target)
-            return
-        if event.key() == Qt.Key_M and self.view in ("store", "installed"):
-            self.set_ui_sounds(not self.settings.ui_sounds)
-            return
+        if not (event.modifiers() & blocked):
+            if target is not None:
+                self.set_view(target)
+                return
+            if event.key() == Qt.Key_M and self.view in ("store", "installed"):
+                self.set_ui_sounds(not self.settings.ui_sounds)
+                return
         super().keyPressEvent(event)
-
-    def _numbers_navigate(self) -> bool:
-        """Con la galería a la vista, las teclas de número no hacen nada."""
-        return (self.view in ("store", "installed")
-                and self.layout_mode == "gallery")

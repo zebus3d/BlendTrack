@@ -206,17 +206,18 @@ class MainWindowTests(SettingsIsolated, unittest.TestCase):
             QTest.keyClick(window, key)
             self.assertEqual(window.view, view, key)
 
-    def test_en_la_galeria_los_numeros_no_hacen_nada(self):
-        """En la galería el teclado es para pasar cartas, no para secciones."""
+    def test_en_la_galeria_los_numeros_tambien_cambian_de_seccion(self):
+        """Los atajos valen también con la galería a la vista."""
         from PySide6.QtCore import Qt
         from PySide6.QtTest import QTest
 
         window = self._window()
         window.set_view("store")
-        window.layout_mode = "gallery"
-        for key in (Qt.Key_1, Qt.Key_2, Qt.Key_3, Qt.Key_4, Qt.Key_5, Qt.Key_6):
-            QTest.keyClick(window, key)
-            self.assertEqual(window.view, "store")
+        window.set_layout_mode("gallery")
+        QTest.keyClick(window, Qt.Key_1)
+        self.assertEqual(window.view, "installed")
+        QTest.keyClick(window, Qt.Key_2)
+        self.assertEqual(window.view, "store")
 
     def test_escribir_numeros_en_el_buscador_no_cambia_de_seccion(self):
         """El buscador se queda sus dígitos: si no, no se podría buscar "4.2"."""
