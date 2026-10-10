@@ -154,6 +154,10 @@ DEFAULT_UPDATE_INTERVAL = 30
 # una es una petición WebDAV); bajarlos todos ralentiza la pestaña sin que casi
 # nadie mire más allá de las últimas. 0 = sin límite (ver ``Settings``).
 FORK_VERSION_LIMITS = (0, 10, 25, 50)
+
+# Estilos de la vista de galería (los pinta ``ui.widgets.gallery``). El primero
+# es el de fábrica.
+GALLERY_STYLES = ("perspective", "shelf", "carousel", "showcase")
 DEFAULT_FORK_VERSION_LIMIT = 10
 
 # Cuántos ajustes guardados (instantáneas) se conservan por versión si el
@@ -400,7 +404,16 @@ class Settings:
     # hace con el botón de cada tarjeta.
     launch_console: bool = False
     launch_console_overrides: dict = field(default_factory=dict)
+    # Último modo de las listas que usó el usuario: "grid", "list" o "gallery".
     layout_mode: str = "grid"
+    # Cómo se ve la galería (``ui.widgets.gallery.STYLES``).
+    gallery_style: str = GALLERY_STYLES[0]
+    # El "tic" al pasar de carta en la galería (``services.sound``).
+    ui_sounds: bool = True
+    # El puntero láser de la galería (si no, la flecha de siempre).
+    laser_pointer: bool = True
+    # Las tarjetas de la rejilla se inclinan en 3D hacia el ratón.
+    card_tilt: bool = True
     zoom: float = DEFAULT_ZOOM
     # Valor al que vuelve la rejilla con Ctrl+0 o Ctrl+clic en el slider. Es
     # distinto de ``zoom`` (que es "lo que tengo puesto ahora"): este es el
@@ -515,6 +528,12 @@ class Settings:
             launch_console_overrides=_clean_bool_map(
                 data.get("launch_console_overrides")),
             layout_mode=str(data.get("layout_mode") or "grid"),
+            gallery_style=(data.get("gallery_style")
+                           if data.get("gallery_style") in GALLERY_STYLES
+                           else GALLERY_STYLES[0]),
+            ui_sounds=bool(data.get("ui_sounds", True)),
+            laser_pointer=bool(data.get("laser_pointer", True)),
+            card_tilt=bool(data.get("card_tilt", True)),
             zoom=_float(data.get("zoom"), DEFAULT_ZOOM),
             reset_zoom=_float(data.get("reset_zoom"), DEFAULT_ZOOM),
             auto_update=bool(data.get("auto_update", True)),

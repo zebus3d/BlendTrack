@@ -44,6 +44,7 @@ from ui.widgets.busy import BusyBar
 from ui.widgets.cards import logo_shadow
 from ui.widgets.downloads import DownloadFlowMixin
 from ui.widgets.folder_library import FolderLibraryMixin
+from ui.widgets import motion
 from ui.widgets.migrate import MigrateView
 from ui.widgets.recent import RecentView
 from ui.widgets.settings_view import SettingsViewMixin
@@ -77,6 +78,7 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
     release_notes_result = Signal(bool)   # abierta o no
     folder_move_progress = Signal(int, int, str)   # hechas, total, nombre
     folder_move_done = Signal(int, int, str)       # movidas, fallidas, error
+    splash_ready = Signal(str, str)   # serie, fichero (galería)
 
     # Índice de la pestaña "Carpetas" dentro de Ajustes (va la segunda, justo
     # después de Descargas, porque es lo que más se toca de las dos).
@@ -131,7 +133,8 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
         self.auto_update = bool(self.settings.auto_update)
         self.periodic_update = bool(self.settings.periodic_update)
         self.layout_mode = (self.settings.layout_mode
-                            if self.settings.layout_mode in ("grid", "list") else "grid")
+                            if self.settings.layout_mode in ("grid", "list", "gallery")
+                            else "grid")
         try:
             self.zoom = min(MAX_ZOOM, max(MIN_ZOOM, float(self.settings.zoom)))
         except (TypeError, ValueError):
@@ -229,6 +232,8 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
         self.release_notes_result.connect(self._on_release_notes_result)
         self.folder_move_progress.connect(self._on_folder_move_progress)
         self.folder_move_done.connect(self._on_folder_move_done)
+        self.splash_ready.connect(self._on_splash_ready)
+        self._splash_pending = set()
         self.source_chosen.connect(self._on_source_chosen)
 
         self._build_ui()
@@ -541,8 +546,17 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
         elif view != "settings":
             # Recordamos la última vista que no eran ajustes.
             self._previous_view = view
+        # Ajustes baja desde arriba al entrar y sube al salir (como en la
+        # versión Kivy y en las preferencias de Blender 2.4x); el resto de
+        # cambios de vista es instantáneo. Se captura cómo estaba el stack
+        # **antes** de cambiar de página: es la imagen que se va.
+        sliding = (self.isVisible()
+                   and (view == "settings") != (self.view == "settings"))
+        before = self.stack.grab() if sliding else None
         self.view = view
         self._set_view(view)
+        if before is not None:
+            motion.slide_stack(self.stack, before, down=view == "settings")
         if view == "installed":
             self.refresh_installed()
         elif view == "store":

@@ -53,6 +53,11 @@ src/
       menus.py         # card_menu (menús con el aspecto de la app)
       folders.py       # la fila de una carpeta de la biblioteca
       busy.py          # barra indeterminada (cargando el listado)
+      motion.py        # animaciones: Ajustes baja, la tarjeta se levanta, la estrella hace pop
+      gallery.py       # vista de galería: tarjetas en fila con perspectiva (4 estilos)
+      gallery_art.py   # lo que pinta la galería: halo, reflejo, fondo con dithering, láser
+      gallery_controls.py # sus mandos: botones de la esquina, láser y teclado (mixin)
+      gallery_card.py  # la carta grande: splash, datos y la tarjeta de rejilla dentro
       tray.py          # el icono de la bandeja
 doc/                 # guía de arquitectura en español (para principiantes)
 packaging/           # spec de PyInstaller, scripts de build, inject_version.py
@@ -387,6 +392,14 @@ no tenerlo.
   `CardButton`) y añadiendo la regla al QSS. Ojo con la especificidad: en QSS
   `#Card[installed="true"]` y `#Card:hover` empatan, y gana la última; por eso
   los `:hover` van al final del bloque.
+- **La galería pinta imágenes, salvo la central.** Qt Widgets no gira widgets
+  en 3D, así que las laterales son capturas (`grab()`) pintadas con un
+  `QTransform` con perspectiva; la central, con la galería quieta, es el widget
+  de verdad colocado encima (sus botones funcionan). Por eso en `d == 0` los
+  cuatro estilos dejan la tarjeta plana y a escala 1 (lo vigila
+  `test_todos_los_estilos_dejan_la_central_plana`): si la imagen midiera otra
+  cosa, la tarjeta saltaría al pararse. El modo (`layout_mode`: grid, list o
+  gallery) y el estilo (`gallery_style`) se recuerdan entre sesiones.
 - **La fila de filtros vive con las listas, no es global.** Tienda (Nube) e
   Instaladas (Local) comparten un contenedor
   (`build_lists.py: _build_lists_view`) con la fila de filtros encima

@@ -319,6 +319,29 @@ def build_qss() -> str:
     /* La propiedad la pone ``_HoverCard`` (enter/leave): cubre el caso de que el
        ratón esté sobre un hijo y el padre no reciba el estado hover. */
     QFrame#Card[hover="true"] {{ background-color: {t.SURFACE_ALT}; }}
+    /* La tarjeta de rejilla que va dentro de la grande de la galería deja de
+       ser tarjeta: el fondo (y su hover) lo pone la de fuera. Va después de
+       los hover para ganarles (misma especificidad, gana la última). */
+    QFrame#Card[embedded="true"],
+    QFrame#Card[embedded="true"][hover="true"],
+    QFrame#Card[embedded="true"]:hover {{ background: transparent; }}
+    QWidget#GalleryInfo {{ background: transparent; }}
+    /* Los botones de la esquina de la galería (silencio y puntero láser):
+       pequeños, redondos y a medio fundir con el fondo, para que no compitan
+       con las cartas. */
+    QPushButton#GalleryCorner {{
+        background-color: rgba(0, 0, 0, 110);
+        color: {t.MUTED};
+        border: 1px solid {t.BORDER};
+        border-radius: 13px;
+        font-size: 12px;
+        padding: 0;
+    }}
+    QPushButton#GalleryCorner:hover {{
+        background-color: {t.SURFACE_ALT};
+        color: {t.TEXT};
+    }}
+    QLabel#GalleryValue {{ color: {t.TEXT}; }}
 
     /* --- Paneles / barras --- */
     QFrame#Chrome {{ background-color: {t.CHROME}; border: none; }}

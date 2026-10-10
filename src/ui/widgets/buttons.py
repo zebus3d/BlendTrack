@@ -15,10 +15,12 @@ control que lo tenía) y lo dejaba en "Local" o en un interruptor de Ajustes.
 
 from PySide6.QtCore import QEvent, QRectF, Qt
 from PySide6.QtGui import QColor, QPainter, QPen
-from PySide6.QtWidgets import QCheckBox, QPushButton, QToolTip
+from PySide6.QtWidgets import (QCheckBox, QPushButton, QStyle,
+                               QStyleOptionButton, QStylePainter, QToolTip)
 
 from ui import icons
 from ui import theme as t
+from ui.widgets import motion
 from ui.widgets.layouts import repolish
 
 
@@ -127,7 +129,14 @@ class StarButton(_FocusRing, QPushButton):
     El glifo es el mismo en los dos estados; lo que cambia es el color, que lo
     pone el QSS según ``:checked`` (no tenemos la variante de contorno de la
     fuente: solo se empaqueta la sólida).
+
+    Al marcarla hace "pop": la estrella salta, rebota y suelta unas chispas
+    (``motion.play_pop``). Mientras dura, el glifo se pinta aquí a mano, porque
+    el QSS fija el tamaño de la fuente (``font-size`` pisa ``setFont``) y no se
+    puede agrandar de otra forma; fuera del pop pinta Qt como siempre.
     """
+
+    _pop = 0.0
 
     def __init__(self, marked: bool = False, tooltip_on: str = "",
                  tooltip_off: str = "", parent=None):
@@ -141,9 +150,50 @@ class StarButton(_FocusRing, QPushButton):
         self._tooltip_off = tooltip_off
         self._update_tooltip()
         self.toggled.connect(lambda _: self._update_tooltip())
+        # Solo al marcar: desmarcar no merece celebración.
+        self.toggled.connect(lambda on: on and motion.play_pop(self))
 
     def _update_tooltip(self) -> None:
         self.setToolTip(self._tooltip_on if self.isChecked() else self._tooltip_off)
+
+    def paintEvent(self, event):
+        if not 0.0 < self._pop < 1.0:
+            super().paintEvent(event)
+            return
+        # El botón (fondo y aro de foco) lo sigue pintando el estilo, pero sin
+        # texto: el glifo va encima, escalado alrededor del centro.
+        painter = QStylePainter(self)
+        try:
+            self._paint_pop(painter)
+        finally:
+            # Se cierra pase lo que pase: una excepción con el painter abierto
+            # dejaba la ventana entera sin poder pintar ("one painter at a
+            # time", "endPaint() called with active painter") y acababa en
+            # violación de segmento.
+            painter.end()
+
+    def _paint_pop(self, painter) -> None:
+        option = QStyleOptionButton()
+        self.initStyleOption(option)
+        option.text = ""
+        painter.drawControl(QStyle.CE_PushButton, option)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        # El color del QSS (``:checked`` → ámbar) no llega a la paleta del
+        # widget: con ``palette()`` salía gris. Solo se pinta aquí al marcar,
+        # así que es el de ``QPushButton#StarButton:checked``.
+        color = QColor(t.WARNING)
+        center = QRectF(self.rect()).center()
+        scale = motion.star_pop_scale(self._pop)
+        painter.save()
+        painter.translate(center)
+        painter.scale(scale, scale)
+        painter.translate(-center)
+        painter.setPen(color)
+        painter.setFont(self.font())
+        painter.drawText(self.rect(), Qt.AlignCenter, self.text())
+        painter.restore()
+        # Las chispas van encima: debajo, el glifo agrandado las tapaba.
+        motion.star_burst(painter, center, self._pop, color)
 
 
 class IconFlatButton(_FocusRing, QPushButton):

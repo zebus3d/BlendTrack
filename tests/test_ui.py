@@ -32,7 +32,7 @@ if HAVE_QT:
     # módulo donde **se usa** el nombre, no donde se define, que es lo que
     # exige ``mock.patch``. Se importan aquí y no dentro de cada test para no
     # repetir la línea cincuenta veces.
-    from ui.widgets import downloads, folder_library
+    from ui.widgets import build_lists, downloads, folder_library
     from ui.widgets import settings_view, updates
 
 from model.build import Build
@@ -100,6 +100,25 @@ class SettingsIsolated:
         # esperando a que alguien pulsara un botón. Cada test inyecta sus builds.
 
         network = mock.patch.object(downloads.api, "get_builds", return_value=[])
+        # La galería pide el splash de cada versión a projects.blender.org:
+        # en los tests, nada de red (y nada de escribir en la caché real).
+        splash = mock.patch.object(build_lists.splash_service, "needs_fetch",
+                                   return_value=False)
+        splash.start()
+        self.addCleanup(splash.stop)
+        # Y nada de sonido: la galería hace "tic" al pasar de carta.
+        # El fondo con dithering de la galería es Python puro (décimas de
+        # segundo por tamaño): en los tests no aporta y alarga la suite.
+        from PySide6.QtGui import QImage
+
+        focus = mock.patch("ui.widgets.gallery.dithered_focus",
+                           side_effect=lambda w, h, *a: QImage(1, 1, QImage.Format_RGB32))
+        focus.start()
+        self.addCleanup(focus.stop)
+        for name in ("play_tick", "play_lock"):
+            quiet = mock.patch.object(build_lists.sound, name)
+            quiet.start()
+            self.addCleanup(quiet.stop)
         network.start()
         self.addCleanup(network.stop)
 
@@ -5900,3 +5919,661 @@ class FocusAfterViewChangeTests(SettingsIsolated, unittest.TestCase):
         window.search_input.setFocus()
         window.set_view("migrate")
         self.assertNotIsInstance(window.focusWidget(), SideButton)
+
+
+@unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
+class MotionTests(SettingsIsolated, unittest.TestCase):
+    """Las animaciones (``ui/widgets/motion.py``): empiezan, acaban y no dejan
+    restos. Lo que se ve no se puede comprobar aquí; esto vigila que una
+    animación no se quede a medias tapando la interfaz."""
+
+    app = None
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+        from ui import fonts, qss
+
+        fonts.load()
+        cls.app.setStyleSheet(qss.build_qss())
+
+    def test_ajustes_se_desliza_al_entrar_y_al_salir(self):
+        """Solo Ajustes se desliza (como en Kivy) y el overlay se retira solo."""
+        from PySide6.QtTest import QTest
+
+        from ui.widgets import motion
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.show()
+        window.set_view("store")
+        self.assertIsNone(getattr(window.stack, "_slide", None))
+        window.set_view("settings")
+        # La página de verdad ya es la de Ajustes desde el primer momento.
+        self.assertEqual(window.view, "settings")
+        self.assertIsNotNone(window.stack._slide)
+        QTest.qWait(motion.SLIDE_MS + 150)
+        self.assertIsNone(window.stack._slide)
+        window.set_view("settings")   # segundo clic: vuelve, también deslizando
+        self.assertIsNotNone(window.stack._slide)
+        QTest.qWait(motion.SLIDE_MS + 150)
+        self.assertIsNone(window.stack._slide)
+
+    def test_entre_las_listas_no_hay_deslizamiento(self):
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.show()
+        window.set_view("store")
+        window.set_view("installed")
+        window.set_view("migrate")
+        self.assertIsNone(getattr(window.stack, "_slide", None))
+
+    def test_la_tarjeta_se_levanta_y_vuelve_a_su_sombra(self):
+        from PySide6.QtTest import QTest
+
+        from ui.widgets import motion
+        from ui.widgets.cards import BuildCard
+
+        card = BuildCard(_build("4.2.23", "v42", "stable"), installed=False,
+                         zebra=False)
+        effect = card.graphicsEffect()
+        self.assertEqual(effect.blurRadius(), motion.SHADOW_REST["blur"])
+        card._set_hover(True)
+        QTest.qWait(motion.LIFT_MS + 100)
+        self.assertAlmostEqual(effect.blurRadius(), motion.SHADOW_LIFT["blur"])
+        card._set_hover(False)
+        QTest.qWait(motion.LIFT_MS + 100)
+        self.assertAlmostEqual(effect.blurRadius(), motion.SHADOW_REST["blur"])
+        self.assertEqual(effect.color().alpha(),
+                         motion.SHADOW_REST["color"].alpha())
+
+    def test_la_estrella_hace_pop_solo_al_marcar(self):
+        from PySide6.QtTest import QTest
+
+        from ui.widgets import motion
+        from ui.widgets.buttons import StarButton
+
+        star = StarButton(False)
+        star.show()
+        star.setChecked(True)
+        QTest.qWait(motion.POP_MS // 3)
+        self.assertGreater(star._pop, 0.0)
+        star.grab()   # pinta a mitad del pop: no debe reventar
+        QTest.qWait(motion.POP_MS)
+        self.assertEqual(star._pop, 0.0)
+        star.setChecked(False)
+        QTest.qWait(50)
+        self.assertEqual(star._pop, 0.0)
+
+    def test_el_pop_empieza_y_acaba_en_su_tamano(self):
+        from ui.widgets import motion
+
+        self.assertEqual(motion.star_pop_scale(0.0), 1.0)
+        self.assertEqual(motion.star_pop_scale(1.0), 1.0)
+        self.assertGreater(max(motion.star_pop_scale(k / 20) for k in range(21)),
+                           1.25)
+
+
+@unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
+class GalleryTests(SettingsIsolated, unittest.TestCase):
+    """La vista de galería (``ui/widgets/gallery.py``), el tercer modo."""
+
+    app = None
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+        from ui import fonts, qss
+
+        fonts.load()
+        cls.app.setStyleSheet(qss.build_qss())
+
+    def _window(self, count=5):
+        from PySide6.QtTest import QTest
+
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.resize(940, 655)
+        window.show()
+        # Deja pasar la carga del arranque (``get_builds`` va mockeado a []):
+        # si llegara después, pisaría las versiones inyectadas.
+        QTest.qWait(250)
+        window.builds = [_build(f"4.{i}.0", f"v4{i}", "stable")
+                         for i in range(count)]
+        window.set_view("store")
+        window.set_layout_mode("gallery")
+        return window
+
+    def _settle(self, view):
+        from PySide6.QtTest import QTest
+
+        from ui.widgets import gallery
+
+        QTest.qWait(gallery.STEP_MS + 150)
+        self.assertNotEqual(view._anim.state(), view._anim.State.Running)
+
+    def test_el_modo_galeria_ensena_la_galeria_y_se_recuerda(self):
+        from services.settings import Settings
+
+        window = self._window()
+        self.assertEqual(window.store_pages.currentWidget(), window.store_gallery)
+        self.assertTrue(window.gallery_btn.isChecked())
+        self.assertEqual(len(window.store_gallery.items), 5)
+        self.assertEqual(Settings.load().layout_mode, "gallery")
+
+    def test_solo_la_central_es_un_widget_visible(self):
+        """La central es la tarjeta de verdad; las demás se pintan como imagen."""
+        window = self._window()
+        view = window.store_gallery
+        visible = [item.card for item in view.items if item.card.isVisible()]
+        self.assertEqual(visible, [view.items[view.target].card])
+        # Y está centrada en la galería.
+        card = visible[0]
+        self.assertLessEqual(abs(card.geometry().center().x()
+                                 - view.width() // 2), 2)
+
+    def test_flechas_y_rueda_mueven_la_seleccion(self):
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+
+        window = self._window()
+        view = window.store_gallery
+        view.setFocus()
+        QTest.keyClick(view, Qt.Key_Right)
+        self.assertEqual(view.target, 1)
+        # Mientras se mueve, la central es una imagen (el widget, escondido).
+        self.assertFalse(view.items[0].card.isVisible())
+        self._settle(view)
+        self.assertTrue(view.items[1].card.isVisible())
+        QTest.keyClick(view, Qt.Key_End)
+        self.assertEqual(view.target, 4)
+        QTest.keyClick(view, Qt.Key_Right)   # ya en la última: no pasa de ahí
+        self.assertEqual(view.target, 4)
+        QTest.keyClick(view, Qt.Key_Home)
+        self.assertEqual(view.target, 0)
+
+    def test_al_reconstruir_sigue_en_la_misma_version(self):
+        """Marcar un favorito reconstruye la tienda: no debe volver a la primera."""
+        window = self._window()
+        view = window.store_gallery
+        view.go(3, 10)
+        self._settle(view)
+        key = view.items[3].key
+        window._rebuild_store()
+        self.assertEqual(view.items[view.target].key, key)
+
+    def test_el_estilo_se_cambia_y_se_guarda(self):
+        from services.settings import Settings
+
+        window = self._window()
+        window.set_gallery_style("showcase")
+        self.assertEqual(window.store_gallery.style_name, "showcase")
+        self.assertEqual(window.installed_gallery.style_name, "showcase")
+        self.assertEqual(Settings.load().gallery_style, "showcase")
+        window.set_gallery_style("inventado")
+        self.assertEqual(Settings.load().gallery_style, "showcase")
+
+    def test_todos_los_estilos_dejan_la_central_plana(self):
+        """En ``d == 0`` ningún estilo gira ni escala: ahí va el widget real,
+        y si la imagen midiera otra cosa, la tarjeta saltaría al pararse."""
+        from PySide6.QtCore import QRectF
+
+        from ui.widgets import gallery
+
+        window = self._window()
+        view = window.store_gallery
+        for style in gallery.STYLES:
+            view.set_style(style)
+            transform = view._place(0.0, 300, 200)[0]
+            rect = transform.mapRect(QRectF(0, 0, 300, 200))
+            self.assertAlmostEqual(rect.width(), 300, places=3, msg=style)
+            self.assertAlmostEqual(rect.height(), 200, places=3, msg=style)
+
+    def test_sin_versiones_se_ve_el_aviso_y_no_la_galeria(self):
+        window = self._window()
+        window.builds = []
+        window._rebuild_store()
+        self.assertEqual(window.store_pages.currentWidget(), window.store_scroll)
+
+    def test_el_boton_de_silencio_manda_en_los_tres_mandos(self):
+        """El de una galería apaga los sonidos y lo reflejan la otra y Ajustes."""
+        from services.settings import Settings
+
+        window = self._window()
+        self.assertTrue(window.settings.ui_sounds)
+        window.store_gallery.mute_button.click()
+        self.assertFalse(Settings.load().ui_sounds)
+        self.assertTrue(window.installed_gallery.mute_button.isChecked())
+        self.assertFalse(window.sounds_switch.isChecked())
+        # Y desde Ajustes, de vuelta.
+        window.sounds_switch.setChecked(True)
+        self.assertFalse(window.store_gallery.mute_button.isChecked())
+        self.assertTrue(Settings.load().ui_sounds)
+
+    def test_las_flechas_pasan_de_carta_aunque_el_foco_este_fuera(self):
+        """El foco se lo quedaba el botón de modo y las flechas no hacían nada."""
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+
+        window = self._window()
+        window.activateWindow()
+        window.gallery_btn.setFocus()
+        view = window.store_gallery
+        if not window.isActiveWindow():
+            self.skipTest("la plataforma offscreen no activa la ventana")
+        QTest.keyClick(window.gallery_btn, Qt.Key_Right)
+        self.assertEqual(view.target, 1)
+
+    def test_el_laser_se_apaga_y_vuelve_la_flecha(self):
+        from PySide6.QtCore import Qt
+
+        from services.settings import Settings
+
+        window = self._window()
+        view = window.store_gallery
+        self.assertNotEqual(view.cursor().shape(), Qt.ArrowCursor)
+        view.laser_button.click()
+        self.assertFalse(Settings.load().laser_pointer)
+        self.assertEqual(view.cursor().shape(), Qt.ArrowCursor)
+        self.assertFalse(window.installed_gallery.laser_button.isChecked())
+
+    def test_el_laser_crece_sobre_la_central_y_encoge_en_el_fondo(self):
+        """Como un láser de verdad: más cerca, más grande; girada, en escorzo."""
+        from PySide6.QtCore import QPointF
+
+        from ui.widgets import gallery_controls
+
+        window = self._window()
+        view = window.store_gallery
+        view._prepare_images()   # las capturas se hacen fuera del pintado
+        view.repaint()           # y esto rellena los polígonos de las cartas
+        centre = view._hits[-1][1].boundingRect().center()
+        near = view._laser_depth(centre)[0]
+        far = view._laser_depth(QPointF(2, 2))
+        self.assertEqual(far, gallery_controls.LASER_BACKGROUND)
+        self.assertGreater(near, far[0])
+        # El suelo, bajo la carta central: aplanado, y más cuanto más al fondo.
+        # Llega casi a media altura (``_floor_top``).
+        self.assertLessEqual(view._floor_top(),
+                             view.height() / 2 + gallery_controls.FLOOR_DROP)
+        under = view._centre_card().geometry().bottom() + 4
+        horizon = view._laser_depth(QPointF(view.width() / 2, under))
+        bottom = view._laser_depth(QPointF(view.width() / 2, view.height() - 2))
+        self.assertLess(horizon[2], 1.0)
+        self.assertLess(horizon[2], bottom[2])
+        self.assertLess(horizon[0], bottom[0])
+
+    def test_sobre_los_botones_de_la_carta_sigue_el_laser(self):
+        """Los botones traían su manita, que tapaba el láser."""
+        from PySide6.QtCore import Qt
+        from PySide6.QtWidgets import QAbstractButton
+
+        window = self._window()
+        view = window.store_gallery
+        buttons = view._centre_card().findChildren(QAbstractButton)
+        self.assertTrue(buttons)
+        self.assertTrue(all(not b.testAttribute(Qt.WA_SetCursor) for b in buttons))
+        view.laser_button.click()   # láser apagado: vuelve la manita
+        self.assertTrue(all(b.cursor().shape() == Qt.PointingHandCursor
+                            for b in buttons))
+
+    def test_el_estilo_se_elige_desde_la_galeria_y_se_recuerda(self):
+        """Ya no está en Ajustes: es una forma de ver, como rejilla o lista."""
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+
+        from services.settings import GALLERY_STYLES, Settings
+
+        window = self._window()
+        self.assertFalse(hasattr(window, "gallery_combo"))
+        view = window.store_gallery
+        view.style_button.click()
+        self.assertEqual(view.style_name, GALLERY_STYLES[1])
+        self.assertEqual(window.installed_gallery.style_name, GALLERY_STYLES[1])
+        self.assertEqual(Settings.load().gallery_style, GALLERY_STYLES[1])
+        QTest.keyClick(view, Qt.Key_4)
+        self.assertEqual(view.style_name, GALLERY_STYLES[3])
+        self.assertEqual(Settings.load().gallery_style, GALLERY_STYLES[3])
+
+    def test_nunca_se_captura_una_carta_en_mitad_de_un_pintado(self):
+        """``grab()`` dentro de ``paintEvent`` tumbaba la app (violación de
+        segmento en un escritorio de verdad; en offscreen solo avisaba)."""
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+
+        window = self._window(count=8)
+        view = window.store_gallery
+        painting = {"now": False, "bad": 0}
+        original = view.paintEvent
+
+        def paint(event):
+            painting["now"] = True
+            try:
+                original(event)
+            finally:
+                painting["now"] = False
+
+        view.paintEvent = paint
+        for item in view.items:
+            grab = item.card.grab
+
+            def guarded(*args, _grab=grab):
+                if painting["now"]:
+                    painting["bad"] += 1
+                return _grab(*args)
+
+            item.card.grab = guarded
+        view._images.clear()
+        view.repaint()
+        QTest.keyClick(view, Qt.Key_Right)
+        QTest.qWait(500)
+        view.repaint()
+        self.assertEqual(painting["bad"], 0)
+        # Y las imágenes acaban llegando (se preparan fuera del pintado).
+        self.assertTrue(view._images)
+
+    def test_el_reflejo_de_las_laterales_se_apaga_hacia_abajo(self):
+        """Con el ``devicePixelRatio`` rebajado antes de tiempo, el fundido
+        del reflejo de la imagen pequeña solo cubría la mitad y abajo se veía
+        la carta entera."""
+        from PySide6.QtGui import QColor
+
+        window = self._window()
+        view = window.store_gallery
+        view._capture(0)
+        for mirror in (view._images[0][1], view._images[0][4]):
+            image = mirror.toImage()
+            bottom = QColor.fromRgba(image.pixel(image.width() // 2,
+                                                 image.height() - 2))
+            self.assertLess(bottom.alpha(), 10)
+
+    def test_la_carta_sigue_siendo_vertical_al_redimensionar(self):
+        """El ancho sale del alto: grande o pequeña, la carta parece una carta."""
+        from PySide6.QtTest import QTest
+
+        from ui.widgets import gallery
+
+        window = self._window()
+        view = window.store_gallery
+        for size in ((940, 655), (1500, 1000), (1100, 520)):
+            window.resize(*size)
+            QTest.qWait(80)
+            card = view._centre_card()
+            ratio = card.height() / card.width()
+            # Y nunca toca el techo de la galería.
+            self.assertGreaterEqual(card.geometry().top(), gallery.TOP_MARGIN - 1, size)
+            self.assertGreater(ratio, 1.15, size)
+            self.assertLess(ratio, 1.6, size)
+        # Más ventana, carta más grande.
+        window.resize(940, 655)
+        QTest.qWait(80)
+        small = view._centre_card().width()
+        window.resize(1500, 1000)
+        QTest.qWait(80)
+        self.assertGreater(view._centre_card().width(), small)
+
+    def test_el_arte_gana_un_poco_de_saturacion_y_contraste(self):
+        """Un poco (+6 % y +3 %): que destaque sin parecer otra imagen."""
+        from PySide6.QtGui import QColor, QImage, QPixmap
+
+        from ui.widgets.gallery_art import enhance
+
+        image = QImage(64, 32, QImage.Format_ARGB32_Premultiplied)
+        for x in range(64):
+            for y in range(32):
+                image.setPixelColor(x, y, QColor(60 + x * 2, 100, 160 - x))
+        before = QPixmap.fromImage(image)
+        after = enhance(before).toImage()
+
+        def chroma(im):
+            values = [QColor(im.pixel(x, y)) for x in range(0, 64, 4)
+                      for y in range(0, 32, 4)]
+            return sum(max(c.red(), c.green(), c.blue())
+                       - min(c.red(), c.green(), c.blue()) for c in values) / len(values)
+
+        gain = chroma(after) / chroma(image) - 1
+        self.assertGreater(gain, 0.03)
+        self.assertLess(gain, 0.15)
+        self.assertEqual(QColor(after.pixel(5, 5)).alpha(), 255)
+
+    def test_las_flechas_no_se_roban_al_buscador_si_tiene_texto(self):
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+
+        window = self._window()
+        window.search_input.setFocus()
+        window.search_input.setText("4")
+        window.search_input.setCursorPosition(0)
+        QTest.keyClick(window.search_input, Qt.Key_Right)
+        self.assertEqual(window.search_input.cursorPosition(), 1)
+
+    def test_flecha_arriba_lanza_solo_si_esta_instalada(self):
+        """↑ lanza la central; en una de la nube no descarga nada."""
+        from unittest import mock
+
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+
+        window = self._window()
+        view = window.store_gallery
+        card = view._centre_card()
+        with mock.patch.object(card.primary_button, "click") as click:
+            card.setProperty("installed", "false")
+            QTest.keyClick(view, Qt.Key_Up)
+            click.assert_not_called()
+            card.setProperty("installed", "true")
+            QTest.keyClick(view, Qt.Key_Up)
+            click.assert_called_once()
+
+    def test_con_el_buscador_vacio_las_flechas_son_de_la_galeria(self):
+        """Al arrancar el foco está en el buscador sin que nadie lo toque."""
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+
+        window = self._window()
+        window.search_input.setFocus()
+        self.assertEqual(window.search_input.text(), "")
+        QTest.keyClick(window.search_input, Qt.Key_Right)
+        self.assertEqual(window.store_gallery.target, 1)
+
+    def test_un_estilo_desconocido_en_el_json_vuelve_al_de_fabrica(self):
+        import json
+
+        from services import settings as settings_service
+
+        path = settings_service.config_dir() / "settings.json"
+        data = json.loads(path.read_text())
+        data["gallery_style"] = "holograma"
+        path.write_text(json.dumps(data))
+        loaded = settings_service.Settings.load()
+        self.assertEqual(loaded.gallery_style,
+                         settings_service.GALLERY_STYLES[0])
+
+
+@unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
+class TiltTests(SettingsIsolated, unittest.TestCase):
+    """La inclinación 3D de las tarjetas de rejilla (``ui/widgets/tilt.py``)."""
+
+    app = None
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+        from ui import fonts, qss
+
+        fonts.load()
+        cls.app.setStyleSheet(qss.build_qss())
+
+    def _card(self, cls_name="GridBuildCard"):
+        from PySide6.QtWidgets import QVBoxLayout, QWidget
+
+        from ui.widgets import cards
+
+        host = QWidget()
+        lay = QVBoxLayout(host)
+        build = _build("4.2.23", "v42", "stable")
+        card = (cards.GridBuildCard(build, False, False, 0.6) if cls_name == "GridBuildCard"
+                else cards.BuildCard(build, False, False))
+        lay.addWidget(card)
+        host.resize(320, 260)
+        host.show()
+        # El ``tearDown`` del mixin ya se encarga de las ventanas sueltas.
+        self._host = host
+        self.app.processEvents()
+        return card
+
+    def test_la_capa_no_se_come_el_raton(self):
+        """Los clics tienen que llegar a la tarjeta de verdad, que sigue debajo."""
+        from PySide6.QtCore import Qt
+
+        card = self._card()
+        card._set_hover(True)
+        overlay = card._tilt
+        self.assertTrue(overlay.isVisible())
+        self.assertTrue(overlay.testAttribute(Qt.WA_TransparentForMouseEvents))
+
+    def test_al_salir_vuelve_a_su_sitio_y_desaparece(self):
+        from PySide6.QtTest import QTest
+
+        card = self._card()
+        card._set_hover(True)
+        overlay = card._tilt
+        overlay._goal = [8.0, -8.0, 1.035, 1.0]
+        QTest.qWait(200)
+        card._set_hover(False)
+        QTest.qWait(600)
+        self.assertFalse(overlay.isVisible())
+        self.assertEqual(overlay._now, [0.0, 0.0, 1.0, 0.0])
+
+    def test_sigue_animando_mientras_el_raton_se_mueve(self):
+        """El ratón manda movimientos más a menudo que el temporizador: si
+        cada uno lo reiniciaba (``start()``), no vencía nunca y la tarjeta solo
+        se movía al parar el ratón (en Wayland: 1 paso en 3 s)."""
+        import time
+
+        from PySide6.QtCore import QPoint
+        from PySide6.QtTest import QTest
+
+        card = self._card()
+        card._set_hover(True)
+        overlay = card._tilt
+        start = list(overlay._now)
+        end = time.monotonic() + 0.4
+        x = 0
+        while time.monotonic() < end:
+            x = (x + 7) % card.width()
+            overlay._aim(card.mapToGlobal(QPoint(x, 5)))
+            QTest.qWait(4)   # más rápido que FRAME_MS
+        self.assertNotEqual(overlay._now, start)
+
+    def test_el_halo_lleva_el_color_de_la_version(self):
+        from ui import theme as t
+        from ui.widgets.build_lists import BuildListsMixin
+
+        lts = _build("4.2.23", "v42", "stable", lts=True)
+        stable = _build("5.1.2", "v51", "stable")
+        alpha = _build("5.4.0", "main", "alpha")
+        from services import channels
+
+        colour = BuildListsMixin._glow_color
+        self.assertEqual(colour(lts, channels.type_of_build(lts)), t.WARNING)
+        self.assertEqual(colour(stable, channels.type_of_build(stable)), t.ACCENT)
+        self.assertEqual(colour(alpha, channels.type_of_build(alpha)), t.TESTING)
+        bfa = _build("5.2.0", "v52", "stable")
+        bfa.fork = "bforartists"
+        upbge = _build("0.50", "upbge-weekly", "alpha")
+        upbge.fork = "upbge"
+        self.assertEqual(colour(bfa, channels.type_of_build(bfa)), t.FORK_BFORARTISTS)
+        self.assertEqual(colour(upbge, channels.type_of_build(upbge)), t.FORK_UPBGE)
+
+    def test_al_pasar_a_la_vecina_la_anterior_termina_ya(self):
+        """Dos capas solapadas, cada una con su foto de fondo, se pisaban y
+        dejaban artefactos en las tarjetas de al lado."""
+        from PySide6.QtWidgets import QHBoxLayout, QWidget
+
+        from ui.widgets import cards
+
+        host = QWidget()
+        lay = QHBoxLayout(host)
+        a = cards.GridBuildCard(_build("4.2.23", "v42", "stable"), False, False, 0.6)
+        b = cards.GridBuildCard(_build("4.3.2", "v43", "stable"), False, False, 0.6)
+        lay.addWidget(a)
+        lay.addWidget(b)
+        host.resize(640, 260)
+        host.show()
+        self._host = host
+        self.app.processEvents()
+        a._set_hover(True)
+        a._set_hover(False)          # vuelve a su sitio (transparente)...
+        self.assertFalse(a._tilt._opaque)
+        b._set_hover(True)           # ...y el ratón ya está en la vecina
+        self.assertFalse(a._tilt.isVisible())
+        self.assertTrue(b._tilt.isVisible())
+        self.assertTrue(b._tilt._opaque)
+
+    def test_las_de_lista_no_se_inclinan(self):
+        card = self._card("BuildCard")
+        card._set_hover(True)
+        self.assertIsNone(getattr(card, "_tilt", None))
+
+    def test_si_borran_la_tarjeta_a_mitad_la_capa_se_retira_sin_romper(self):
+        """La rejilla se reconstruye (al recuperar el foco se reescanean las
+        instaladas) con una tarjeta inclinándose: un fotograma más tocando la
+        tarjeta borrada lanzaba una excepción dentro de ``paintEvent``, el
+        painter se quedaba abierto y la app acababa en violación de segmento."""
+        import sys
+
+        from PySide6.QtCore import QEvent
+        from PySide6.QtTest import QTest
+
+        card = self._card()
+        card._set_hover(True)
+        overlay = card._tilt
+        overlay._goal = [8.0, -8.0, 1.035, 1.0]
+        QTest.qWait(50)
+        errors = []
+        hook = sys.excepthook
+        sys.excepthook = lambda *exc: errors.append(exc)
+        self.addCleanup(setattr, sys, "excepthook", hook)
+        card.setParent(None)
+        card.deleteLater()
+        self.app.sendPostedEvents(None, QEvent.DeferredDelete)
+        QTest.qWait(150)
+        self.assertEqual(errors, [])
+        # La capa se ha retirado: borrada, o al menos parada.
+        from shiboken6 import isValid
+
+        self.assertTrue(not isValid(overlay) or not overlay._frame.isActive())
+
+    def test_se_puede_apagar_en_ajustes(self):
+        from PySide6.QtTest import QTest
+
+        from services.settings import Settings
+        from ui.widgets.cards import GridBuildCard
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.show()
+        QTest.qWait(250)
+        window.builds = [_build("4.2.23", "v42", "stable")]
+        window.set_view("store")
+        window.set_layout_mode("grid")
+        card = window.findChildren(GridBuildCard)[-1]
+        self.assertTrue(card.tilt_enabled)
+        window.tilt_switch.setChecked(False)
+        self.assertFalse(Settings.load().card_tilt)
+        QTest.qWait(50)   # las tarjetas nuevas se enseñan en el siguiente ciclo
+        cards = [c for c in window.findChildren(GridBuildCard) if c.isVisible()]
+        self.assertTrue(cards)
+        self.assertTrue(all(not c.tilt_enabled for c in cards))
+        cards[0]._set_hover(True)
+        self.assertIsNone(getattr(cards[0], "_tilt", None))
+
+    def test_al_esconderse_deja_de_escuchar_el_raton(self):
+        card = self._card()
+        card._set_hover(True)
+        overlay = card._tilt
+        card.hide()
+        self.assertFalse(overlay._hover)

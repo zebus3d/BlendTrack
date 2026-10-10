@@ -24,6 +24,7 @@ from ui import theme as t
 from ui.fonts import device_ratio, glyph_icon, icon_font
 from ui.widgets.buttons import CardButton, IconLinkButton, StarButton
 from ui.widgets.labels import EditableLabel, ElidedLabel
+from ui.widgets import motion, tilt
 from ui.widgets.layouts import repolish
 
 # Un logo por fork. El de Blender está en el centro; Bforartists y UPBGE traen
@@ -34,6 +35,13 @@ _LOGOS = {
     "bforartists": ASSETS_DIR / "images" / "bforartists_logo.png",
     "upbge": ASSETS_DIR / "images" / "upbge_logo.png",
 }
+
+
+
+def logo_path(fork: str):
+    """Ruta del logo de un fork (el de Blender si no se conoce)."""
+    return _LOGOS.get(fork, _LOGOS[FORK_BLENDER])
+
 
 # Los PNG se cargan una vez por fork y las versiones escaladas/atenuadas se
 # guardan por (fork, tamaño, atenuado). Antes cada tarjeta hacía
@@ -158,7 +166,9 @@ def card_shadow(widget) -> None:
     bajo el ratón, así que es medio milisegundo, pero conviene saberlo antes de
     añadir más efectos.
     """
-    _drop_shadow(widget, blur=10.0, offset=2.0, alpha=110)
+    rest = motion.SHADOW_REST
+    _drop_shadow(widget, blur=rest["blur"], offset=rest["offset"],
+                 alpha=rest["color"].alpha())
 
 
 def _favorite_star(marked: bool, on_toggle) -> StarButton:
@@ -284,6 +294,10 @@ class _HoverCard:
     No basta con ``QFrame#Card:hover`` en el QSS: cuando el ratón está encima de
     un hijo (una etiqueta o un botón), el padre puede no recibir el estado
     hover. Aquí lo marcamos a mano con una propiedad dinámica que el QSS lee.
+
+    Además la tarjeta "se levanta": su sombra crece y se vuelve un halo del
+    color de acento (``motion.lift_shadow``). El fondo lo cambia el QSS de
+    golpe, pero el halo entra y sale con suavidad.
     """
 
     def enterEvent(self, event):
@@ -294,9 +308,29 @@ class _HoverCard:
         super().leaveEvent(event)
         self._set_hover(False)
 
+    # Las tarjetas de rejilla se inclinan en 3D hacia el ratón (``tilt``);
+    # las de lista no (son filas a todo lo ancho) ni la que va dentro de la
+    # carta grande de la galería.
+    tilt_enabled = False
+
     def _set_hover(self, on: bool) -> None:
         self.setProperty("hover", "true" if on else "false")
         repolish(self)
+        if self.tilt_enabled:
+            # La capa inclinada lleva su propio halo, que se inclina con ella.
+            # El plano de la sombra (``lift_shadow``) sobraba: eran dos halos,
+            # y el de debajo, apagándose con su propia animación, dejaba restos
+            # en las tarjetas de al lado.
+            tilt.tilt(self, on)
+        else:
+            motion.lift_shadow(self, on)
+
+    def hideEvent(self, event):
+        # Al cambiar de vista con el ratón encima no llega ``leaveEvent``: sin
+        # esto, la inclinación se quedaba a medias y escuchando el ratón.
+        super().hideEvent(event)
+        if self.tilt_enabled:
+            tilt.tilt(self, False)
 
 
 class BaseBuildCard(_HoverCard, QFrame):
@@ -463,6 +497,7 @@ class GridBuildCard(BaseBuildCard):
         # mismo. Al ahorrársela a las descargables, estas salían 22 px más bajas
         # que las instaladas y la rejilla quedaba desigual.
         self.setFixedHeight(_grid_height(zoom))
+        self.tilt_enabled = True
         lay = QVBoxLayout(self)
         m = int(12 * zoom)
         lay.setContentsMargins(m, m, m, m)
@@ -508,6 +543,8 @@ class GridBuildCard(BaseBuildCard):
         )
         action.setIcon(_launch_icon() if installed else _download_icon())
         action.clicked.connect(lambda: self.action_clicked.emit(self.build))
+        # El botón principal (Descargar o Lanzar): la galería lo pulsa con Intro.
+        self.primary_button = action
         row.addWidget(action)
         row.addStretch()
         lay.addLayout(row)
@@ -629,6 +666,7 @@ class GridInstalledCard(_HoverCard, QFrame):
         # tamaño. La fila de la etiqueta se reserva siempre (aquí lleva el
         # aviso de actualización, o va vacía).
         self.setFixedHeight(_grid_height(zoom))
+        self.tilt_enabled = True
 
         lay = QVBoxLayout(self)
         m = int(12 * zoom)
@@ -697,6 +735,8 @@ class GridInstalledCard(_HoverCard, QFrame):
                             tooltip=tr("Launch this installed version"))
         launch.setIcon(_launch_icon())
         launch.clicked.connect(lambda: self.launch_clicked.emit(entry))
+        # Como en la tienda: el que pulsa Intro en la galería.
+        self.primary_button = launch
         row.addWidget(launch, 1)
         delete = CardButton(icons.DELETE, variant="danger",
                             tooltip=tr("Remove this installed version"))

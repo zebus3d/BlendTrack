@@ -26,8 +26,13 @@ from services.downloader import log as download_log
 from ui import icons
 from ui.fonts import icon_font
 from ui.widgets.buttons import IconFlatButton, Pill
+from ui import theme as t
+from services import sound
+from services import splash as splash_service
+from ui.widgets import gallery
+from ui.widgets.gallery_card import GalleryCard, build_rows, installed_rows
 from ui.widgets.cards import (BuildCard, GridBuildCard, GridInstalledCard,
-                              InstalledCard, card_shadow)
+                              InstalledCard, card_shadow, logo_path)
 from ui.widgets.layouts import clear_layout
 from ui.widgets.menus import card_menu
 from ui.widgets.shell import (ARCH_LABELS, CHANNEL_TOOLTIPS, CHANNELS,
@@ -72,11 +77,197 @@ class BuildListsMixin:
 
     def _build_store_view(self):
         self.store_scroll, self.store_grid = self._new_list_view()
-        return self.store_scroll
+        self.store_gallery = gallery.GalleryView(self.settings.gallery_style)
+        self.store_gallery.passed.connect(self._gallery_tick)
+        self.store_gallery.settled.connect(self._gallery_lock)
+        self.store_gallery.mute_toggled.connect(
+            lambda muted: self.set_ui_sounds(not muted))
+        self.store_gallery.set_muted(not self.settings.ui_sounds)
+        self.store_gallery.laser_toggled.connect(self.set_laser_pointer)
+        self.store_gallery.set_laser(self.settings.laser_pointer)
+        self.store_gallery.style_requested.connect(self.set_gallery_style)
+        self.store_pages = self._list_pages(self.store_scroll, self.store_gallery)
+        return self.store_pages
 
     def _build_installed_view(self):
         self.installed_scroll, self.installed_grid = self._new_list_view()
-        return self.installed_scroll
+        self.installed_gallery = gallery.GalleryView(self.settings.gallery_style)
+        self.installed_gallery.passed.connect(self._gallery_tick)
+        self.installed_gallery.settled.connect(self._gallery_lock)
+        self.installed_gallery.mute_toggled.connect(
+            lambda muted: self.set_ui_sounds(not muted))
+        self.installed_gallery.set_muted(not self.settings.ui_sounds)
+        self.installed_gallery.laser_toggled.connect(self.set_laser_pointer)
+        self.installed_gallery.set_laser(self.settings.laser_pointer)
+        self.installed_gallery.style_requested.connect(self.set_gallery_style)
+        self.installed_pages = self._list_pages(self.installed_scroll,
+                                                self.installed_gallery)
+        return self.installed_pages
+
+    @staticmethod
+    def _list_pages(scroll: QScrollArea, view) -> QStackedWidget:
+        """La rejilla (o la lista) y la galería de una pestaña, una encima de otra.
+
+        La galería no es una rejilla con otra colocación: pinta las tarjetas
+        ella misma (ver ``ui/widgets/gallery.py``), así que va en su propia
+        página y se cambia de una a otra según el modo.
+        """
+        pages = QStackedWidget()
+        pages.addWidget(scroll)
+        pages.addWidget(view)
+        return pages
+
+    def _gallery_tick(self) -> None:
+        """El "tic" de pasar de carta, si el usuario no lo ha apagado."""
+        if self.settings.ui_sounds:
+            sound.play_tick()
+
+    def _gallery_lock(self) -> None:
+        """El "clac" de una carta que se queda en el centro."""
+        if self.settings.ui_sounds:
+            sound.play_lock()
+
+    def set_ui_sounds(self, on: bool) -> None:
+        """Enciende o apaga los sonidos y deja de acuerdo a los tres mandos.
+
+        Se cambia desde el botón de silencio de cualquiera de las dos galerías
+        o desde Ajustes > Interfaz: los otros dos tienen que enterarse.
+        """
+        self.settings.ui_sounds = bool(on)
+        self.settings.save()
+        self.store_gallery.set_muted(not on)
+        self.installed_gallery.set_muted(not on)
+        switch = getattr(self, "sounds_switch", None)
+        if switch is not None and switch.isChecked() != bool(on):
+            switch.blockSignals(True)
+            switch.setChecked(bool(on))
+            switch.blockSignals(False)
+            switch.update()
+
+    def set_card_tilt(self, on: bool) -> None:
+        """Enciende o apaga la inclinación 3D de las tarjetas (y lo recuerda).
+
+        Las tarjetas lo leen al construirse, así que se rehacen las dos
+        rejillas: el cambio se ve en el acto, sin reiniciar.
+        """
+        self.settings.card_tilt = bool(on)
+        self.settings.save()
+        self._rebuild_store()
+        self._rebuild_installed()
+
+    def set_laser_pointer(self, on: bool) -> None:
+        """El puntero láser de las galerías, encendido o no (y recordado)."""
+        self.settings.laser_pointer = bool(on)
+        self.settings.save()
+        self.store_gallery.set_laser(bool(on))
+        self.installed_gallery.set_laser(bool(on))
+
+    def set_gallery_style(self, style: str) -> None:
+        """Cambia el estilo de las dos galerías y lo recuerda.
+
+        Se pide desde la propia galería (el botón de la esquina o las teclas
+        1-4): es una forma de ver, como rejilla/lista/galería, no un ajuste.
+        """
+        if style not in gallery.STYLES:
+            return
+        self.settings.gallery_style = style
+        self.settings.save()
+        self.store_gallery.set_style(style)
+        self.installed_gallery.set_style(style)
+
+    def _gallery_item(self, card, item, key: str, subtitle: str,
+                      build_type: str, rows, installed: bool):
+        """Envuelve una tarjeta de rejilla en la grande de la galería.
+
+        ``build_type`` es el de ``services.channels`` (``type_of_build`` en la
+        tienda, ``type_of_installed`` en Local): el color de la versión sale de
+        ahí, naranja en las LTS y el acento en el resto, como en las tarjetas.
+        El splash se pone si ya está en la caché; si no, se pide en un hilo y
+        llega por ``splash_ready``.
+        """
+        color = self._glow_color(item, build_type)
+        logo = str(logo_path(item.fork))
+        series = splash_service.series_for(item.version, item.branch or "",
+                                           getattr(item, "risk", "") or "",
+                                           item.fork)
+        cached = splash_service.cached(series)
+        big = GalleryCard(card, rows, color, logo, installed)
+        big.glow_color = color
+        if cached is not None:
+            big.set_splash(str(cached))
+        elif series and (splash_service.needs_fetch(series)
+                         or self._splash_executable(series)):
+            self._fetch_splash(series)
+        return gallery.GalleryItem(
+            card=big, key=key, title=f"{item.fork_name} {item.version}",
+            subtitle=subtitle, color=color, logo=logo, series=series,
+            splash=str(cached) if cached is not None else "")
+
+    def _splash_executable(self, series: str):
+        """El ejecutable de alguna instalación de esa serie, si la hay.
+
+        Si la versión (o otra de su serie, que comparten splash) está
+        instalada, el splash se saca de su binario y no hace falta la red.
+        """
+        for entry in self.installed:
+            if entry.executable and splash_service.series_for(
+                    entry.version, entry.branch or "", entry.risk or "",
+                    entry.fork) == series:
+                return entry.executable
+        return None
+
+    @staticmethod
+    def _glow_color(item, build_type: str) -> str:
+        """El color de la luz de una versión: halo, brillo y fondo de galería.
+
+        Naranja las LTS (el mismo con el que la tarjeta escribe "LTS"), azul
+        las estables y violeta las que están en pruebas: diarias, alfas, beta
+        y experimentales. Los forks llevan su propio color (turquesa
+        Bforartists, magenta UPBGE), para distinguirlos de un vistazo. La
+        misma regla en la rejilla y en la galería, para que el color diga lo
+        mismo en las dos.
+        """
+        if build_type == channels.TYPE_BFORARTISTS:
+            return t.FORK_BFORARTISTS
+        if build_type == channels.TYPE_UPBGE:
+            return t.FORK_UPBGE
+        if build_type == channels.TYPE_LTS:
+            return t.WARNING
+        if build_type == channels.TYPE_STABLE:
+            return t.ACCENT
+        if build_type in (channels.TYPE_DAILY, channels.TYPE_EXPERIMENTAL):
+            return t.TESTING
+        risk = getattr(item, "risk", "") or "stable"
+        return t.ACCENT if risk == "stable" else t.TESTING
+
+    def _fetch_splash(self, series: str) -> None:
+        """Consigue el splash de una serie en un hilo (una vez por serie):
+        del ejecutable instalado si lo hay, y si no, de la red."""
+        if series in self._splash_pending:
+            return
+        self._splash_pending.add(series)
+        executable = self._splash_executable(series)
+
+        def worker():
+            path = (splash_service.extract_from(series, executable)
+                    if executable else None)
+            if path is None and splash_service.needs_fetch(series):
+                path = splash_service.fetch(series)
+            if path is None:
+                return
+            try:
+                self.splash_ready.emit(series, str(path))
+            except RuntimeError:
+                # La ventana se cerró mientras se bajaba: ya no hay a quién
+                # avisar, y el fichero queda en la caché para la próxima vez.
+                pass
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_splash_ready(self, series: str, path: str) -> None:
+        self._splash_pending.discard(series)
+        self.store_gallery.set_splash(series, path)
+        self.installed_gallery.set_splash(series, path)
 
     def _columns_for(self, scroll: QScrollArea, card_width: int) -> int:
         """Número de columnas que caben en el ancho visible (mínimo 1).
@@ -142,6 +333,10 @@ class BuildListsMixin:
         clear_layout(self.store_grid)
         builds = self._filtered()
         columns = self._grid_columns(self.store_scroll, self.store_grid, 0)
+        # La galería solo se enseña si hay algo que enseñar: el aviso de "no hay
+        # versiones" es una tarjeta suelta y va en la página de la rejilla.
+        in_gallery = self.layout_mode == "gallery" and bool(builds)
+        self.store_pages.setCurrentIndex(1 if in_gallery else 0)
         if not builds:
             # Cada canal vacío tiene su explicación, en vez del genérico.
             if self.channel == "experimental":
@@ -159,7 +354,8 @@ class BuildListsMixin:
             self._fill_grid(self.store_grid, [self._placeholder(text, hint)],
                             columns)
             return
-        grid = self.layout_mode == "grid"
+        grid = self.layout_mode in ("grid", "gallery")
+        zoom = gallery.CARD_ZOOM if in_gallery else self.zoom
         cards = []
         for index, build in enumerate(builds):
             # La misma regla que al pulsar (``install_build``): en las diarias
@@ -178,8 +374,11 @@ class BuildListsMixin:
                        if installed and self.settings.experimental_features
                        else None)
             if grid:
-                card = GridBuildCard(build, installed, zebra, self.zoom, marked,
+                card = GridBuildCard(build, installed, zebra, zoom, marked,
                                      console=console)
+                card.tilt_enabled = self.settings.card_tilt
+                card.glow_color = self._glow_color(
+                    build, channels.type_of_build(build))
             else:
                 card = BuildCard(build, installed, zebra, marked, console=console)
             card.action_clicked.connect(self.install_build)
@@ -190,12 +389,30 @@ class BuildListsMixin:
             card.customContextMenuRequested.connect(
                 lambda pos, b=build, c=card: self._show_store_menu(b, c, pos))
             cards.append(card)
+        if in_gallery:
+            self.store_gallery.set_items([
+                self._gallery_item(card, build, build.filename,
+                                   self._gallery_subtitle(build),
+                                   channels.type_of_build(build),
+                                   build_rows(build),
+                                   installed_service.find_installed(
+                                       self.installed, build) is not None)
+                for card, build in zip(cards, builds, strict=True)])
+            return
         self._fill_grid(self.store_grid, cards, columns)
+
+    @staticmethod
+    def _gallery_subtitle(build) -> str:
+        """Rama y tamaño, la línea bajo el título en el estilo ``showcase``."""
+        size = build.human_size if build.size else ""
+        return "  ·  ".join(part for part in (build.branch, size) if part)
 
     def _rebuild_installed(self) -> None:
         clear_layout(self.installed_grid)
         entries = self._filtered_installed()
         columns = self._grid_columns(self.installed_scroll, self.installed_grid, 0)
+        in_gallery = self.layout_mode == "gallery" and bool(entries)
+        self.installed_pages.setCurrentIndex(1 if in_gallery else 0)
         if not entries:
             if self.channel == "favorites":
                 text = tr("No favorites yet")
@@ -210,7 +427,8 @@ class BuildListsMixin:
             self._fill_grid(self.installed_grid, [self._placeholder(text, hint)],
                             columns)
             return
-        grid = self.layout_mode == "grid"
+        grid = self.layout_mode in ("grid", "gallery")
+        zoom = gallery.CARD_ZOOM if in_gallery else self.zoom
         cards = []
         for index, entry in enumerate(entries):
             # Igual que en la tienda: cebra solo en modo lista.
@@ -221,9 +439,12 @@ class BuildListsMixin:
             console = (self._console_state(entry)
                        if self.settings.experimental_features else None)
             if grid:
-                card = GridInstalledCard(entry, zebra, self.zoom, marked,
+                card = GridInstalledCard(entry, zebra, zoom, marked,
                                          update=update, console=console,
                                          read_only=self._is_read_only(entry))
+                card.tilt_enabled = self.settings.card_tilt
+                card.glow_color = self._glow_color(
+                    entry, channels.type_of_installed(entry))
             else:
                 card = InstalledCard(entry, zebra, marked, update=update,
                                      read_only=self._is_read_only(entry),
@@ -239,6 +460,13 @@ class BuildListsMixin:
             card.customContextMenuRequested.connect(
                 lambda pos, e=entry, c=card: self._show_installed_menu(e, c, pos))
             cards.append(card)
+        if in_gallery:
+            self.installed_gallery.set_items([
+                self._gallery_item(card, entry, str(entry.path), entry.name,
+                                   channels.type_of_installed(entry),
+                                   installed_rows(entry), True)
+                for card, entry in zip(cards, entries, strict=True)])
+            return
         self._fill_grid(self.installed_grid, cards, columns)
 
     def _installed_menu(self, entry) -> QMenu:
@@ -487,16 +715,21 @@ class BuildListsMixin:
         self._rebuild_installed()
 
     def set_layout_mode(self, mode: str) -> None:
-        """Cambia entre rejilla y lista y recuerda la elección."""
+        """Cambia entre rejilla, lista y galería, y recuerda la elección."""
         self.layout_mode = mode
         self.zoom_box.setVisible(
             self.view not in ("settings", "migrate", "recent", "addons")
             and mode == "grid")
-        (self.grid_btn if mode == "grid" else self.list_btn).setChecked(True)
+        self._layout_buttons()[mode].setChecked(True)
         self.settings.layout_mode = mode
         self.settings.save()
         self._rebuild_store()
         self._rebuild_installed()
+
+    def _layout_buttons(self) -> dict:
+        """Los botones de modo de la fila de filtros, por modo."""
+        return {"grid": self.grid_btn, "list": self.list_btn,
+                "gallery": self.gallery_btn}
 
     def set_zoom(self, value: float) -> None:
         """Fija el tamaño de la rejilla: la etiqueta va al instante y
@@ -660,13 +893,18 @@ class BuildListsMixin:
         self.grid_btn.setFont(icon_font())
         self.list_btn = Pill(icons.LIST, tr("Show the versions as a list of rows."))
         self.list_btn.setFont(icon_font())
-        for btn, mode in ((self.grid_btn, "grid"), (self.list_btn, "list")):
+        self.gallery_btn = Pill(icons.GALLERY, tr(
+            "Show the versions as a gallery you flip through sideways.\n"
+            "Arrows, the mouse wheel or dragging move through them; the button "
+            "in its corner (or keys 1 to 4) changes the style."))
+        self.gallery_btn.setFont(icon_font())
+        for mode, btn in self._layout_buttons().items():
             self.layout_group.addButton(btn)
             # Misma altura que los tags de canal: la fila queda a ras.
             btn.setFixedHeight(FILTER_CONTROL_HEIGHT)
             btn.clicked.connect(lambda _=False, m=mode: self.set_layout_mode(m))
             lay.addWidget(btn)
-        (self.grid_btn if self.layout_mode == "grid" else self.list_btn).setChecked(True)
+        self._layout_buttons()[self.layout_mode].setChecked(True)
 
         self.platform_combo = QComboBox()
         self.platform_combo.setObjectName("FilterCombo")

@@ -88,6 +88,18 @@ DANGER_ICON = "#FFC0C0"     # glifo de la papelera al pasar por encima: blanco
                             # teñido de rojo, para que el realce avise de verdad
                             # (sobre DANGER = 3,3:1, suficiente para un icono)
 WARNING = "#FFAF23"         # naranja (LTS)
+# Violeta: el halo de las versiones "en pruebas" (diarias, alfas, beta y
+# experimentales). Solo se usa para luz (halo, brillo), nunca para texto: no
+# lleva mínimo de contraste. No es verde a propósito: en la app el verde es
+# "instalada / lanzar", y un halo verde en una que no lo está mentiría.
+TESTING = "#8E6CD8"
+# Los forks, cada uno con su luz, para distinguirlos de un vistazo. No se usa
+# el color de su logo: el de Bforartists es azul (#3c76a7, el de las estables)
+# y el de UPBGE naranja (#ef9137, el de las LTS), y se confundirían justo con
+# lo que tienen que distinguirse. Turquesa y magenta no significan nada más en
+# la app (el verde es "instalada"; el rojo, borrar). Solo para luz, no texto.
+FORK_BFORARTISTS = "#2FB3A6"
+FORK_UPBGE = "#C9549A"
 SUCCESS_TEXT = "#6FCF7A"    # verde claro para texto
 INFO_TEXT = "#80ACE2"       # azul claro para texto (4,5:1 sobre el hover)
 INFO_DISC = "#45729B"       # disco del icono de información

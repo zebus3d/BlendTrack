@@ -34,7 +34,8 @@ from ui.widgets.buttons import CardButton, SwitchPill
 from ui.widgets.cards import settings_card
 from ui.widgets.dialogs import show_error
 from ui.widgets.labels import ElidedLabel
-from ui.widgets.shell import (EXPERIMENTAL_VIEWS, LANGUAGE_IDS, MAX_ZOOM,
+from ui.widgets.shell import (EXPERIMENTAL_VIEWS,
+                              LANGUAGE_IDS, MAX_ZOOM,
                               MIN_ZOOM, ZoomSlider)
 from ui.widgets.tray import TrayIcon
 
@@ -274,6 +275,29 @@ class SettingsViewMixin:
             self._on_language_changed)
         row3.addWidget(self.language_combo)
         lay.addLayout(row3)
+
+        row_tilt = QHBoxLayout()
+        row_tilt.addWidget(QLabel(tr("Tilt the cards under the mouse")))
+        row_tilt.addStretch()
+        self.tilt_switch = SwitchPill(
+            self.settings.card_tilt,
+            tooltip=tr("In the grid, the card under the mouse leans towards it "
+                       "in 3D and rises above the others.\nTurn it off if you "
+                       "prefer the cards to stay still."))
+        self.tilt_switch.toggled.connect(self.set_card_tilt)
+        row_tilt.addWidget(self.tilt_switch)
+        lay.addLayout(row_tilt)
+
+        row_sound = QHBoxLayout()
+        row_sound.addWidget(QLabel(tr("Interface sounds")))
+        row_sound.addStretch()
+        self.sounds_switch = SwitchPill(
+            self.settings.ui_sounds,
+            tooltip=tr("A soft click each time a card passes through the "
+                       "centre of the gallery."))
+        self.sounds_switch.toggled.connect(self.set_ui_sounds)
+        row_sound.addWidget(self.sounds_switch)
+        lay.addLayout(row_sound)
 
         # Destino del "restablecer" (Ctrl+0 / Ctrl+clic en el slider del pie).
         # Es una preferencia, no el zoom actual: moverlo aquí NO cambia la
