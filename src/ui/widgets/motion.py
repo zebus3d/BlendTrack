@@ -72,24 +72,25 @@ def _animation(owner, ms: int, curve, on_value, on_done=None) -> QVariantAnimati
 
 # --------------------------------------------------------------- tarjetas
 def _apply_shadow(effect: QGraphicsDropShadowEffect, k: float,
-                  colour: str | None = None) -> None:
+                  colour: str | None = None, boost: float = 1.0) -> None:
     """Pone la sombra en el punto ``k`` (0 = reposo, 1 = levantada).
 
     ``colour`` es el del halo levantado: el de la versión (``glow_color`` de la
-    tarjeta: naranja LTS, azul estable, violeta en pruebas).
+    tarjeta: naranja LTS, azul estable, violeta en pruebas). ``boost`` (> 1)
+    sube la intensidad y el radio del halo: lo usan las tarjetas de rejilla
+    cuando el efecto está apagado, para que el realce no se pierda.
     """
     rest, lift = SHADOW_REST, SHADOW_LIFT
-    effect.setBlurRadius(_lerp(rest["blur"], lift["blur"], k))
+    effect.setBlurRadius(_lerp(rest["blur"], lift["blur"] * boost, k))
     offset = _lerp(rest["offset"], lift["offset"], k)
     effect.setOffset(offset, offset)
-    a, b = rest["color"], lift["color"]
-    if colour:
-        b = QColor(colour)
-        b.setAlpha(lift["color"].alpha())
-    effect.setColor(QColor(round(_lerp(a.red(), b.red(), k)),
-                           round(_lerp(a.green(), b.green(), k)),
-                           round(_lerp(a.blue(), b.blue(), k)),
-                           round(_lerp(a.alpha(), b.alpha(), k))))
+    target = QColor(colour) if colour else QColor(lift["color"])
+    target.setAlpha(min(255, round(lift["color"].alpha() * boost)))
+    a = rest["color"]
+    effect.setColor(QColor(round(_lerp(a.red(), target.red(), k)),
+                           round(_lerp(a.green(), target.green(), k)),
+                           round(_lerp(a.blue(), target.blue(), k)),
+                           round(_lerp(a.alpha(), target.alpha(), k))))
 
 
 def lift_shadow(widget: QWidget, on: bool) -> None:
@@ -108,7 +109,9 @@ def lift_shadow(widget: QWidget, on: bool) -> None:
 
         def step(value):
             widget._lift = float(value)
-            _apply_shadow(effect, widget._lift, getattr(widget, "glow_color", None))
+            _apply_shadow(effect, widget._lift,
+                          getattr(widget, "glow_color", None),
+                          getattr(widget, "glow_boost", 1.0))
 
         anim = QVariantAnimation(widget)
         anim.setDuration(LIFT_MS)

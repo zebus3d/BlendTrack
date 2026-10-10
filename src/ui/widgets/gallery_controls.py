@@ -26,6 +26,7 @@ from services.settings import GALLERY_STYLES as STYLES
 from ui import icons
 from ui.fonts import icon_font
 from ui.widgets.gallery_art import LASER_FRAMES, laser_cursor
+from ui.widgets.shell import CORNER_BUTTON_MARGIN, CORNER_BUTTON_SIZE
 
 # Cada cuánto cambia el moteado del puntero láser (~12 por segundo: más rápido
 # se ve como un parpadeo nervioso, más lento como un salto).
@@ -43,9 +44,11 @@ FLOOR_DROP = 20
 # porque la rueda se gira varias muescas seguidas.
 WHEEL_MS = 320
 
-# Los botones de la esquina: lado y separación del borde.
-MUTE_SIZE = 26
-MUTE_MARGIN = 8
+# Los botones de la esquina: lado y separación del borde. El tamaño y el margen
+# son los mismos que los de la rejilla (``shell``), para que el botón no baile
+# al cambiar de vista.
+MUTE_SIZE = CORNER_BUTTON_SIZE
+MUTE_MARGIN = CORNER_BUTTON_MARGIN
 
 # Lo que ocupan los tres botones de la esquina: la línea de atajos lo deja
 # libre a los dos lados para no pasar por debajo y seguir centrada.
@@ -93,7 +96,7 @@ class GalleryControlsMixin:
         # (se recoloca en ``resizeEvent``). Lleva su propio cursor: el láser es
         # para las cartas, y sobre un botón se espera la manita.
         self.mute_button = QPushButton(self)
-        self.mute_button.setObjectName("GalleryCorner")
+        self.mute_button.setObjectName("CornerButton")
         self.mute_button.setCheckable(True)
         self.mute_button.setFont(icon_font())
         self.mute_button.setFixedSize(MUTE_SIZE, MUTE_SIZE)
@@ -102,7 +105,7 @@ class GalleryControlsMixin:
         self.mute_button.toggled.connect(self._on_mute)
         self.set_muted(False)
         self.laser_button = QPushButton(self)
-        self.laser_button.setObjectName("GalleryCorner")
+        self.laser_button.setObjectName("CornerButton")
         self.laser_button.setCheckable(True)
         self.laser_button.setFont(icon_font())
         self.laser_button.setFixedSize(MUTE_SIZE, MUTE_SIZE)
@@ -114,7 +117,7 @@ class GalleryControlsMixin:
         # El estilo se elige aquí mismo, como el modo de vista: cada pulsación
         # pasa al siguiente (y se recuerda el último, en los ajustes).
         self.style_button = QPushButton(icons.GALLERY_STYLE, self)
-        self.style_button.setObjectName("GalleryCorner")
+        self.style_button.setObjectName("CornerButton")
         self.style_button.setFont(icon_font())
         self.style_button.setFixedSize(MUTE_SIZE, MUTE_SIZE)
         self.style_button.setCursor(Qt.PointingHandCursor)

@@ -41,6 +41,12 @@ FILTERS_HEIGHT = t.FILTERS_HEIGHT
 # el mismo que los tags de canal, para que la fila quede a ras.
 FILTER_CONTROL_HEIGHT = t.CONTROL_HEIGHT
 
+# La esquina de abajo a la derecha (galería y rejilla): el botón que la ocupa
+# mide y se separa del borde igual en las dos, para que no baile al cambiar de
+# vista. Los comparten ``gallery_controls`` y ``build_lists``.
+CORNER_BUTTON_SIZE = 26
+CORNER_BUTTON_MARGIN = 8
+
 # Vistas que solo se ven con las opciones experimentales (Ajustes > Avanzado).
 # Recientes y Migración salieron de aquí cuando quedaron probadas (Migración
 # tiene la batería de tests de UI más grande de la app y feedback de usuarios
@@ -66,10 +72,13 @@ ZOOM_STEP = 0.1
 # vigila ``test_todas_las_pestanas_de_canal_son_alcanzables``.
 DEFAULT_WINDOW_WIDTH = 940
 
-# Alto de fábrica. 655 deja entrar **tres filas** de tarjetas de rejilla al
-# zoom de fábrica (50 %) con 3 columnas (separaciones y márgenes incluidos).
+# Alto de fábrica. Deja entrar **tres filas** de tarjetas de rejilla al zoom
+# de fábrica (50 %) con 3 columnas (separaciones y márgenes incluidos). Lleva 35
+# px de más sobre los 655 que hacían falta para eso: es la franja que se reserva
+# abajo en la rejilla para el botón de efectos de tarjeta (la esquina de abajo a
+# la derecha), y sin ellos la tercera fila quedaría cortada.
 # Lo vigila ``test_el_tamano_por_defecto_muestra_tres_filas_al_zoom_de_fabrica``.
-DEFAULT_WINDOW_HEIGHT = 655
+DEFAULT_WINDOW_HEIGHT = 690
 
 # Ancho mínimo. Por debajo, la fila de filtros y las tarjetas se aprietan de más
 # y la interfaz empieza a recortar contenido. Las pestañas de canal que no caben

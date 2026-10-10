@@ -206,6 +206,21 @@ def _start_window(window, start_minimized: bool) -> None:
         window.restore_window_geometry()
 
 
+def _install_kwin_position_rule(settings) -> None:
+    """Deja en KWin la regla que recuerda la posición de la ventana.
+
+    Solo aplica en KDE Wayland (en X11 la app ya guarda la posición ella misma);
+    se hace **una sola vez**, así que si el usuario borra la regla, no se repone.
+    """
+    if settings.kwin_rule_done:
+        return
+    from services import kwin
+
+    if kwin.remember_position_rule():
+        settings.kwin_rule_done = True
+        settings.save()
+
+
 def run_ui(screenshot: str | None = None) -> int:
     """Arranca la aplicación Qt."""
     from services import settings as settings_service
@@ -280,6 +295,11 @@ def run_ui(screenshot: str | None = None) -> int:
 
     # Restos de la sesión anterior, con retardo para no retrasar el arranque.
     QTimer.singleShot(600, lambda: _clean_previous_session(settings))
+    # En KDE Wayland la posición de la ventana es cosa del compositor: se le
+    # deja una regla de KWin para que la recuerde (una sola vez). En un hilo
+    # para no retrasar el arranque con los subprocesos de KDE.
+    threading.Thread(target=_install_kwin_position_rule,
+                     args=(settings,), daemon=True).start()
 
     if screenshot:
         def grab():

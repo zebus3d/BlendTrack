@@ -35,6 +35,8 @@ from ui.widgets.cards import (BuildCard, GridBuildCard, GridInstalledCard,
                               InstalledCard, card_shadow, logo_path)
 from ui.widgets.layouts import clear_layout
 from ui.widgets.menus import card_menu
+from ui.widgets.grid_corner import (CORNER_RESERVED, GridCorner,
+                                    apply_tilt_options, prepare_grid_card)
 from ui.widgets.shell import (ARCH_LABELS, CHANNEL_TOOLTIPS, CHANNELS,
                               FILTER_CONTROL_HEIGHT, FILTERS_HEIGHT, MAX_ZOOM,
                               MIN_ZOOM, PLATFORMS, ZOOM_STEP)
@@ -49,7 +51,10 @@ class BuildListsMixin:
         scroll.setWidgetResizable(True)
         content = QWidget()
         grid = QGridLayout(content)
-        grid.setContentsMargins(14, 14, 14, 14)
+        # Un poco más de margen abajo: deja una franja libre para el botón de la
+        # esquina (el de la vista de rejilla), que flota sobre el listado y sin
+        # ella taparía los botones de la última fila de tarjetas.
+        grid.setContentsMargins(14, 14, 14, 14 + CORNER_RESERVED)
         grid.setSpacing(10)
         grid.setAlignment(Qt.AlignTop)
         scroll.setWidget(content)
@@ -73,6 +78,19 @@ class BuildListsMixin:
         self.list_stack.addWidget(self._build_store_view())
         self.list_stack.addWidget(self._build_installed_view())
         lay.addWidget(self.list_stack, 1)
+        # El botón de la esquina de abajo a la derecha, el mismo que el de la
+        # galería pero para encender o apagar la inclinación de las tarjetas de
+        # la rejilla (Ajustes > Interfaz sigue teniendo su interruptor y los dos
+        # van a una). Es hijo de la página, no de la lista: así flota quieto en
+        # su esquina en vez de desplazarse con el scroll.
+        self.lists_page = page
+        self.grid_corner = GridCorner(page, self.settings)
+        self.grid_corner.button.toggled.connect(self.set_card_tilt)
+        self.grid_corner.panel.changed.connect(self.set_tilt_option)
+        self.grid_corner.panel.color_changed.connect(self.set_tilt_color)
+        self.grid_corner.gear.toggled.connect(self.set_tilt_panel_open)
+        self.grid_corner.mute.toggled.connect(
+            lambda muted: self.set_ui_sounds(not muted))
         return page
 
     def _build_store_view(self):
@@ -137,6 +155,9 @@ class BuildListsMixin:
         self.settings.save()
         self.store_gallery.set_muted(not on)
         self.installed_gallery.set_muted(not on)
+        corner = getattr(self, "grid_corner", None)
+        if corner is not None:
+            corner.set_muted(not on)
         switch = getattr(self, "sounds_switch", None)
         if switch is not None and switch.isChecked() != bool(on):
             switch.blockSignals(True)
@@ -148,12 +169,52 @@ class BuildListsMixin:
         """Enciende o apaga la inclinación 3D de las tarjetas (y lo recuerda).
 
         Las tarjetas lo leen al construirse, así que se rehacen las dos
-        rejillas: el cambio se ve en el acto, sin reiniciar.
+        rejillas: el cambio se ve en el acto, sin reiniciar. Se pide desde el
+        interruptor de Ajustes > Interfaz o desde el botón de la esquina de la
+        rejilla: los dos se ponen de acuerdo (como los sonidos, que están en
+        Ajustes y en el botón de silencio de la galería).
         """
         self.settings.card_tilt = bool(on)
         self.settings.save()
+        self.grid_corner.set_on(on)
+        switch = getattr(self, "tilt_switch", None)
+        if switch is not None and switch.isChecked() != bool(on):
+            switch.blockSignals(True)
+            switch.setChecked(bool(on))
+            switch.blockSignals(False)
         self._rebuild_store()
         self._rebuild_installed()
+
+    def set_tilt_option(self, name: str, value: int) -> None:
+        """Guarda un ajuste del efecto (la esquina de la rejilla) y lo aplica.
+
+        No rehace la rejilla: la tarjeta lee los ajustes al inclinarse, así que
+        basta con repartírselos a las que ya están construidas.
+        """
+        if name not in ("tilt_strength", "tilt_light", "tilt_glow",
+                        "tilt_light_sat"):
+            return
+        setattr(self.settings, name, int(value))
+        self.settings.save()
+        apply_tilt_options((self.store_grid, self.installed_grid),
+                           self.settings)
+
+    def set_tilt_panel_open(self, open_: bool) -> None:
+        """Recuerda si el panel de ajustes del efecto estaba desplegado."""
+        self.settings.tilt_panel_open = bool(open_)
+        self.settings.save()
+
+    def set_tilt_color(self, colour: str) -> None:
+        """Cambia el color de la luz del efecto (una muestra del panel)."""
+        self.settings.tilt_light_color = colour
+        self.settings.save()
+        apply_tilt_options((self.store_grid, self.installed_grid),
+                           self.settings)
+
+    def _sync_grid_corner(self) -> None:
+        """Enseña la esquina del efecto solo en la rejilla (no en lista ni galería)."""
+        self.grid_corner.set_shown(
+            self.view in ("store", "installed") and self.layout_mode == "grid")
 
     def set_laser_pointer(self, on: bool) -> None:
         """El puntero láser de las galerías, encendido o no (y recordado)."""
@@ -376,9 +437,10 @@ class BuildListsMixin:
             if grid:
                 card = GridBuildCard(build, installed, zebra, zoom, marked,
                                      console=console)
-                card.tilt_enabled = self.settings.card_tilt
-                card.glow_color = self._glow_color(
-                    build, channels.type_of_build(build))
+                prepare_grid_card(
+                    card, self.settings, self._glow_color(
+                        build, channels.type_of_build(build)),
+                    self._gallery_tick)
             else:
                 card = BuildCard(build, installed, zebra, marked, console=console)
             card.action_clicked.connect(self.install_build)
@@ -442,9 +504,10 @@ class BuildListsMixin:
                 card = GridInstalledCard(entry, zebra, zoom, marked,
                                          update=update, console=console,
                                          read_only=self._is_read_only(entry))
-                card.tilt_enabled = self.settings.card_tilt
-                card.glow_color = self._glow_color(
-                    entry, channels.type_of_installed(entry))
+                prepare_grid_card(
+                    card, self.settings, self._glow_color(
+                        entry, channels.type_of_installed(entry)),
+                    self._gallery_tick)
             else:
                 card = InstalledCard(entry, zebra, marked, update=update,
                                      read_only=self._is_read_only(entry),
@@ -725,6 +788,8 @@ class BuildListsMixin:
         self.settings.save()
         self._rebuild_store()
         self._rebuild_installed()
+        # El botón de los efectos solo vale en la rejilla.
+        self._sync_grid_corner()
 
     def _layout_buttons(self) -> dict:
         """Los botones de modo de la fila de filtros, por modo."""

@@ -9,10 +9,17 @@ la ruta pedía 666 px y la tarjeta entera 974 px en una ventana de 900.
 """
 
 from PySide6.QtCore import QSize, Qt, Signal
-from PySide6.QtGui import QPainter
+from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import QLabel, QLineEdit, QSizePolicy
 
 from i18n import tr
+
+# La sombra del texto: un negro suave desplazado un píxel, para que el título y
+# el meta de una tarjeta de rejilla se lean sobre el brillo del efecto (ver
+# ``tilt.py``). No es decorativa: sin ella, el reflejo que sigue al ratón lava
+# las letras claras del centro de la tarjeta.
+TEXT_SHADOW = QColor(0, 0, 0, 160)
+TEXT_SHADOW_OFFSET = (1, 1)
 
 
 class ElidedLabel(QLabel):
@@ -36,9 +43,16 @@ class ElidedLabel(QLabel):
     def __init__(self, text: str = "", mode=Qt.ElideRight, parent=None):
         super().__init__(text, parent)
         self._mode = mode
+        self._shadow = False
         self.setMinimumWidth(0)
         self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         self._update_tooltip()
+
+    def set_text_shadow(self, on: bool) -> None:
+        """Pinta una sombra negra suave bajo el texto (para leerlo sobre el brillo)."""
+        if bool(on) != self._shadow:
+            self._shadow = bool(on)
+            self.update()
 
     def minimumSizeHint(self) -> QSize:
         """Alto el de siempre, ancho 0: el texto no manda sobre el layout."""
@@ -75,6 +89,13 @@ class ElidedLabel(QLabel):
         que no tienes), que es exactamente lo que hace un ``QLabel`` normal.
         """
         painter = QPainter(self)
+        if self._shadow:
+            # La sombra primero, un píxel abajo a la derecha; el texto encima la
+            # tapa salvo por ese filo, que es lo que da el relieve.
+            painter.setPen(TEXT_SHADOW)
+            dx, dy = TEXT_SHADOW_OFFSET
+            painter.drawText(self.contentsRect().translated(dx, dy),
+                             int(self.alignment()), self.displayed_text())
         self.style().drawItemText(
             painter, self.contentsRect(), int(self.alignment()),
             self.palette(), self.isEnabled(), self.displayed_text(),

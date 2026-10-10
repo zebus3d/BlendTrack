@@ -31,6 +31,7 @@ from i18n import tr
 from paths import ASSETS_DIR
 from services import detector, updater
 from services import installed as installed_service
+from services import opener
 from services import settings as settings_service
 from services.downloader import Downloader
 from services.launcher import Launcher
@@ -39,9 +40,10 @@ from ui import theme as t
 from ui.fonts import glyph_icon, icon_font
 from ui.widgets.addons import AddonsView
 from ui.widgets.build_lists import BuildListsMixin
-from ui.widgets.buttons import CardButton, SideButton
+from ui.widgets.buttons import CardButton, IconFlatButton, SideButton
 from ui.widgets.busy import BusyBar
 from ui.widgets.cards import logo_shadow
+from ui.widgets.donate import DonationPopup, paypal_url
 from ui.widgets.downloads import DownloadFlowMixin
 from ui.widgets.folder_library import FolderLibraryMixin
 from ui.widgets import motion
@@ -59,6 +61,13 @@ from ui.widgets.shell import (ARCH_LABELS, DEFAULT_WINDOW_HEIGHT,
 from ui.widgets.shell import CHANNELS, ZOOM_STEP  # noqa: F401
 from ui.widgets.tray import TrayIcon
 from ui.widgets.updates import UpdateFlowMixin
+
+# El enlace del botón de donación del pie (PayPal.Me). Abre en el navegador
+# por defecto y con el entorno limpio (``services.opener``). Sin importe en la
+# URL: así el donante elige la cantidad libremente (con un importe prefijado,
+# PayPal.Me la fija y no deja cambiarla).
+SUPPORT_URL = "https://paypal.me/zebus3d"
+
 
 class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
                  DownloadFlowMixin, UpdateFlowMixin, QWidget):
@@ -422,7 +431,9 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
         footer.setObjectName("Chrome")
         footer.setFixedHeight(40)
         lay = QHBoxLayout(footer)
-        lay.setContentsMargins(16, 4, 16, 4)
+        # Margen derecho corto: el icono de donación queda pegado a la esquina
+        # (con 16 quedaba un hueco grande a su derecha).
+        lay.setContentsMargins(16, 4, 4, 4)
         lay.setSpacing(12)
         self.status_label = QLabel(tr("Ready"))
         self.status_label.setObjectName("Muted")
@@ -492,7 +503,35 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
         self._update_zoom_label()
         zoom_lay.addWidget(self.zoom_label)
         lay.addWidget(self.zoom_box, 0, Qt.AlignRight)
+
+        # Donación: un icono pequeño pegado a la esquina de abajo a la derecha.
+        # Abre un diálogo para elegir el importe y luego PayPal en el navegador
+        # por defecto (con el entorno limpio).
+        self.donate_btn = IconFlatButton(icons.DONATE, tr(
+            "Support Blender Manager with a PayPal donation."))
+        self.donate_btn.setFont(icon_font())
+        self.donate_btn.clicked.connect(self._offer_donation)
+        lay.addWidget(self.donate_btn, 0, Qt.AlignRight)
         return footer
+
+    def _offer_donation(self) -> None:
+        """Abre el popup para elegir el importe de la donación.
+
+        El importe va en la URL de PayPal.Me (``/5``) y ahí queda fijo, así que
+        lo elige el usuario en el popup: no se le impone. Si ya estaba abierto,
+        el botón lo cierra.
+        """
+        popup = getattr(self, "_donation", None)
+        if popup is not None and popup.isVisible():
+            popup.close()
+            return
+        self._donation = DonationPopup(self, self.donate_btn,
+                                       self._open_donation)
+        self._donation.popup()
+
+    @staticmethod
+    def _open_donation(amount: float) -> None:
+        opener.open_url(paypal_url(SUPPORT_URL, amount))
 
     # -------------------------------------------------------------- estado
     def _set_status(self, text: str, timeout: int = 0) -> None:
@@ -608,6 +647,9 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
         self.header_tools.setVisible(show_tools)
         self.zoom_box.setVisible(show_tools and self.layout_mode == "grid")
         self._update_refresh_tooltip()
+        # El botón de los efectos de tarjeta (esquina de la rejilla) solo se
+        # enseña en las listas y en modo rejilla.
+        self._sync_grid_corner()
 
     def _update_refresh_tooltip(self) -> None:
         """El botón de refrescar explica qué va a refrescar en esta vista."""
@@ -788,7 +830,11 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
             self.settings.window_width = geometry.width()
             self.settings.window_height = geometry.height()
             changed = True
-        if (not self.settings.window_pos_saved
+        # En Wayland el compositor decide dónde va la ventana y no deja ni leer
+        # su posición: guardar (0, 0) sería basura que, en una sesión X11, la
+        # abriría pegada a la esquina. Así que ahí no se guarda.
+        if self._window_can_be_placed() and (
+                not self.settings.window_pos_saved
                 or (geometry.x(), geometry.y()) != (self.settings.window_x,
                                                     self.settings.window_y)):
             self.settings.window_x = geometry.x()
@@ -816,11 +862,29 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
         con ella el monitor. Si la pantalla ya no está o la posición quedó fuera
         de todo monitor (cambio de resolución, monitor desconectado), se centra
         en vez de abrir en un sitio inalcanzable.
+
+        En **Wayland** no se hace nada: el compositor decide dónde colocar la
+        ventana y el cliente no puede moverla (``move()`` no tiene efecto). Ahí
+        la posición "recordada" es cosa de una regla de ventana de KWin, no de
+        la aplicación.
         """
+        if not self._window_can_be_placed():
+            return
         if self._saved_position_is_visible():
             self.move(self.settings.window_x, self.settings.window_y)
         else:
             self.center_on_screen()
+
+    @staticmethod
+    def _window_can_be_placed() -> bool:
+        """True si la aplicación puede leer y fijar la posición de la ventana.
+
+        En Wayland no puede (el compositor manda); en X11, Windows y macOS sí.
+        Se mira el **backend de Qt** (``platformName``) y no la variable de
+        entorno: los tests corren con el plugin *offscreen*, donde sí se puede
+        mover, aunque la sesión sea Wayland.
+        """
+        return not QApplication.platformName().startswith("wayland")
 
     def _saved_position_is_visible(self) -> bool:
         """True si la posición guardada deja la ventana en algún monitor.

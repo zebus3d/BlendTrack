@@ -316,6 +316,14 @@ class _HoverCard:
     def _set_hover(self, on: bool) -> None:
         self.setProperty("hover", "true" if on else "false")
         repolish(self)
+        if on:
+            # El "tic" al entrar en una tarjeta de rejilla. La tarjeta no sabe
+            # de sonidos: la ventana le deja aquí un callback (``hover_tick``)
+            # que comprueba si los sonidos están encendidos. Las de lista no
+            # lo llevan y no suenan.
+            tick = getattr(self, "hover_tick", None)
+            if tick is not None:
+                tick()
         if self.tilt_enabled:
             # La capa inclinada lleva su propio halo, que se inclina con ella.
             # El plano de la sombra (``lift_shadow``) sobraba: eran dos halos,
@@ -331,6 +339,16 @@ class _HoverCard:
         super().hideEvent(event)
         if self.tilt_enabled:
             tilt.tilt(self, False)
+
+    def set_text_shadow(self, on: bool) -> None:
+        """Sombra negra bajo el texto de la tarjeta.
+
+        La pide la rejilla cuando el efecto (que pinta un brillo encima) va a
+        lavar las letras; las tarjetas de lista no tienen ``_shadow_labels`` y
+        no hacen nada.
+        """
+        for label in getattr(self, "_shadow_labels", ()):
+            label.set_text_shadow(on)
 
 
 class BaseBuildCard(_HoverCard, QFrame):
@@ -487,6 +505,10 @@ def _grid_height(zoom: float) -> int:
 class GridBuildCard(BaseBuildCard):
     """Tarjeta en modo rejilla (icono grande y botón debajo)."""
 
+    # Cuando el efecto está apagado no hay inclinación que destaque la tarjeta:
+    # su halo al pasar el ratón sube un poco más de intensidad (``lift_shadow``).
+    glow_boost = 1.3
+
     def __init__(self, build, installed: bool, zebra: bool, zoom: float = 1.0,
                  marked: bool = False, console=None, parent=None):
         super().__init__(build, installed, zebra, console=console,
@@ -518,6 +540,8 @@ class GridBuildCard(BaseBuildCard):
         sub.setObjectName("Warning" if self.is_lts else "Info")
         sub.setAlignment(Qt.AlignHCenter)
         lay.addWidget(sub)
+        # Las etiquetas que llevan sombra cuando el efecto está encendido.
+        self._shadow_labels = [title, sub]
 
         tag = QLabel(tr("Local build") if installed else "")
         tag.setObjectName("Success")
@@ -641,6 +665,9 @@ class InstalledCard(_HoverCard, QFrame):
 class GridInstalledCard(_HoverCard, QFrame):
     """Versión instalada en cuadrícula (icono grande y botones debajo)."""
 
+    # Como en la tienda: sin efecto, el halo del ratón sube un poco más.
+    glow_boost = 1.3
+
     launch_clicked = Signal(object)
     delete_clicked = Signal(object)
     notes_clicked = Signal(object)
@@ -704,6 +731,8 @@ class GridInstalledCard(_HoverCard, QFrame):
         hint.setObjectName("Info")
         hint.setAlignment(Qt.AlignHCenter)
         lay.addWidget(hint)
+        # Las etiquetas que llevan sombra cuando el efecto está encendido.
+        self._shadow_labels = [title, meta, hint]
 
         lay.addStretch()
 

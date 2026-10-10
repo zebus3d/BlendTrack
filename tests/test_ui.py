@@ -332,6 +332,29 @@ class MainWindowTests(SettingsIsolated, unittest.TestCase):
         self.assertEqual(window.status_label.text(),
                          tr("Could not open the browser"))
 
+    def test_el_boton_de_donacion_abre_paypal_con_el_importe(self):
+        """El popup pide la cantidad y se abre PayPal con ese importe."""
+        from services import opener
+        from ui.widgets import main_window
+
+        window = self._window()
+        with mock.patch.object(main_window, "DonationPopup") as popup:
+            window.donate_btn.click()
+        popup.assert_called_once()
+        # El popup recibe el callback que abre PayPal con el importe elegido.
+        on_donate = popup.call_args.args[2]
+        with mock.patch.object(opener, "open_url") as open_url:
+            on_donate(7.5)
+        open_url.assert_called_once_with("https://paypal.me/zebus3d/7.5")
+
+    def test_la_url_de_paypal_lleva_el_importe_sin_ceros(self):
+        from ui.widgets.donate import paypal_url
+
+        base = "https://paypal.me/zebus3d"
+        self.assertEqual(paypal_url(base, 5), f"{base}/5")
+        self.assertEqual(paypal_url(base, 7.5), f"{base}/7.5")
+        self.assertEqual(paypal_url(base, 1.5), f"{base}/1.5")
+
 
 @unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
 class ForkUiTests(SettingsIsolated, unittest.TestCase):
@@ -796,6 +819,46 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         marco = window.frameGeometry().center()
         self.assertLessEqual(abs(marco.x() - centro.x()), 2)
         self.assertLessEqual(abs(marco.y() - centro.y()), 2)
+
+    def test_en_wayland_no_se_guarda_la_posicion(self):
+        """En Wayland (compositor manda) no se guarda una posición inútil."""
+        from unittest import mock
+
+        from PySide6.QtWidgets import QApplication
+
+        from services.settings import Settings
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.show()
+        window.move(180, 120)
+        self.app.processEvents()
+        with mock.patch.object(QApplication, "platformName",
+                               return_value="wayland"):
+            window.close()
+        self.assertFalse(Settings.load().window_pos_saved)
+
+    def test_en_wayland_no_se_restaura_la_posicion(self):
+        """En Wayland la app no mueve la ventana: de eso se encarga KWin."""
+        from unittest import mock
+
+        from PySide6.QtWidgets import QApplication
+
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.show()
+        window.move(50, 50)
+        self.app.processEvents()
+        window.settings.window_pos_saved = True
+        window.settings.window_x = 400
+        window.settings.window_y = 300
+        with mock.patch.object(QApplication, "platformName",
+                               return_value="wayland"):
+            window.restore_window_geometry()
+        marco = window.frameGeometry()
+        self.assertLessEqual(abs(marco.x() - 50), 2)
+        self.assertLessEqual(abs(marco.y() - 50), 2)
 
     def test_atajos_registrados(self):
         from PySide6.QtGui import QShortcut
@@ -5988,6 +6051,24 @@ class MotionTests(SettingsIsolated, unittest.TestCase):
         self.assertEqual(effect.color().alpha(),
                          motion.SHADOW_REST["color"].alpha())
 
+    def test_la_rejilla_sin_efecto_tiene_mas_halo(self):
+        """Sin el efecto 3D no hay inclinación que destaque la tarjeta: el halo
+        del ratón sube un poco más de intensidad (``glow_boost``)."""
+        from PySide6.QtTest import QTest
+
+        from ui.widgets import motion
+        from ui.widgets.cards import GridBuildCard
+
+        card = GridBuildCard(_build("4.2.23", "v42", "stable"), False, False, 0.6)
+        card.tilt_enabled = False
+        card.glow_color = "#FFAF23"
+        effect = card.graphicsEffect()
+        card._set_hover(True)
+        QTest.qWait(motion.LIFT_MS + 100)
+        self.assertAlmostEqual(effect.blurRadius(),
+                               motion.SHADOW_LIFT["blur"] * card.glow_boost)
+        self.assertEqual(effect.color().alpha(), 255)
+
     def test_la_estrella_hace_pop_solo_al_marcar(self):
         from PySide6.QtTest import QTest
 
@@ -6570,6 +6651,198 @@ class TiltTests(SettingsIsolated, unittest.TestCase):
         self.assertTrue(all(not c.tilt_enabled for c in cards))
         cards[0]._set_hover(True)
         self.assertIsNone(getattr(cards[0], "_tilt", None))
+
+    def test_el_boton_de_la_esquina_alterna_los_efectos(self):
+        """El botón flotante de la rejilla hace lo mismo que el de Ajustes."""
+        from PySide6.QtTest import QTest
+
+        from services.settings import Settings
+        from ui.widgets.cards import GridBuildCard
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.show()
+        QTest.qWait(250)
+        window.builds = [_build("4.2.23", "v42", "stable")]
+        window.set_view("store")
+        window.set_layout_mode("grid")
+        button = window.grid_corner.button
+        self.assertTrue(button.isVisible())
+        self.assertTrue(button.isChecked())
+        button.click()
+        self.assertFalse(Settings.load().card_tilt)
+        self.assertFalse(window.tilt_switch.isChecked())
+        QTest.qWait(50)   # las tarjetas nuevas se enseñan en el siguiente ciclo
+        cards = [c for c in window.findChildren(GridBuildCard) if c.isVisible()]
+        self.assertTrue(cards)
+        self.assertTrue(all(not c.tilt_enabled for c in cards))
+        # Desde Ajustes, de vuelta: el botón de la esquina se entera.
+        window.tilt_switch.setChecked(True)
+        self.assertTrue(button.isChecked())
+        self.assertTrue(Settings.load().card_tilt)
+        # Y solo vive en la rejilla.
+        window.set_layout_mode("list")
+        self.assertFalse(button.isVisible())
+        window.set_layout_mode("gallery")
+        self.assertFalse(button.isVisible())
+        window.set_layout_mode("grid")
+        self.assertTrue(button.isVisible())
+
+    def test_el_texto_lleva_sombra_solo_con_el_efecto(self):
+        """La sombra negra del texto se enciende con el efecto, no siempre."""
+        from ui.widgets.cards import GridBuildCard
+
+        card = GridBuildCard(_build("4.2.23", "v42", "stable"), False, False, 0.6)
+        self.assertFalse(any(label._shadow for label in card._shadow_labels))
+        card.set_text_shadow(True)
+        self.assertTrue(all(label._shadow for label in card._shadow_labels))
+        card.set_text_shadow(False)
+        self.assertFalse(any(label._shadow for label in card._shadow_labels))
+
+    def test_el_panel_del_efecto_se_despliega_y_ajusta(self):
+        """El engranaje abre los ajustes; los deslizadores guardan y se aplican."""
+        from PySide6.QtTest import QTest
+
+        from services.settings import Settings
+        from ui.widgets.cards import GridBuildCard
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.show()
+        QTest.qWait(250)
+        window.builds = [_build("4.2.23", "v42", "stable")]
+        window.set_view("store")
+        window.set_layout_mode("grid")
+        corner = window.grid_corner
+        self.assertFalse(corner.panel.isVisible())
+        corner.gear.click()
+        self.assertTrue(corner.panel.isVisible())
+        self.assertTrue(Settings.load().tilt_panel_open)
+        corner.panel.rotation.setValue(90)
+        self.assertEqual(Settings.load().tilt_strength, 90)
+        corner.panel.light.setValue(160)
+        self.assertEqual(Settings.load().tilt_light, 160)
+        corner.panel.saturation.setValue(200)
+        self.assertEqual(Settings.load().tilt_light_sat, 200)
+        QTest.qWait(50)
+        cards = [c for c in window.findChildren(GridBuildCard) if c.isVisible()]
+        self.assertTrue(cards)
+        self.assertAlmostEqual(cards[0].tilt_strength, 0.9)
+        self.assertAlmostEqual(cards[0].tilt_light, 1.6)
+        # Al apagar FX se pliega el panel y el engranaje se esconde.
+        corner.button.click()
+        self.assertFalse(corner.panel.isVisible())
+        self.assertFalse(corner.gear.isVisible())
+
+    def test_las_muestras_de_tono_vuelven_al_de_fabrica(self):
+        """Ctrl+clic en una muestra de color devuelve el tono por defecto."""
+        from PySide6.QtCore import QPoint, Qt
+        from PySide6.QtTest import QTest
+        from PySide6.QtWidgets import QPushButton
+
+        from services.settings import Settings
+        from ui.widgets.grid_corner import LIGHT_TONES
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.show()
+        QTest.qWait(250)
+        window.set_view("store")
+        window.set_layout_mode("grid")
+        corner = window.grid_corner
+        corner.gear.click()
+        swatches = corner.panel.findChildren(QPushButton)
+        self.assertEqual(len(swatches), len(LIGHT_TONES))
+        swatches[-1].click()   # un tono que no es el de fábrica
+        self.assertEqual(Settings.load().tilt_light_color, LIGHT_TONES[-1][1])
+        QTest.mouseClick(swatches[0], Qt.LeftButton, Qt.ControlModifier,
+                         QPoint(9, 9))
+        self.assertEqual(Settings.load().tilt_light_color, LIGHT_TONES[0][1])
+
+    def test_el_tic_suena_al_pasar_por_una_tarjeta_de_rejilla(self):
+        """El mismo "tic" de la galería, al entrar en una tarjeta de rejilla."""
+        from unittest import mock
+
+        from PySide6.QtTest import QTest
+
+        from ui.widgets import build_lists
+        from ui.widgets.cards import GridBuildCard
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.show()
+        QTest.qWait(250)
+        window.builds = [_build("4.2.23", "v42", "stable")]
+        window.set_view("store")
+        window.set_layout_mode("grid")
+        QTest.qWait(50)
+        card = [c for c in window.findChildren(GridBuildCard)
+                if c.isVisible()][0]
+        with mock.patch.object(build_lists.sound, "play_tick") as tick:
+            card._set_hover(True)
+        tick.assert_called_once()
+        # Con los sonidos apagados, no suena.
+        window.set_ui_sounds(False)
+        QTest.qWait(50)
+        card = [c for c in window.findChildren(GridBuildCard)
+                if c.isVisible()][0]
+        with mock.patch.object(build_lists.sound, "play_tick") as tick:
+            card._set_hover(True)
+        tick.assert_not_called()
+
+    def test_el_boton_de_silencio_de_la_rejilla_manda_en_todo(self):
+        """El silencio de la esquina apaga los sonidos y lo reflejan galería y Ajustes."""
+        from PySide6.QtTest import QTest
+
+        from services.settings import Settings
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.show()
+        QTest.qWait(250)
+        window.set_view("store")
+        window.set_layout_mode("grid")
+        corner = window.grid_corner
+        self.assertFalse(corner.mute.isChecked())
+        corner.mute.click()
+        self.assertFalse(Settings.load().ui_sounds)
+        self.assertTrue(window.store_gallery.mute_button.isChecked())
+        self.assertFalse(window.sounds_switch.isChecked())
+        # Y desde la galería, de vuelta.
+        window.store_gallery.mute_button.click()
+        self.assertTrue(Settings.load().ui_sounds)
+        self.assertFalse(corner.mute.isChecked())
+
+    def test_los_ajustes_del_efecto_se_recuerdan_entre_sesiones(self):
+        """Cerrar y volver a abrir deja el efecto como lo dejó el usuario."""
+        from PySide6.QtTest import QTest
+
+        from services.settings import Settings
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.show()
+        QTest.qWait(250)
+        window.set_view("store")
+        window.set_layout_mode("grid")
+        corner = window.grid_corner
+        corner.gear.click()               # panel abierto
+        corner.panel.rotation.setValue(130)
+        corner.mute.click()               # silenciado
+        corner.button.click()             # efecto apagado
+        self.assertFalse(Settings.load().card_tilt)
+
+        # Otra "sesión": una ventana nueva con la misma config.
+        window2 = MainWindow()
+        window2.show()
+        QTest.qWait(250)
+        c2 = window2.grid_corner
+        self.assertFalse(c2.button.isChecked())
+        self.assertTrue(c2.mute.isChecked())
+        self.assertEqual(c2.panel.rotation.value(), 130)
+        # El panel quedó recordado abierto: al encender el efecto, se reabre.
+        c2.button.click()
+        self.assertTrue(c2.panel.isVisible())
 
     def test_al_esconderse_deja_de_escuchar_el_raton(self):
         card = self._card()

@@ -58,9 +58,14 @@ HALO_GROW = 4
 FOLLOW = 0.22
 FRAME_MS = 16
 # El brillo que sigue al ratón: su opacidad máxima y su radio (fracción del
-# ancho de la tarjeta).
-GLARE = 0.22
+# ancho de la tarjeta). Bajó de 0,22 a 0,14: con el máximo, el reflejo sobre la
+# tarjeta lavaba el texto y costaba leerlo.
+GLARE = 0.14
 GLARE_RADIUS = 0.75
+# El color del reflejo: blanco cálido, no blanco puro. Sobre el gris de la app,
+# el blanco puro parecía un foco de quirófano; un blanco con un punto de amarillo
+# se lee como luz de estudio.
+GLARE_COLOR = QColor(255, 243, 214)
 RADIUS = 12   # el de ``QFrame#Card`` en el QSS
 # La sombra de "elevación": cuánto baja respecto a la tarjeta y su opacidad,
 # las dos al subir del todo. Es lo que hace que se lea como que sube en Z por
@@ -225,8 +230,10 @@ class TiltOverlay(QWidget):
         x = min(1.0, max(0.0, local.x() / w))
         y = min(1.0, max(0.0, local.y() / h))
         # La tarjeta mira hacia el ratón: con el cursor a la derecha, su lado
-        # derecho se hunde (giro en Y) y con el cursor arriba, el de arriba.
-        self._goal = [(y - 0.5) * 2 * MAX_TILT, -(x - 0.5) * 2 * MAX_TILT,
+        # derecho se hunde (giro en Y) y con el cursor arriba, el de arriba. La
+        # fuerza (``tilt_strength``) es un ajuste del usuario: 1.0 = fábrica.
+        tilt = MAX_TILT * getattr(self.card, "tilt_strength", 1.0)
+        self._goal = [(y - 0.5) * 2 * tilt, -(x - 0.5) * 2 * tilt,
                       LIFT, 1.0]
         self._glare_at = QPointF(x, y)
         self._run()
@@ -336,6 +343,13 @@ class TiltOverlay(QWidget):
         cover.addRoundedRect(card_rect, RADIUS, RADIUS)
         painter.fillPath(cover, QColor(t.BG))
         rot_x, rot_y, scale, glare = self._now
+        # Los ajustes del usuario (fracciones; 1.0 = fábrica): la intensidad del
+        # reflejo y la del halo.
+        light_boost = getattr(self.card, "tilt_light", 1.0)
+        glow_boost = getattr(self.card, "tilt_glow", 1.0)
+        # Sin recortar a 1.0: con el 300 % del ajuste, la luz tiene que poder
+        # subir de verdad (recortando, 200 % ya no hacía nada más que 100 %).
+        glare = glare * light_boost
         # La sombra de elevación, antes que la tarjeta: más abajo y más oscura
         # cuanto más sube (``scale`` va de 1 a ``LIFT``).
         height = max(0.0, min(1.0, (scale - 1.0) / (LIFT - 1.0)))
@@ -354,22 +368,27 @@ class TiltOverlay(QWidget):
         if height > 0.01:
             # El halo, inclinado con la tarjeta y sumando luz: el de la tarjeta
             # de debajo se quedaba plano y medio tapado.
-            painter.setOpacity(HALO_ALPHA * height)
+            painter.setOpacity(min(1.0, HALO_ALPHA * height * glow_boost))
             painter.setCompositionMode(QPainter.CompositionMode_Plus)
             painter.drawPixmap(QPointF(-HALO_PAD, -HALO_PAD), self._halo(w, h))
             painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
             painter.setOpacity(1.0)
         painter.drawPixmap(QPointF(0, 0), self._pixmap)
         if glare > 0.01:
-            # El brillo: una luz blanca en el punto que mira al ratón, solo
-            # dentro de la silueta de la tarjeta y sumando luz (``Plus``).
+            # El brillo: una luz en el punto que mira al ratón, solo dentro de
+            # la silueta de la tarjeta y sumando luz (``Plus``). El color lo
+            # elige el usuario (``tilt_light_color``); de fábrica, blanco cálido.
+            colour = getattr(self.card, "tilt_light_color", None) or GLARE_COLOR
             shape = QPainterPath()
             shape.addRoundedRect(QRectF(0, 0, w, h), RADIUS, RADIUS)
             painter.setClipPath(shape)
             spot = QPointF(self._glare_at.x() * w, self._glare_at.y() * h)
             light = QRadialGradient(spot, w * GLARE_RADIUS)
-            light.setColorAt(0.0, QColor(255, 255, 255, round(255 * GLARE * glare)))
-            light.setColorAt(1.0, QColor(255, 255, 255, 0))
+            light.setColorAt(0.0, QColor(colour.red(), colour.green(),
+                                         colour.blue(),
+                                         min(255, round(255 * GLARE * glare))))
+            light.setColorAt(1.0, QColor(colour.red(), colour.green(),
+                                         colour.blue(), 0))
             painter.setCompositionMode(QPainter.CompositionMode_Plus)
             painter.fillRect(QRectF(0, 0, w, h), light)
 

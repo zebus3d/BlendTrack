@@ -326,10 +326,9 @@ def build_qss() -> str:
     QFrame#Card[embedded="true"][hover="true"],
     QFrame#Card[embedded="true"]:hover {{ background: transparent; }}
     QWidget#GalleryInfo {{ background: transparent; }}
-    /* Los botones de la esquina de la galería (silencio y puntero láser):
-       pequeños, redondos y a medio fundir con el fondo, para que no compitan
-       con las cartas. */
-    QPushButton#GalleryCorner {{
+    /* Los botones de la esquina (galería y rejilla): pequeños, redondos y a
+       medio fundir con el fondo, para que no compitan con las cartas. */
+    QPushButton#CornerButton {{
         background-color: rgba(0, 0, 0, 110);
         color: {t.MUTED};
         border: 1px solid {t.BORDER};
@@ -337,9 +336,35 @@ def build_qss() -> str:
         font-size: 12px;
         padding: 0;
     }}
-    QPushButton#GalleryCorner:hover {{
+    QPushButton#CornerButton:hover {{
         background-color: {t.SURFACE_ALT};
         color: {t.TEXT};
+    }}
+    /* El botón de los efectos de la rejilla lleva las letras "FX": más pequeñas
+       y en negrita, y el color cambia según esté encendido o apagado. */
+    QPushButton#CornerButton[fx="true"] {{
+        font-size: 10px;
+        font-weight: 700;
+    }}
+    /* Los glifos de la esquina de la rejilla (engranaje y sonido) un punto más
+       grandes, para que midan como el "FX" de al lado. La galería se queda a 12. */
+    QPushButton#CornerButton[cornerIcon="true"] {{ font-size: 13px; }}
+    QPushButton#CornerButton[fx="true"][active="true"] {{
+        color: {t.ACCENT};
+        border-color: {t.ACCENT};
+    }}
+    QPushButton#CornerButton[fx="true"][active="false"] {{
+        color: {t.TEXT};
+        border-color: {t.TEXT_DIM};
+    }}
+    /* El panel de ajustes del efecto de la rejilla (rotación, luz y halo):
+       un popup flotante como los de Blender. Los colores son los de su tema por
+       defecto (``wcol_menu_back``: fondo #181818, borde #242424), con un punto
+       de transparencia para que se lea como popup sobre las tarjetas. */
+    QWidget#TiltPanel {{
+        background-color: rgba(24, 24, 24, 235);
+        border: 1px solid #242424;
+        border-radius: 8px;
     }}
     QLabel#GalleryValue {{ color: {t.TEXT}; }}
 
@@ -518,6 +543,19 @@ def build_qss() -> str:
         border-radius: 4px;
         padding: 0 4px;
     }}
+    /* Importe de la donación: mismo aspecto que un QLineEdit, pero con borde
+       visible para que se lea como un campo editable sobre el popup oscuro. */
+    QDoubleSpinBox#DonationAmount {{
+        background-color: {t.FIELD};
+        border: 1px solid {t.BORDER};
+        border-radius: 8px;
+        padding: 5px 11px;
+        color: {t.TEXT};
+        selection-background-color: {t.ACCENT_SELECTED};
+        selection-color: {t.TEXT_SEL};
+    }}
+    QDoubleSpinBox#DonationAmount:hover {{ border-color: {t.MUTED}; }}
+    QDoubleSpinBox#DonationAmount:focus {{ border-color: {t.ACCENT}; }}
 
     /* --- Desplegables --- */
     QComboBox {{
@@ -584,6 +622,13 @@ def build_qss() -> str:
     }}
     QSlider::handle:horizontal:hover {{ background: {t.ACCENT}; }}
     QSlider::handle:horizontal:pressed {{ background: {t.ACCENT_DARK}; }}
+    /* En el popup de ajustes del efecto (fondo casi negro) el carril del
+       deslizador no se veía: FIELD (#171717) y el fondo del popup (#181818) son
+       casi el mismo color. Se aclara solo para ese popup. */
+    QWidget#TiltPanel QSlider::groove:horizontal,
+    QWidget#TiltPanel QSlider::add-page:horizontal {{
+        background: {t.SURFACE_ALT};
+    }}
 
     /* --- Etiquetas con color --- */
     QLabel#Muted {{ color: {t.MUTED}; }}

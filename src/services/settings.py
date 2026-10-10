@@ -160,6 +160,28 @@ FORK_VERSION_LIMITS = (0, 10, 25, 50)
 GALLERY_STYLES = ("perspective", "shelf", "carousel", "showcase")
 DEFAULT_FORK_VERSION_LIMIT = 10
 
+# Fuerza de la inclinación de las tarjetas, en porcentaje. El suelo (20) deja
+# el efecto sutil pero visible; el techo (150) exagera sin que la tarjeta
+# parezca rota. El de fábrica (40) es una inclinación discreta.
+TILT_STRENGTH_MIN = 20
+TILT_STRENGTH_MAX = 150
+TILT_STRENGTH_DEFAULT = 40
+# El reflejo llega a 0 (apagado) y a 300 (el triple: la luz se nota de verdad).
+# El halo, a 0 y a 200. Los de fábrica: un reflejo suave y el halo al máximo.
+TILT_LIGHT_MIN, TILT_LIGHT_MAX = 0, 300
+TILT_LIGHT_DEFAULT = 88
+TILT_GLOW_MIN, TILT_GLOW_MAX = 0, 200
+TILT_GLOW_DEFAULT = 200
+# Saturación del color de la luz. A 100 % es el del tono elegido; por encima,
+# más vivo (el color se pierde sobre el gris de la tarjeta), y por debajo, más
+# apagado.
+TILT_SAT_MIN, TILT_SAT_MAX = 0, 300
+TILT_SAT_DEFAULT = 150
+# El color del reflejo que sigue al ratón: el tono "cálido" de la paleta
+# (``grid_corner.LIGHT_TONES``). Blanco cálido y no blanco puro: sobre el gris de
+# la app, el blanco puro parecía un foco de quirófano.
+TILT_LIGHT_COLOR_DEFAULT = "#ffe1a8"
+
 # Cuántos ajustes guardados (instantáneas) se conservan por versión si el
 # usuario no dice otra cosa (Migración). 0 = sin límite.
 DEFAULT_SNAPSHOT_KEEP = 5
@@ -353,6 +375,23 @@ def _float(value, default: float) -> float:
     return number if math.isfinite(number) else default
 
 
+def _clean_color(value) -> str:
+    """Un color de la luz del efecto en ``#rrggbb``, o el de fábrica.
+
+    El color lo elige el usuario en la esquina de la rejilla, pero el JSON se
+    puede editar a mano: un valor que no sea un hex válido no puede dejar el
+    efecto pintando con basura.
+    """
+    text = str(value or "").strip().lower()
+    if len(text) == 7 and text[0] == "#":
+        try:
+            int(text[1:], 16)
+            return text
+        except ValueError:
+            pass
+    return TILT_LIGHT_COLOR_DEFAULT
+
+
 def _clean_fork_limit(value) -> int:
     """Normaliza cuántas versiones de un fork se enseñan (0 = todas).
 
@@ -414,6 +453,19 @@ class Settings:
     laser_pointer: bool = True
     # Las tarjetas de la rejilla se inclinan en 3D hacia el ratón.
     card_tilt: bool = True
+    # Fuerza de esa inclinación, en porcentaje (100 = la de fábrica). Se ajusta
+    # desde el propio botón de la esquina de la rejilla, no en Ajustes.
+    tilt_strength: int = TILT_STRENGTH_DEFAULT
+    # Intensidad del reflejo que sigue al ratón y del halo de color, en
+    # porcentaje. También en la esquina de la rejilla.
+    tilt_light: int = TILT_LIGHT_DEFAULT
+    tilt_glow: int = TILT_GLOW_DEFAULT
+    # Color de la luz que sigue al ratón (hex ``#rrggbb``) y su saturación.
+    tilt_light_color: str = TILT_LIGHT_COLOR_DEFAULT
+    tilt_light_sat: int = TILT_SAT_DEFAULT
+    # Si el panel de ajustes del efecto (el de la esquina de la rejilla) estaba
+    # desplegado al cerrar. Es solo comodidad: por defecto va plegado.
+    tilt_panel_open: bool = False
     zoom: float = DEFAULT_ZOOM
     # Valor al que vuelve la rejilla con Ctrl+0 o Ctrl+clic en el slider. Es
     # distinto de ``zoom`` (que es "lo que tengo puesto ahora"): este es el
@@ -445,6 +497,10 @@ class Settings:
     window_x: int = 0
     window_y: int = 0
     window_pos_saved: bool = False
+    # Si ya se creó la regla de KWin que recuerda dónde se deja la ventana (solo
+    # tiene sentido en KDE Wayland, donde la posición es cosa del compositor). Se
+    # intenta una sola vez: si el usuario borra la regla, no se repone.
+    kwin_rule_done: bool = False
     # Bandeja del sistema. Son dos decisiones independientes: cerrar la ventana
     # (la X) es lo que más molesta si la app se cierra sin querer, así que viene
     # activado; minimizar a la bandeja es más agresivo y viene apagado (muchos
@@ -534,6 +590,13 @@ class Settings:
             ui_sounds=bool(data.get("ui_sounds", True)),
             laser_pointer=bool(data.get("laser_pointer", True)),
             card_tilt=bool(data.get("card_tilt", True)),
+            tilt_strength=_int(data.get("tilt_strength"),
+                               TILT_STRENGTH_DEFAULT),
+            tilt_light=_int(data.get("tilt_light"), TILT_LIGHT_DEFAULT),
+            tilt_glow=_int(data.get("tilt_glow"), TILT_GLOW_DEFAULT),
+            tilt_light_color=_clean_color(data.get("tilt_light_color")),
+            tilt_light_sat=_int(data.get("tilt_light_sat"), TILT_SAT_DEFAULT),
+            tilt_panel_open=bool(data.get("tilt_panel_open", False)),
             zoom=_float(data.get("zoom"), DEFAULT_ZOOM),
             reset_zoom=_float(data.get("reset_zoom"), DEFAULT_ZOOM),
             auto_update=bool(data.get("auto_update", True)),
@@ -552,6 +615,7 @@ class Settings:
             window_x=_int(data.get("window_x"), 0),
             window_y=_int(data.get("window_y"), 0),
             window_pos_saved=bool(data.get("window_pos_saved", False)),
+            kwin_rule_done=bool(data.get("kwin_rule_done", False)),
             platform=str(data.get("platform") or ""),
             arch=str(data.get("arch") or ""),
             channel=str(data.get("channel") or "all"),
@@ -598,6 +662,16 @@ class Settings:
             # Un valor raro (editado a mano) no puede dejar el temporizador con
             # un intervalo absurdo o negativo.
             settings.update_interval_min = DEFAULT_UPDATE_INTERVAL
+        if not (TILT_STRENGTH_MIN <= settings.tilt_strength <= TILT_STRENGTH_MAX):
+            # Un porcentaje fuera de rango (editado a mano) volvería loca la
+            # inclinación: se cae al de fábrica.
+            settings.tilt_strength = TILT_STRENGTH_DEFAULT
+        settings.tilt_light = min(TILT_LIGHT_MAX,
+                                  max(TILT_LIGHT_MIN, settings.tilt_light))
+        settings.tilt_glow = min(TILT_GLOW_MAX,
+                                 max(TILT_GLOW_MIN, settings.tilt_glow))
+        settings.tilt_light_sat = min(TILT_SAT_MAX,
+                                      max(TILT_SAT_MIN, settings.tilt_light_sat))
         return settings
 
     def destination_for(self, build) -> str:
