@@ -32,7 +32,7 @@ if HAVE_QT:
     # módulo donde **se usa** el nombre, no donde se define, que es lo que
     # exige ``mock.patch``. Se importan aquí y no dentro de cada test para no
     # repetir la línea cincuenta veces.
-    from ui.widgets import build_lists, downloads, folder_library
+    from ui.widgets import downloads, folder_library, gallery_feed
     from ui.widgets import settings_view, updates
 
 from model.build import Build
@@ -102,7 +102,7 @@ class SettingsIsolated:
         network = mock.patch.object(downloads.api, "get_builds", return_value=[])
         # La galería pide el splash de cada versión a projects.blender.org:
         # en los tests, nada de red (y nada de escribir en la caché real).
-        splash = mock.patch.object(build_lists.splash_service, "needs_fetch",
+        splash = mock.patch.object(gallery_feed.splash_service, "needs_fetch",
                                    return_value=False)
         splash.start()
         self.addCleanup(splash.stop)
@@ -116,7 +116,7 @@ class SettingsIsolated:
         focus.start()
         self.addCleanup(focus.stop)
         for name in ("play_tick", "play_lock"):
-            quiet = mock.patch.object(build_lists.sound, name)
+            quiet = mock.patch.object(gallery_feed.sound, name)
             quiet.start()
             self.addCleanup(quiet.stop)
         network.start()
@@ -1440,7 +1440,7 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
 
         window = MainWindow()
         calls = []
-        window.refresh_installed = lambda: calls.append(1)
+        window.refresh_installed = lambda **_: calls.append(1)
         window.isActiveWindow = lambda: False
         window.changeEvent(QEvent(QEvent.ActivationChange))
         self.assertEqual(calls, [])
@@ -1922,6 +1922,29 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
             self.app.processEvents()
         after = window._grid_columns(window.store_scroll, window.store_grid, 0)
         self.assertEqual(before, after)
+
+    def test_al_abrir_no_se_rehacen_las_tarjetas_sin_motivo(self):
+        """El reflujo con las mismas columnas, el reescaneo al ganar el foco sin
+        cambios y un listado que no trae parches no rehacen las instaladas: cada
+        pasada de más hacía que la barra de scroll fuera y viniera y las
+        tarjetas pegaran un saltito al abrir."""
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.layout_mode = "grid"
+        window._reflow()
+        first = window.installed_grid.itemAt(0).widget()
+        window.show()
+        for _ in range(5):
+            self.app.processEvents()
+        window._reflow()
+        window.refresh_installed(only_if_changed=True)
+        window._on_builds_loaded([])
+        self.assertIs(window.installed_grid.itemAt(0).widget(), first)
+        # Si cambian las columnas, sí se rehace.
+        window.resize(window.width() + 400, window.height())
+        window._reflow()
+        self.assertIsNot(window.installed_grid.itemAt(0).widget(), first)
 
     def test_los_desplegables_llevan_flecha(self):
         """Los combos usan ``ChevronCombo``, que pinta la flecha (Qt no la dibuja
@@ -7116,7 +7139,7 @@ class TiltTests(SettingsIsolated, unittest.TestCase):
 
         from PySide6.QtTest import QTest
 
-        from ui.widgets import build_lists
+        from ui.widgets import gallery_feed
         from ui.widgets.main_window import MainWindow
 
         window = MainWindow()
@@ -7134,14 +7157,14 @@ class TiltTests(SettingsIsolated, unittest.TestCase):
         # fondo (programado al llegar el listado) la puede estar reconstruyendo
         # justo al mirar y la nueva aún no está visible un instante.
         card = window._entries_of(window.store_grid)[0][2]
-        with mock.patch.object(build_lists.sound, "play_tick") as tick:
+        with mock.patch.object(gallery_feed.sound, "play_tick") as tick:
             card._set_hover(True)
         tick.assert_called_once()
         # Con los sonidos apagados, no suena.
         window.set_ui_sounds(False)
         QTest.qWait(50)
         card = window._entries_of(window.store_grid)[0][2]
-        with mock.patch.object(build_lists.sound, "play_tick") as tick:
+        with mock.patch.object(gallery_feed.sound, "play_tick") as tick:
             card._set_hover(True)
         tick.assert_not_called()
 

@@ -26,13 +26,12 @@ from services.downloader import log as download_log
 from ui import icons
 from ui.fonts import icon_font
 from ui.widgets.buttons import ChevronCombo, IconFlatButton, Pill
-from services import sound
-from services import splash as splash_service
 from ui.widgets import gallery
 from ui.widgets import build_style
-from ui.widgets.gallery_card import GalleryCard, build_rows, installed_rows
+from ui.widgets.gallery_feed import GalleryFeedMixin
+from ui.widgets.gallery_card import build_rows, installed_rows
 from ui.widgets.cards import (BuildCard, GridBuildCard, GridInstalledCard,
-                              InstalledCard, card_shadow, logo_path)
+                              InstalledCard, card_shadow)
 from ui.widgets.layouts import clear_layout
 from ui.widgets.menus import card_menu
 from ui.widgets.grid_corner import (CORNER_RESERVED, GridCorner,
@@ -42,7 +41,7 @@ from ui.widgets.shell import (ARCH_LABELS, CHANNEL_TOOLTIPS, CHANNELS,
                               MIN_ZOOM, PLATFORMS, ZOOM_STEP)
 
 
-class BuildListsMixin:
+class BuildListsMixin(GalleryFeedMixin):
     """Parte de ``MainWindow``; ver el docstring del módulo."""
 
     def _new_list_view(self):
@@ -135,16 +134,6 @@ class BuildListsMixin:
         pages.addWidget(view)
         return pages
 
-    def _gallery_tick(self) -> None:
-        """El "tic" de pasar de carta, si el usuario no lo ha apagado."""
-        if self.settings.ui_sounds:
-            sound.play_tick()
-
-    def _gallery_lock(self) -> None:
-        """El "clac" de una carta que se queda en el centro."""
-        if self.settings.ui_sounds:
-            sound.play_lock()
-
     def set_ui_sounds(self, on: bool) -> None:
         """Enciende o apaga los sonidos y deja de acuerdo a los tres mandos.
 
@@ -221,99 +210,9 @@ class BuildListsMixin:
             grid=self.layout_mode == "grid")
         self._sync_grid_keys()
 
-    def set_laser_pointer(self, on: bool) -> None:
-        """El puntero láser de las galerías, encendido o no (y recordado)."""
-        self.settings.laser_pointer = bool(on)
-        self.settings.save()
-        self.store_gallery.set_laser(bool(on))
-        self.installed_gallery.set_laser(bool(on))
-
-    def set_gallery_style(self, style: str) -> None:
-        """Cambia el estilo de las dos galerías y lo recuerda.
-
-        Se pide desde la propia galería (el botón de la esquina o las teclas
-        1-4): es una forma de ver, como rejilla/lista/galería, no un ajuste.
-        """
-        if style not in gallery.STYLES:
-            return
-        self.settings.gallery_style = style
-        self.settings.save()
-        self.store_gallery.set_style(style)
-        self.installed_gallery.set_style(style)
-
-    def _gallery_item(self, card, item, key: str, subtitle: str,
-                      build_type: str, rows, installed: bool):
-        """Envuelve una tarjeta de rejilla en la grande de la galería.
-
-        ``build_type`` es el de ``services.channels`` (``type_of_build`` en la
-        tienda, ``type_of_installed`` en Local): el color de la versión sale de
-        ahí, naranja en las LTS y el acento en el resto, como en las tarjetas.
-        El splash se pone si ya está en la caché; si no, se pide en un hilo y
-        llega por ``splash_ready``.
-        """
-        color = self._glow_color(item, build_type)
-        logo = str(logo_path(item.fork))
-        series = splash_service.series_for(item.version, item.branch or "",
-                                           getattr(item, "risk", "") or "",
-                                           item.fork)
-        cached = splash_service.cached(series)
-        big = GalleryCard(card, rows, color, logo, installed)
-        big.glow_color = color
-        if cached is not None:
-            big.set_splash(str(cached))
-        elif series and (splash_service.needs_fetch(series)
-                         or self._splash_executable(series)):
-            self._fetch_splash(series)
-        return gallery.GalleryItem(
-            card=big, key=key, title=f"{item.fork_name} {item.version}",
-            subtitle=subtitle, color=color, logo=logo, series=series,
-            splash=str(cached) if cached is not None else "")
-
-    def _splash_executable(self, series: str):
-        """El ejecutable de alguna instalación de esa serie, si la hay.
-
-        Si la versión (o otra de su serie, que comparten splash) está
-        instalada, el splash se saca de su binario y no hace falta la red.
-        """
-        for entry in self.installed:
-            if entry.executable and splash_service.series_for(
-                    entry.version, entry.branch or "", entry.risk or "",
-                    entry.fork) == series:
-                return entry.executable
-        return None
-
     @staticmethod
     def _glow_color(item, build_type: str) -> str:
         return build_style.glow_color(item, build_type)
-
-    def _fetch_splash(self, series: str) -> None:
-        """Consigue el splash de una serie en un hilo (una vez por serie):
-        del ejecutable instalado si lo hay, y si no, de la red."""
-        if series in self._splash_pending:
-            return
-        self._splash_pending.add(series)
-        executable = self._splash_executable(series)
-
-        def worker():
-            path = (splash_service.extract_from(series, executable)
-                    if executable else None)
-            if path is None and splash_service.needs_fetch(series):
-                path = splash_service.fetch(series)
-            if path is None:
-                return
-            try:
-                self.splash_ready.emit(series, str(path))
-            except RuntimeError:
-                # La ventana se cerró mientras se bajaba: ya no hay a quién
-                # avisar, y el fichero queda en la caché para la próxima vez.
-                pass
-
-        threading.Thread(target=worker, daemon=True).start()
-
-    def _on_splash_ready(self, series: str, path: str) -> None:
-        self._splash_pending.discard(series)
-        self.store_gallery.set_splash(series, path)
-        self.installed_gallery.set_splash(series, path)
 
     def _columns_for(self, scroll: QScrollArea, card_width: int) -> int:
         """Número de columnas que caben en el ancho visible (mínimo 1).
@@ -343,6 +242,9 @@ class BuildListsMixin:
         adapta al ancho de la ventana en vez de dejar huecos a la derecha.
         """
         clear_layout(grid)
+        # Se apunta con cuántas columnas se montó: ``_reflow`` la deja en paz
+        # mientras le sigan tocando las mismas.
+        grid.setProperty("columns", columns)
         # Reseteamos stretches de una rejilla anterior con más columnas.
         for col in range(24):
             grid.setColumnStretch(col, 1 if col < columns else 0)
@@ -367,9 +269,23 @@ class BuildListsMixin:
         return frame
 
     def _reflow(self) -> None:
+        """Recoloca la rejilla tras un cambio de tamaño, si cambian las columnas.
+
+        Solo se rehace la rejilla cuyo número de columnas ya no es el que le
+        toca. Rehacerla siempre (como antes) destruía y volvía a crear todas
+        las tarjetas tres o cuatro veces al abrir la app (al llegar el tamaño
+        de la ventana, el listado y este reflujo diferido) aunque nada hubiera
+        cambiado; en cada pasada la barra de scroll se iba y volvía y las
+        tarjetas cambiaban de ancho: el "saltito" del arranque.
+        """
         if self.layout_mode == "grid":
-            self._rebuild_store()
-            self._rebuild_installed()
+            for scroll, grid, rebuild in (
+                    (self.store_scroll, self.store_grid, self._rebuild_store),
+                    (self.installed_scroll, self.installed_grid,
+                     self._rebuild_installed)):
+                columns = self._grid_columns(scroll, grid, 0)
+                if grid.property("columns") != columns:
+                    rebuild()
         # La lista de Carpetas crece con la ventana: al cambiar el alto hay que
         # volver a medirle el hueco (el resto de páginas no lleva listas).
         self._fit_folder_list()
@@ -624,10 +540,19 @@ class BuildListsMixin:
         if self.view in ("store", "installed"):
             self.refresh(force=True)
 
-    def refresh_installed(self) -> None:
-        """Vuelve a escanear las carpetas y repinta las instaladas."""
-        self.installed = installed_service.scan_folders(self.settings.library_roots(),
-                                                        self.platform)
+    def refresh_installed(self, only_if_changed: bool = False) -> None:
+        """Vuelve a escanear las carpetas y repinta las instaladas.
+
+        Con ``only_if_changed`` no se repinta nada si el escaneo da lo mismo
+        que ya había: es el caso del reescaneo al recuperar el foco (también al
+        abrir la app), que casi nunca encuentra cambios y rehacía todas las
+        tarjetas, con su parpadeo, cada vez que se volvía a la ventana.
+        """
+        installed = installed_service.scan_folders(self.settings.library_roots(),
+                                                   self.platform)
+        if only_if_changed and installed == self.installed:
+            return
+        self.installed = installed
         self._recompute_updates()
         self._rebuild_installed()
         self.migrate_view.set_installed(self.installed)
@@ -692,11 +617,15 @@ class BuildListsMixin:
         # así se sabe aunque el cambio se haga con Ajustes delante.
         self._builds_forks = list(self.settings.enabled_forks()
                                   if forks is None else forks)
+        previous_updates = self.updates_by_path
         self._recompute_updates()
         self._rebuild_store()
         # Las instaladas también llevan el aviso de parche, y ese aviso depende
-        # del listado que acaba de llegar.
-        self._rebuild_installed()
+        # del listado que acaba de llegar. Si no ha cambiado no se rehacen: es
+        # lo único suyo que depende del listado, y rehacerlas al arrancar hacía
+        # que las tarjetas parpadearan sin motivo.
+        if self.updates_by_path != previous_updates:
+            self._rebuild_installed()
         # La ventana puede no tener todavía su ancho final: refloweamos en
         # cuanto el layout esté asentado para calcular bien las columnas.
         QTimer.singleShot(250, self, self._reflow)

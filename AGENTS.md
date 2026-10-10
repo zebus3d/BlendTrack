@@ -58,6 +58,7 @@ src/
       gallery_art.py   # lo que pinta la galería: halo, reflejo, fondo con dithering, láser
       gallery_controls.py # sus mandos: botones de la esquina, láser y teclado (mixin)
       gallery_card.py  # la carta grande: splash, datos y la tarjeta de rejilla dentro
+      gallery_feed.py  # lo que la ventana le da a la galería: cartas, splashes, estilo (mixin)
       tray.py          # el icono de la bandeja
 doc/                 # guía de arquitectura en español (para principiantes)
 packaging/           # spec de PyInstaller, scripts de build, inject_version.py

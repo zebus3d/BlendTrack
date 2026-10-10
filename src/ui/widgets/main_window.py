@@ -781,7 +781,7 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
                 or self._focus_refresh.isActive()):
             return
         self._focus_refresh.start()
-        self.refresh_installed()
+        self.refresh_installed(only_if_changed=True)
 
     # ------------------------------------------------------------- bandeja
     def _ensure_tray(self) -> TrayIcon:
