@@ -84,6 +84,19 @@ class SideButton(_FocusRing, QPushButton):
         if tooltip:
             self.setToolTip(tooltip)
 
+    def keyPressEvent(self, event):
+        """Las flechas no cambian de sección: se dejan pasar sin hacer nada.
+
+        Por defecto, un ``QPushButton`` en un ``QButtonGroup`` mueve el foco con
+        las flechas y **pulsa** el botón vecino, así que bajar con la flecha
+        cambiaba de sección (y pintaba su aro de foco). Las flechas son para
+        recorrer las tarjetas de la rejilla (``grid_keys``), no la barra.
+        """
+        if event.key() in (Qt.Key_Left, Qt.Key_Right, Qt.Key_Up, Qt.Key_Down):
+            event.ignore()
+            return
+        super().keyPressEvent(event)
+
 
 class CardButton(_FocusRing, QPushButton):
     """Botón de acción dentro de las tarjetas (descargar, lanzar, borrar...).

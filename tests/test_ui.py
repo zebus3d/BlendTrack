@@ -190,6 +190,88 @@ class MainWindowTests(SettingsIsolated, unittest.TestCase):
         result = window._filtered()
         self.assertEqual([b.version for b in result], ["5.3.0"])
 
+    def test_los_numeros_cambian_de_seccion(self):
+        """1-6 saltan a Local, Nube, Recientes, Addons, Migración y Ajustes."""
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+
+        window = self._window()
+        window.layout_mode = "grid"
+        window.settings.experimental_features = True
+        # Nada de arrancar Blender al entrar en Addons.
+        window.addons_view.read = lambda: None
+        for key, view in ((Qt.Key_1, "installed"), (Qt.Key_2, "store"),
+                          (Qt.Key_3, "recent"), (Qt.Key_4, "addons"),
+                          (Qt.Key_5, "migrate"), (Qt.Key_6, "settings")):
+            QTest.keyClick(window, key)
+            self.assertEqual(window.view, view, key)
+
+    def test_en_la_galeria_los_numeros_no_hacen_nada(self):
+        """En la galería el teclado es para pasar cartas, no para secciones."""
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+
+        window = self._window()
+        window.set_view("store")
+        window.layout_mode = "gallery"
+        for key in (Qt.Key_1, Qt.Key_2, Qt.Key_3, Qt.Key_4, Qt.Key_5, Qt.Key_6):
+            QTest.keyClick(window, key)
+            self.assertEqual(window.view, "store")
+
+    def test_escribir_numeros_en_el_buscador_no_cambia_de_seccion(self):
+        """El buscador se queda sus dígitos: si no, no se podría buscar "4.2"."""
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+
+        window = self._window()
+        window.set_view("store")
+        window.layout_mode = "grid"
+        window.search_input.setFocus()
+        QTest.keyClick(window.search_input, Qt.Key_4)
+        self.assertEqual(window.view, "store")
+        self.assertEqual(window.search_input.text(), "4")
+
+    def test_alt_mas_numero_cambia_de_pestana(self):
+        """Alt+2 etc. cambian de pestaña: canales, Ajustes, Migración."""
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+
+        from ui.widgets.shell import CHANNELS
+
+        window = self._window()
+        window.show()
+        window.activateWindow()
+        QTest.qWait(20)
+        window.set_view("store")
+        window.set_channel("all")
+        QTest.keyClick(window, Qt.Key_2, Qt.AltModifier)
+        self.assertEqual(window.channel, CHANNELS[1][0])
+        QTest.keyClick(window, Qt.Key_1, Qt.AltModifier)
+        self.assertEqual(window.channel, CHANNELS[0][0])
+        # En Ajustes, Alt+2 cambia de pestaña (no toca el canal).
+        window.set_view("settings")
+        QTest.keyClick(window, Qt.Key_2, Qt.AltModifier)
+        self.assertEqual(window.settings_tabs.currentIndex(), 1)
+        # En una pantalla sin pestañas, no pasa nada (ni revienta).
+        window.set_view("recent")
+        QTest.keyClick(window, Qt.Key_1, Qt.AltModifier)
+        self.assertEqual(window.view, "recent")
+
+    def test_el_foco_inicial_sale_del_buscador_vacio(self):
+        """El buscador solo toma el foco con clic; entonces 1-6 navegan."""
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+
+        window = self._window()
+        window.layout_mode = "grid"
+        # No lo gana solo ni con Tab: solo al hacer clic.
+        self.assertEqual(window.search_input.focusPolicy(), Qt.ClickFocus)
+        window.show()
+        QTest.qWait(20)
+        self.assertIsNot(window.focusWidget(), window.search_input)
+        QTest.keyClick(window.focusWidget() or window, Qt.Key_1)
+        self.assertEqual(window.view, "installed")
+
     def test_installed_filtra_por_canal(self):
         """La pestaña de instaladas tambien filtra por canal, no solo busqueda.
 
@@ -912,6 +994,26 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         window._set_zoom_value(DEFAULT_ZOOM)
         window.zoom_in()
         self.assertAlmostEqual(window.zoom, DEFAULT_ZOOM)
+
+    def test_escape_cancela_la_descarga_en_curso(self):
+        """Esc hace lo mismo que el botón Cancelar, solo mientras hay descarga."""
+        from PySide6.QtGui import QKeySequence
+
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        self.assertEqual(window.cancel_shortcut.key(), QKeySequence("Esc"))
+        # Fuera de una descarga el atajo va apagado: así no se traga el Escape
+        # de otros sitios (cancelar el renombrado de una tarjeta, cerrar un
+        # panel) cuando no hay nada que parar.
+        self.assertFalse(window.cancel_shortcut.isEnabled())
+        window._set_downloading(True)
+        self.assertTrue(window.cancel_shortcut.isEnabled())
+        with mock.patch.object(window, "cancel_download") as cancelar:
+            window.cancel_shortcut.activated.emit()
+        cancelar.assert_called_once()
+        window._set_downloading(False)
+        self.assertFalse(window.cancel_shortcut.isEnabled())
 
     def test_ctrl_clic_en_el_slider_resetea(self):
         from PySide6.QtCore import QEvent, QPointF, Qt
@@ -5697,13 +5799,14 @@ class KeyboardFocusTests(unittest.TestCase):
 
         sheet = qss.build_qss()
         for selector in ('QPushButton#Pill[focusRing="true"]',
-                         'QPushButton#SideButton[focusRing="true"]',
                          'QPushButton#CardButton[focusRing="true"]',
                          'QPushButton#IconFlat[focusRing="true"]',
                          'QPushButton#StarButton[focusRing="true"]',
                          'QPushButton#IconLink[focusRing="true"]',
                          "QLineEdit:focus"):
             self.assertIn(selector, sheet)
+        # Los de la barra lateral no: su sección ya se marca con ``:checked``.
+        self.assertNotIn('QPushButton#SideButton[focusRing="true"]', sheet)
 
     def test_el_aro_solo_sale_con_el_teclado(self):
         """El foco que Qt reparte solo no enciende el aro; un Tab, sí.
@@ -6314,9 +6417,11 @@ class GalleryTests(SettingsIsolated, unittest.TestCase):
         self.assertEqual(view.style_name, GALLERY_STYLES[1])
         self.assertEqual(window.installed_gallery.style_name, GALLERY_STYLES[1])
         self.assertEqual(Settings.load().gallery_style, GALLERY_STYLES[1])
+        # Las teclas de número no son de la galería (son los atajos de sección):
+        # pulsarlas aquí no cambia el estilo.
         QTest.keyClick(view, Qt.Key_4)
-        self.assertEqual(view.style_name, GALLERY_STYLES[3])
-        self.assertEqual(Settings.load().gallery_style, GALLERY_STYLES[3])
+        self.assertEqual(view.style_name, GALLERY_STYLES[1])
+        self.assertEqual(Settings.load().gallery_style, GALLERY_STYLES[1])
 
     def test_nunca_se_captura_una_carta_en_mitad_de_un_pintado(self):
         """``grab()`` dentro de ``paintEvent`` tumbaba la app (violación de
@@ -6448,6 +6553,24 @@ class GalleryTests(SettingsIsolated, unittest.TestCase):
             QTest.keyClick(view, Qt.Key_Up)
             click.assert_called_once()
 
+    def test_flecha_abajo_descarga_solo_si_no_esta_instalada(self):
+        """↓ descarga la central de la nube; en una ya instalada no hace nada."""
+        from unittest import mock
+
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+
+        window = self._window()
+        view = window.store_gallery
+        card = view._centre_card()
+        with mock.patch.object(card.primary_button, "click") as click:
+            card.setProperty("installed", "true")
+            QTest.keyClick(view, Qt.Key_Down)
+            click.assert_not_called()
+            card.setProperty("installed", "false")
+            QTest.keyClick(view, Qt.Key_Down)
+            click.assert_called_once()
+
     def test_con_el_buscador_vacio_las_flechas_son_de_la_galeria(self):
         """Al arrancar el foco está en el buscador sin que nadie lo toque."""
         from PySide6.QtCore import Qt
@@ -6471,6 +6594,160 @@ class GalleryTests(SettingsIsolated, unittest.TestCase):
         loaded = settings_service.Settings.load()
         self.assertEqual(loaded.gallery_style,
                          settings_service.GALLERY_STYLES[0])
+
+
+@unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
+class GridKeysTests(SettingsIsolated, unittest.TestCase):
+    """Las flechas de la rejilla (``ui/widgets/grid_keys.py``)."""
+
+    app = None
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+        from ui import fonts, qss
+
+        fonts.load()
+        cls.app.setStyleSheet(qss.build_qss())
+
+    def _window(self, count=6):
+        from PySide6.QtTest import QTest
+
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.resize(1000, 700)
+        window.show()
+        # Espera a la carga del arranque (mockeada a []) antes de inyectar, o la
+        # pisaría (un qWait fijo no basta bajo carga).
+        _wait_until(lambda: window._refresh_request >= 1
+                    and not window.busy_bar.isVisible(), timeout=5.0)
+        window.builds = [_build(f"5.{i}.0", "v5", "stable")
+                         for i in range(count)]
+        window.set_view("store")
+        window.set_layout_mode("grid")
+        QTest.qWait(20)   # deja asentarse las tarjetas recién creadas
+        return window
+
+    def _entries(self, window):
+        return window._entries_of(window.store_grid)
+
+    def _active(self, window):
+        for index, (_row, _col, widget) in enumerate(self._entries(window)):
+            if widget.property("hover") == "true":
+                return index
+        return None
+
+    def test_la_vecina_es_por_celda_no_por_el_orden_de_la_lista(self):
+        """En la última columna, la "de al lado" no es la de la fila siguiente."""
+        from PySide6.QtCore import Qt
+
+        from ui.widgets.grid_keys import GridKeysMixin
+
+        entries = [(0, 0, "a"), (0, 1, "b"), (0, 2, "c"),
+                   (1, 0, "d"), (1, 1, "e"), (1, 2, "f")]
+        neighbour = GridKeysMixin._grid_neighbour
+        self.assertEqual(neighbour(entries, 0, 1, Qt.Key_Right), 2)
+        self.assertIsNone(neighbour(entries, 0, 2, Qt.Key_Right))
+        self.assertIsNone(neighbour(entries, 1, 2, Qt.Key_Right))
+        self.assertEqual(neighbour(entries, 1, 1, Qt.Key_Up), 1)
+        self.assertIsNone(neighbour(entries, 1, 1, Qt.Key_Down))
+        self.assertIsNone(neighbour(entries, 0, 0, Qt.Key_Left))
+        self.assertEqual(neighbour(entries, 1, 2, Qt.Key_Left), 4)
+
+    def test_las_flechas_mueven_la_tarjeta_activa(self):
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+
+        window = self._window()
+        self.assertIsNone(self._active(window))
+        QTest.keyClick(window, Qt.Key_Right)   # entra en la rejilla
+        self.assertEqual(self._active(window), 0)
+        QTest.keyClick(window, Qt.Key_Right)
+        self.assertEqual(self._active(window), 1)
+        self.assertEqual(window.view, "store")   # no cambia de sección
+
+    def test_las_flechas_no_cambian_de_seccion(self):
+        """Bajar con la flecha en la barra lateral ya no salta de sección."""
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+
+        window = self._window()
+        window.set_view("store")
+        window.side_buttons["store"].setFocus()
+        QTest.keyClick(window.side_buttons["store"], Qt.Key_Down)
+        QTest.keyClick(window.side_buttons["store"], Qt.Key_Up)
+        self.assertEqual(window.view, "store")
+
+    def test_el_raton_quieto_no_le_quita_el_resalte_al_teclado(self):
+        from PySide6.QtCore import QEvent, Qt
+        from PySide6.QtTest import QTest
+
+        window = self._window()
+        entries = self._entries(window)
+        QTest.keyClick(window, Qt.Key_Right)
+        self.assertEqual(self._active(window), 0)
+        self.assertFalse(window._grid_hover_armed)
+        # El cursor no se ha movido: un Enter en otra tarjeta (la que quedó
+        # debajo al desplazarse la rejilla) no le quita el resalte a la activa.
+        QApplication.sendEvent(entries[1][2], QEvent(QEvent.Enter))
+        self.assertIsNone(entries[1][2].property("hover"))
+        self.assertEqual(self._active(window), 0)
+
+    def test_la_flecha_sigue_desde_la_tarjeta_que_tiene_el_raton(self):
+        """Si el ratón está en una tarjeta, la flecha parte de ahí."""
+        from PySide6.QtCore import QEvent, Qt
+        from PySide6.QtTest import QTest
+
+        window = self._window()
+        entries = self._entries(window)
+        # El ratón entra en la segunda tarjeta (sin moverse después): queda
+        # como activa.
+        QApplication.sendEvent(entries[1][2], QEvent(QEvent.Enter))
+        self.assertEqual(window._grid_active["store"], 1)
+        row, col = entries[1][0], entries[1][1]
+        target = window._grid_neighbour(entries, row, col, Qt.Key_Right)
+        self.assertIsNotNone(target)
+        QTest.keyClick(window, Qt.Key_Right)
+        self.assertEqual(self._active(window), target)
+
+    def test_en_la_lista_arriba_y_abajo_mueven_la_fila(self):
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+
+        window = self._window()
+        window.set_layout_mode("list")
+        entries = self._entries(window)
+        self.assertGreaterEqual(len(entries), 3)
+        QTest.keyClick(window, Qt.Key_Down)
+        self.assertEqual(self._active(window), 0)
+        QTest.keyClick(window, Qt.Key_Down)
+        self.assertEqual(self._active(window), 1)
+        QTest.keyClick(window, Qt.Key_Up)
+        self.assertEqual(self._active(window), 0)
+        # Izquierda y derecha no tienen vecina en una sola columna.
+        QTest.keyClick(window, Qt.Key_Right)
+        self.assertEqual(self._active(window), 0)
+
+    def test_la_lista_resalta_con_el_color_de_la_version(self):
+        from PySide6.QtTest import QTest
+
+        window = self._window()
+        window.set_layout_mode("list")
+        QTest.qWait(20)
+        card = self._entries(window)[0][2]
+        self.assertTrue(getattr(card, "glow_color", ""))
+        self.assertIsNotNone(getattr(card, "hover_tick", None))
+
+    def test_en_la_lista_solo_se_ve_el_boton_de_silencio(self):
+        from PySide6.QtTest import QTest
+
+        window = self._window()
+        window.set_layout_mode("list")
+        QTest.qWait(20)
+        self.assertTrue(window.grid_corner.isVisible())
+        self.assertFalse(window.grid_corner.button.isVisible())
+        self.assertTrue(window.grid_corner.mute.isVisible())
 
 
 @unittest.skipUnless(HAVE_QT, "PySide6 no instalado")
@@ -6766,26 +7043,30 @@ class TiltTests(SettingsIsolated, unittest.TestCase):
         from PySide6.QtTest import QTest
 
         from ui.widgets import build_lists
-        from ui.widgets.cards import GridBuildCard
         from ui.widgets.main_window import MainWindow
 
         window = MainWindow()
         window.show()
-        QTest.qWait(250)
+        # Espera a que acabe la carga del arranque (``get_builds`` mockeado a
+        # []): si se inyectan las versiones antes de que llegue, la carga las
+        # pisa. Un ``qWait`` fijo no basta bajo carga.
+        _wait_until(lambda: window._refresh_request >= 1
+                    and not window.busy_bar.isVisible(), timeout=5.0)
         window.builds = [_build("4.2.23", "v42", "stable")]
         window.set_view("store")
         window.set_layout_mode("grid")
         QTest.qWait(50)
-        card = [c for c in window.findChildren(GridBuildCard)
-                if c.isVisible()][0]
+        # La tarjeta se busca en la rejilla, no por ``isVisible``: un reflow de
+        # fondo (programado al llegar el listado) la puede estar reconstruyendo
+        # justo al mirar y la nueva aún no está visible un instante.
+        card = window._entries_of(window.store_grid)[0][2]
         with mock.patch.object(build_lists.sound, "play_tick") as tick:
             card._set_hover(True)
         tick.assert_called_once()
         # Con los sonidos apagados, no suena.
         window.set_ui_sounds(False)
         QTest.qWait(50)
-        card = [c for c in window.findChildren(GridBuildCard)
-                if c.isVisible()][0]
+        card = window._entries_of(window.store_grid)[0][2]
         with mock.patch.object(build_lists.sound, "play_tick") as tick:
             card._set_hover(True)
         tick.assert_not_called()

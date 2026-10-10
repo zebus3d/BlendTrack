@@ -313,7 +313,16 @@ class _HoverCard:
     # carta grande de la galería.
     tilt_enabled = False
 
-    def _set_hover(self, on: bool) -> None:
+    def set_hover(self, on: bool, point=None) -> None:
+        """Marca la tarjeta como resaltada, como si el ratón estuviera encima.
+
+        Lo usa la rejilla con el teclado: ``point`` (global) es hacia dónde
+        mira la inclinación, para que la tarjeta se eleve y brille aunque no
+        haya ratón. Sin él, se apunta al cursor de verdad (el caso del ratón).
+        """
+        self._set_hover(on, point)
+
+    def _set_hover(self, on: bool, point=None) -> None:
         self.setProperty("hover", "true" if on else "false")
         repolish(self)
         if on:
@@ -329,7 +338,7 @@ class _HoverCard:
             # El plano de la sombra (``lift_shadow``) sobraba: eran dos halos,
             # y el de debajo, apagándose con su propia animación, dejaba restos
             # en las tarjetas de al lado.
-            tilt.tilt(self, on)
+            tilt.tilt(self, on, point)
         else:
             motion.lift_shadow(self, on)
 

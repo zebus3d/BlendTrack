@@ -678,14 +678,14 @@ def build_qss() -> str:
     /* --- Foco de teclado ---
        Quien navega con Tab tiene que ver dónde está, pero solo él: el aro va
        con ``[focusRing="true"]`` y no con ``:focus``, porque Qt también reparte
-       el foco solo (al abrir la ventana o al esconder el buscador) y con
-       ``:focus`` el botón "Local" y los interruptores salían recuadrados en
-       blanco sin haber tocado el teclado. La propiedad la pone ``_FocusRing``
-       (``buttons.py``) solo si el foco llegó con una tecla: el equivalente al
-       ``:focus-visible`` de la web. Va al final para ganar a los estados
-       normales; con el ratón encima, manda el realce del hover. */
+       el foco solo (al abrir la ventana o al esconder el buscador). La
+       propiedad la pone ``_FocusRing`` (``buttons.py``) solo si el foco llegó
+       con una tecla: el equivalente al ``:focus-visible`` de la web. Va al
+       final para ganar a los estados normales; con el ratón encima, manda el
+       realce del hover. Los de la barra lateral (``#SideButton``) NO llevan
+       aro: su sección ya se marca con el fondo de ``:checked`` y el aro blanco
+       allí solo ensuciaba. */
     QPushButton#Pill[focusRing="true"],
-    QPushButton#SideButton[focusRing="true"],
     QPushButton#CardButton[focusRing="true"],
     QPushButton#IconFlat[focusRing="true"],
     QPushButton#StarButton[focusRing="true"] {{

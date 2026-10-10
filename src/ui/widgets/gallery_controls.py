@@ -9,8 +9,10 @@ usuario toca para manejarlas.
 - Los tres botones de la esquina: estilo, puntero láser y silencio.
 - El puntero láser, con su profundidad (más grande cerca, en escorzo sobre una
   carta girada, aplanado sobre el suelo) y su moteado animado.
-- El teclado: ← → (pasar), ↑ (lanzar), Inicio/Fin, Intro y 1-4, estén donde
-  estén el foco y el ratón (``eventFilter``).
+- El teclado: ← → (pasar), ↑ (lanzar), ↓ (descargar), Inicio/Fin e Intro, estén
+  donde estén el foco y el ratón (``eventFilter``). Las teclas de número no son
+  suyas: son los atajos de sección de la ventana (salvo en la galería, donde no
+  hacen nada); el estilo se cambia con el botón de la esquina.
 """
 
 import math
@@ -55,9 +57,8 @@ MUTE_MARGIN = CORNER_BUTTON_MARGIN
 HINT_RESERVE = 3 * MUTE_SIZE + MUTE_MARGIN + 20
 
 # Las teclas que maneja la galería (ver ``eventFilter``).
-GALLERY_KEYS = (Qt.Key_Left, Qt.Key_Right, Qt.Key_Up, Qt.Key_Home, Qt.Key_End,
-                Qt.Key_Return, Qt.Key_Enter,
-                Qt.Key_1, Qt.Key_2, Qt.Key_3, Qt.Key_4)
+GALLERY_KEYS = (Qt.Key_Left, Qt.Key_Right, Qt.Key_Up, Qt.Key_Down, Qt.Key_Home,
+                Qt.Key_End, Qt.Key_Return, Qt.Key_Enter)
 
 # Nombre visible de cada estilo (el texto es la clave de i18n), para el
 # tooltip del botón de estilo de la esquina.
@@ -142,7 +143,7 @@ class GalleryControlsMixin:
 
     def _style_tooltip(self) -> None:
         self.style_button.setToolTip(tr(
-            "Gallery style: {name}\nClick for {next} (or press 1, 2, 3 or 4).",
+            "Gallery style: {name}\nClick for {next}.",
             name=tr(STYLE_LABELS[self.style_name]),
             next=tr(STYLE_LABELS[self._next_style()])))
 
@@ -352,8 +353,6 @@ class GalleryControlsMixin:
             self.go(0)
         elif key == Qt.Key_End:
             self.go(len(self.items) - 1)
-        elif Qt.Key_1 <= key <= Qt.Key_4:
-            self.style_requested.emit(STYLES[key - Qt.Key_1])
         elif key in (Qt.Key_Return, Qt.Key_Enter):
             # La acción principal de la central: Descargar o Lanzar.
             self._press_primary()
@@ -363,6 +362,14 @@ class GalleryControlsMixin:
             # 300 MB (para eso está Intro).
             centre = self._centre_card()
             if centre is not None and centre.property("installed") == "true":
+                self._press_primary()
+        elif key == Qt.Key_Down:
+            # ↓ descarga: la acción principal en la nube (el botón es
+            # "Descargar"). En una ya instalada o en Local no hay nada que
+            # bajar, así que no hace nada. Igual que ↑, una flecha se toca sin
+            # querer, pero aquí lo que arranca es justo lo que se ha pedido.
+            centre = self._centre_card()
+            if centre is not None and centre.property("installed") != "true":
                 self._press_primary()
         else:
             super().keyPressEvent(event)

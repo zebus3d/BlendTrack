@@ -391,6 +391,9 @@ class GridCorner(QWidget):
     def __init__(self, parent, settings):
         super().__init__(parent)
         self.setObjectName("CornerControls")
+        # True en la rejilla (FX + engranaje + silencio); False en la lista,
+        # donde solo tiene sentido el silencio (no hay efecto que encender).
+        self._grid = True
         lay = QHBoxLayout(self)
         # El margen deja sitio al halo de FX, que se sale del botón.
         lay.setContentsMargins(GLOW_MARGIN, GLOW_MARGIN, GLOW_MARGIN, GLOW_MARGIN)
@@ -454,13 +457,20 @@ class GridCorner(QWidget):
         self.button.set_on(on)
         self._sync_controls()
 
-    def set_shown(self, show: bool) -> None:
-        """Enseña u oculta todo el grupo (solo vale en la rejilla) y lo coloca."""
+    def set_shown(self, show: bool, grid: bool = True) -> None:
+        """Enseña u oculta el grupo y lo coloca.
+
+        En la rejilla va entero (FX + engranaje + silencio); en la lista solo el
+        silencio, porque no hay efecto de tarjeta que encender.
+        """
+        self._grid = bool(grid)
+        self.button.setVisible(self._grid)
+        self.gear.setVisible(self._grid and self.button.isChecked())
         self.setVisible(bool(show))
         if show:
             self._resize_and_place()
             self.raise_()
-            self._set_panel(self.gear.isChecked())
+            self._set_panel(self._grid and self.gear.isChecked())
         else:
             self._set_panel(False)
 
@@ -486,14 +496,15 @@ class GridCorner(QWidget):
         engranaje **no** se desmarca al apagar el efecto: recuerda si el panel
         estaba abierto, para reabrirlo al volver a encenderlo.
         """
-        on = self.button.isChecked()
+        on = self.button.isChecked() and self._grid
         if self.gear.isVisible() != on:
             self.gear.setVisible(on)
         self._resize_and_place()
         self._set_panel(self.gear.isChecked())
 
     def _set_panel(self, open_: bool) -> None:
-        visible = bool(open_) and self.button.isChecked() and self.isVisible()
+        visible = (bool(open_) and self._grid and self.button.isChecked()
+                   and self.isVisible())
         self.panel.setVisible(visible)
         app = QApplication.instance()
         if visible:

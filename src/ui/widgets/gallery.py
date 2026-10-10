@@ -139,7 +139,8 @@ class GalleryView(GalleryControlsMixin, QWidget):
 
     Flechas, Inicio/Fin, rueda del ratón, arrastrar, o clic en una lateral para
     traerla al centro; Intro pulsa el botón principal de la central (Descargar
-    o Lanzar). ``current_changed`` avisa del índice de la que queda delante.
+    o Lanzar), ↑ la lanza si ya está instalada y ↓ la descarga si está en la
+    nube. ``current_changed`` avisa del índice de la que queda delante.
     """
 
     current_changed = Signal(int)
@@ -758,8 +759,9 @@ class GalleryView(GalleryControlsMixin, QWidget):
         rect = QRectF(reserve, self.height() - HINT_HEIGHT - 4,
                       max(0, self.width() - 2 * reserve), HINT_HEIGHT)
         text = painter.fontMetrics().elidedText(tr(
-            "← →  move   ·   ↑  launch   ·   Enter  download or launch   ·   "
-            "1–4  style   ·   Home / End  first / last   ·   wheel or drag  scroll"),
+            "← →  move   ·   ↑  launch   ·   ↓  download   ·   "
+            "Enter  download or launch   ·   "
+            "Home / End  first / last   ·   wheel or drag  scroll"),
             Qt.ElideRight, int(rect.width()))
         painter.drawText(rect, Qt.AlignHCenter | Qt.AlignVCenter, text)
 

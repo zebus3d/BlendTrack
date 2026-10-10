@@ -46,6 +46,7 @@ from ui.widgets.cards import logo_shadow
 from ui.widgets.donate import DonationPopup, paypal_url
 from ui.widgets.downloads import DownloadFlowMixin
 from ui.widgets.folder_library import FolderLibraryMixin
+from ui.widgets.grid_keys import GridKeysMixin
 from ui.widgets import motion
 from ui.widgets.migrate import MigrateView
 from ui.widgets.recent import RecentView
@@ -61,6 +62,7 @@ from ui.widgets.shell import (ARCH_LABELS, DEFAULT_WINDOW_HEIGHT,
 from ui.widgets.shell import CHANNELS, ZOOM_STEP  # noqa: F401
 from ui.widgets.tray import TrayIcon
 from ui.widgets.updates import UpdateFlowMixin
+from ui.widgets.view_keys import ViewKeysMixin
 
 # El enlace del botón de donación del pie (PayPal.Me). Abre en el navegador
 # por defecto y con el entorno limpio (``services.opener``). Sin importe en la
@@ -70,7 +72,8 @@ SUPPORT_URL = "https://paypal.me/zebus3d"
 
 
 class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
-                 DownloadFlowMixin, UpdateFlowMixin, QWidget):
+                 DownloadFlowMixin, UpdateFlowMixin, ViewKeysMixin,
+                 GridKeysMixin, QWidget):
     """Pantalla principal: cabecera, filtros, listas y pie con progreso/zoom."""
 
     # Señales para marshar el resultado de los hilos al hilo de la interfaz.
@@ -312,6 +315,45 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
         for keys, slot in bindings.items():
             shortcut = QShortcut(QKeySequence(keys), self)
             shortcut.activated.connect(slot)
+        # Esc cancela la descarga en curso, igual que el botón Cancelar. Solo
+        # está activo mientras hay una descarga: así no se traga el Escape de
+        # otros sitios (cancelar el renombrado de una tarjeta, cerrar un panel)
+        # cuando no hay nada que parar.
+        self.cancel_shortcut = QShortcut(QKeySequence("Esc"), self)
+        self.cancel_shortcut.setEnabled(False)
+        self.cancel_shortcut.activated.connect(self.cancel_download)
+        # Alt+1..9: pasa a la pestaña N de la pantalla actual (los canales de
+        # Local/Nube, las pestañas de Ajustes y las de Migración). Los números
+        # **sin** Alt cambian de sección (ver ``ViewKeysMixin``); con Alt, de
+        # pestaña dentro de la pantalla. Cuenta solo las pestañas visibles: los
+        # canales de los forks apagados no ocupan número.
+        for number in range(1, 10):
+            shortcut = QShortcut(QKeySequence(f"Alt+{number}"), self)
+            shortcut.activated.connect(lambda n=number: self._select_tab(n))
+
+    def _tab_bar_for_view(self):
+        """La barra de pestañas de la pantalla actual, o ``None`` si no tiene."""
+        if self.view in ("store", "installed"):
+            return self.channel_tabs
+        if self.view == "settings":
+            return self.settings_tabs
+        if self.view == "migrate":
+            return self.migrate_view.tabs
+        return None
+
+    def _select_tab(self, number: int) -> None:
+        """Selecciona la pestaña ``number`` (1..N) de la pantalla actual.
+
+        Cuenta solo las visibles: las pestañas de los forks se esconden si el
+        fork está apagado y no deben ocupar un número.
+        """
+        tabs = self._tab_bar_for_view()
+        if tabs is None:
+            return
+        visible = [index for index in range(tabs.count())
+                   if tabs.isTabVisible(index)]
+        if 1 <= number <= len(visible):
+            tabs.setCurrentIndex(visible[number - 1])
 
     def _build_header(self) -> QFrame:
         header = QFrame()
@@ -363,6 +405,11 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
         self.search_input.setToolTip(tr(
             "Filter by version, branch or file name as you type."))
         self.search_input.setFixedWidth(240)
+        # El buscador NO toma el foco solo: ni al abrir la ventana (Qt lo deja
+        # en el primer control) ni con Tab. Así los dígitos no se quedan en el
+        # campo y los atajos de sección (1-6) funcionan; se escribe en él al
+        # hacer clic, que es cuando el usuario quiere buscar de verdad.
+        self.search_input.setFocusPolicy(Qt.ClickFocus)
         self.search_input.textChanged.connect(self._on_search_text)
         # Icono de lupa dentro del campo, como en la versión original.
         self.search_input.addAction(
@@ -471,7 +518,7 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
         self.percent.setVisible(False)
         progress_lay.addWidget(self.percent)
         self.cancel_btn = CardButton(tr("Cancel"),
-                                     tooltip=tr("Stop the download running now."))
+                                     tooltip=tr("Stop the download running now (Esc)."))
         self.cancel_btn.clicked.connect(self.cancel_download)
         self.cancel_btn.setVisible(False)
         progress_lay.addWidget(self.cancel_btn)
@@ -548,6 +595,11 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
         self.progress.setVisible(active)
         self.percent.setVisible(active)
         self.cancel_btn.setVisible(active)
+        # El atajo de Escape va con el botón: solo cancela mientras hay una
+        # descarga (ver ``_install_shortcuts``).
+        shortcut = getattr(self, "cancel_shortcut", None)
+        if shortcut is not None:
+            shortcut.setEnabled(active)
 
     @property
     def platform(self) -> str:

@@ -116,8 +116,14 @@ class TiltOverlay(QWidget):
         return self.card is not None and isValid(self.card)
 
     # -------------------------------------------------------------- estado
-    def hover(self, on: bool) -> None:
-        """El ratón entra (se inclina y eleva) o sale (vuelve a su sitio)."""
+    def hover(self, on: bool, point=None) -> None:
+        """El ratón entra (se inclina y eleva) o sale (vuelve a su sitio).
+
+        ``point`` (global) es hacia dónde mira la inclinación; si no llega, se
+        usa el cursor. Lo pasa la rejilla cuando el resalte lo mueve el teclado,
+        para que la tarjeta se eleve y brille sin girar hacia un ratón que no
+        está encima.
+        """
         if not self._alive():
             return
         self._hover = on
@@ -134,7 +140,7 @@ class TiltOverlay(QWidget):
                 # ese brillo se quedaba pegado en la foto mientras dure esta.
                 QTimer.singleShot(motion.LIFT_MS + 60, self, self._refresh_backdrop)
             self._set_opaque(True)
-            self._aim(QCursor.pos())
+            self._aim(point if point is not None else QCursor.pos())
             self.show()
             self.raise_()
         else:
@@ -393,8 +399,12 @@ class TiltOverlay(QWidget):
             painter.fillRect(QRectF(0, 0, w, h), light)
 
 
-def tilt(card: QWidget, on: bool) -> None:
-    """Empieza o termina la inclinación de ``card`` (una capa por tarjeta)."""
+def tilt(card: QWidget, on: bool, point=None) -> None:
+    """Empieza o termina la inclinación de ``card`` (una capa por tarjeta).
+
+    ``point`` (global) es hacia dónde mira la inclinación cuando la enciende el
+    teclado; sin él, hacia el ratón.
+    """
     overlay = getattr(card, "_tilt", None)
     if on and card.parentWidget() is not None:
         # Una sola capa a la vez: la de la tarjeta de la que viene el ratón,
@@ -407,4 +417,4 @@ def tilt(card: QWidget, on: bool) -> None:
             return
         overlay = TiltOverlay(card)
         card._tilt = overlay
-    overlay.hover(on)
+    overlay.hover(on, point)

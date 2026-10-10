@@ -26,10 +26,10 @@ from services.downloader import log as download_log
 from ui import icons
 from ui.fonts import icon_font
 from ui.widgets.buttons import IconFlatButton, Pill
-from ui import theme as t
 from services import sound
 from services import splash as splash_service
 from ui.widgets import gallery
+from ui.widgets import build_style
 from ui.widgets.gallery_card import GalleryCard, build_rows, installed_rows
 from ui.widgets.cards import (BuildCard, GridBuildCard, GridInstalledCard,
                               InstalledCard, card_shadow, logo_path)
@@ -212,9 +212,14 @@ class BuildListsMixin:
                            self.settings)
 
     def _sync_grid_corner(self) -> None:
-        """Enseña la esquina del efecto solo en la rejilla (no en lista ni galería)."""
+        """La esquina de las listas: entera en la rejilla (FX + engranaje +
+        silencio), solo el silencio en la lista (no hay efecto de tarjeta) y
+        nada en la galería."""
+        lists = self.view in ("store", "installed")
         self.grid_corner.set_shown(
-            self.view in ("store", "installed") and self.layout_mode == "grid")
+            lists and self.layout_mode in ("grid", "list"),
+            grid=self.layout_mode == "grid")
+        self._sync_grid_keys()
 
     def set_laser_pointer(self, on: bool) -> None:
         """El puntero láser de las galerías, encendido o no (y recordado)."""
@@ -279,27 +284,7 @@ class BuildListsMixin:
 
     @staticmethod
     def _glow_color(item, build_type: str) -> str:
-        """El color de la luz de una versión: halo, brillo y fondo de galería.
-
-        Naranja las LTS (el mismo con el que la tarjeta escribe "LTS"), azul
-        las estables y violeta las que están en pruebas: diarias, alfas, beta
-        y experimentales. Los forks llevan su propio color (turquesa
-        Bforartists, magenta UPBGE), para distinguirlos de un vistazo. La
-        misma regla en la rejilla y en la galería, para que el color diga lo
-        mismo en las dos.
-        """
-        if build_type == channels.TYPE_BFORARTISTS:
-            return t.FORK_BFORARTISTS
-        if build_type == channels.TYPE_UPBGE:
-            return t.FORK_UPBGE
-        if build_type == channels.TYPE_LTS:
-            return t.WARNING
-        if build_type == channels.TYPE_STABLE:
-            return t.ACCENT
-        if build_type in (channels.TYPE_DAILY, channels.TYPE_EXPERIMENTAL):
-            return t.TESTING
-        risk = getattr(item, "risk", "") or "stable"
-        return t.ACCENT if risk == "stable" else t.TESTING
+        return build_style.glow_color(item, build_type)
 
     def _fetch_splash(self, series: str) -> None:
         """Consigue el splash de una serie en un hilo (una vez por serie):
@@ -434,15 +419,14 @@ class BuildListsMixin:
             console = (self._console_state(entry)
                        if installed and self.settings.experimental_features
                        else None)
+            colour = self._glow_color(build, channels.type_of_build(build))
             if grid:
                 card = GridBuildCard(build, installed, zebra, zoom, marked,
                                      console=console)
-                prepare_grid_card(
-                    card, self.settings, self._glow_color(
-                        build, channels.type_of_build(build)),
-                    self._gallery_tick)
+                prepare_grid_card(card, self.settings, colour, self._gallery_tick)
             else:
                 card = BuildCard(build, installed, zebra, marked, console=console)
+                build_style.prepare_list_card(card, colour, self._gallery_tick)
             card.action_clicked.connect(self.install_build)
             card.notes_clicked.connect(self.open_release_notes)
             card.favorite_toggled.connect(self.set_favorite)
@@ -500,18 +484,17 @@ class BuildListsMixin:
             # El botón de consola solo se enseña con las opciones experimentales.
             console = (self._console_state(entry)
                        if self.settings.experimental_features else None)
+            colour = self._glow_color(entry, channels.type_of_installed(entry))
             if grid:
                 card = GridInstalledCard(entry, zebra, zoom, marked,
                                          update=update, console=console,
                                          read_only=self._is_read_only(entry))
-                prepare_grid_card(
-                    card, self.settings, self._glow_color(
-                        entry, channels.type_of_installed(entry)),
-                    self._gallery_tick)
+                prepare_grid_card(card, self.settings, colour, self._gallery_tick)
             else:
                 card = InstalledCard(entry, zebra, marked, update=update,
                                      read_only=self._is_read_only(entry),
                                      console=console)
+                build_style.prepare_list_card(card, colour, self._gallery_tick)
             card.launch_clicked.connect(self.launch_installed)
             card.delete_clicked.connect(self.delete_installed)
             card.notes_clicked.connect(self.open_release_notes)
