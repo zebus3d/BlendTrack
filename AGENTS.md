@@ -355,6 +355,11 @@ no tenerlo.
 
 ## Interfaz
 
+**Antes de tocar nada visual, lee `doc/03-diseno-ui-ux.md`** (paleta,
+estados, decisiones de diseño y fallos visuales ya diagnosticados). Los
+colores salen siempre de `src/ui/theme.py`, que lleva el contraste medido de
+cada uno. Los principios generales de diseño están en la skill `ux-ui-expert`.
+
 - **El alto de una lista con asa va FIJO, no negociado con el layout**
   (`ui/widgets/layouts.py: FittedList`). Dejándoselo negociar, cuando la
   ventana se queda corta Qt reparte a la baja y encoge la lista hasta su
@@ -594,6 +599,16 @@ minor** (`v1.3.0`).
   `src/services/updater.py` (`BlendTrack-x86_64.AppImage`,
   `BlendTrack-windows-x86_64.zip`, `BlendTrack-macos.zip`). Si cambian
   en el CI, actualiza también el updater.
+- **Asset de compatibilidad (temporal)**: el job `linux` publica además una
+  copia del AppImage llamada `BlenderManager-x86_64.AppImage`. NO es un error:
+  quien ya tenga instalado el antiguo BlenderManager busca ese nombre (el
+  `ASSET_NAMES` de su copia) y así su auto-update le instala este mismo
+  binario sin reinstallar a mano. En Linux el nombre interno no importa (al
+  aplicar se reemplaza el fichero en su sitio); en Windows/macOS sí, por eso no
+  se hace ahí. Quitar del `build.yml` (el `cp` y la ruta del artifact) cuando
+  ya no queden instalaciones antiguas. Solo llega a quien abra la app durante
+  la ventana, y solo desde una release **final** promovida (`releases/latest`
+  ignora los pre-releases).
 - **`checksums.txt`**: el job `release` lo genera y el updater lo usa para
   verificar el SHA-256 antes de instalar (ver "Auto-update"). No quitar ese
   paso: sin él, ninguna app instalada puede actualizarse sola.

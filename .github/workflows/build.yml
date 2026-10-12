@@ -155,6 +155,14 @@ jobs:
           # Copiamos el AppImage a la raíz para que el artefacto contenga
           # únicamente el archivo, sin la carpeta dist/.
           cp dist/BlendTrack-x86_64.AppImage BlendTrack-x86_64.AppImage
+          # Puente de compatibilidad temporal: quien ya tenga instalado el
+          # antiguo BlenderManager busca su asset por el nombre viejo
+          # (updater.ASSET_NAMES en su copia). Publicamos también una copia con
+          # ese nombre (mismo binario, solo cambia el fichero) para que su
+          # auto-update le instale esta version. En Linux no importa el nombre
+          # interno de la AppImage: al aplicarla se reemplaza el fichero en su
+          # sitio. Quitar cuando no queden instalaciones antiguas.
+          cp BlendTrack-x86_64.AppImage BlenderManager-x86_64.AppImage
       - name: Smoke test del AppImage generado
         run: |
           chmod +x BlendTrack-x86_64.AppImage
@@ -176,7 +184,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: BlendTrack-linux
-          path: BlendTrack-x86_64.AppImage
+          path: |
+            BlendTrack-x86_64.AppImage
+            BlenderManager-x86_64.AppImage
 
   windows:
     needs: version
