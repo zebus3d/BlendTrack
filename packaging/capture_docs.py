@@ -2,9 +2,12 @@
 
 Uso:  QT_QPA_PLATFORM=offscreen .venv/bin/python packaging/capture_docs.py
 
-Las capturas del README son 1280x880, en español y con la barra de filtros
-visible. El alto es holgado a propósito: con 624 px la última fila de tarjetas
-de la tienda salía cortada por abajo (la rejilla tiene más filas que la lista).
+Las capturas del README son 1280x880, **en inglés** (el idioma se fija en los
+ajustes temporales, así no dependen del locale de la máquina) y con la barra de
+filtros visible. Hay rejilla y lista (`store_grid`/`store_list`,
+`installed_grid`/`installed_list`) para poder enseñar los dos modos. El alto es
+holgado a propósito: con 624 px la última fila de tarjetas de la tienda salía
+cortada por abajo (la rejilla tiene más filas que la lista).
 Se hacen con el plugin offscreen de Qt, así que no hace falta servidor gráfico
 (a diferencia del Kivy antiguo, que necesitaba ventana real).
 
@@ -89,9 +92,15 @@ def main() -> None:
     # zoom pendiente) pero aquí no debe tocar nada del usuario.
     with tempfile.TemporaryDirectory() as temp:
         settings_service.config_dir = lambda: Path(temp)
+        # Semilla del settings.json temporal: idioma fijo en inglés. MainWindow
+        # relee los ajustes al arrancar (``i18n.set_language(settings.language)``),
+        # así que fijarlo aquí es lo que hace que la captura salga en inglés y
+        # no en el idioma del sistema.
+        (Path(temp) / "settings.json").write_text(
+            '{"language": "en"}', encoding="utf-8")
 
         app = QApplication([])
-        i18n.set_language("es")
+        i18n.set_language("en")
         fonts.load()
         app.setStyleSheet(qss.build_qss())
 
@@ -127,6 +136,17 @@ def main() -> None:
         def save_store_grid():
             window.grab().save(str(OUT / "store_grid.png"))
             print("guardada store_grid.png")
+            QTimer.singleShot(300, capture_store_list)
+
+        def capture_store_list():
+            # El modo lista enseña más versiones por pantalla que la rejilla;
+            # útil para la documentación además de la rejilla.
+            window.set_layout_mode("list")
+            QTimer.singleShot(600, save_store_list)
+
+        def save_store_list():
+            window.grab().save(str(OUT / "store_list.png"))
+            print("guardada store_list.png")
             QTimer.singleShot(300, capture_installed_grid)
 
         def capture_installed_grid():
@@ -137,6 +157,15 @@ def main() -> None:
         def save_installed_grid():
             window.grab().save(str(OUT / "installed_grid.png"))
             print("guardada installed_grid.png")
+            QTimer.singleShot(300, capture_installed_list)
+
+        def capture_installed_list():
+            window.set_layout_mode("list")
+            QTimer.singleShot(600, save_installed_list)
+
+        def save_installed_list():
+            window.grab().save(str(OUT / "installed_list.png"))
+            print("guardada installed_list.png")
             QTimer.singleShot(300, capture_migrate)
 
         def capture_migrate():

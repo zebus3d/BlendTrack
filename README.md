@@ -12,6 +12,12 @@ file written in Python with PySide6/Qt.
 <sub>Every build in one screen, with channel tabs, search, and a grid or list
 view.</sub>
 
+<p align="center">
+  <img width="72%" alt="BlendTrack store, list view" src="docs/img/store_list.png">
+</p>
+
+<sub>The same store in list view, when you want more versions per screen.</sub>
+
 **Get it:** [latest release](https://github.com/zebus3d/BlendTrack/releases/latest)
 — AppImage for Linux, a single `.exe` for Windows, a `.zip` for macOS.
 
