@@ -687,7 +687,7 @@ class ExtractorTests(unittest.TestCase):
 
     def test_una_ruta_absoluta_del_tar_cae_dentro_del_destino(self):
         """El filtro ``data`` le quita la barra inicial: no sale del destino."""
-        name = "blendermanager-test-absoluta.txt"
+        name = "blendtrack-test-absoluta.txt"
         with tempfile.TemporaryDirectory() as tmp:
             archive_path = Path(tmp) / "abs.tar.gz"
             self._tar_malicioso(archive_path,
@@ -1417,8 +1417,8 @@ class AutostartTests(unittest.TestCase):
     def test_el_desktop_entrecomilla_rutas_con_espacios(self):
         from services import autostart
 
-        entry = autostart._desktop_entry(["/ruta/con espacios/BlenderManager"])
-        self.assertIn('Exec="/ruta/con espacios/BlenderManager"', entry)
+        entry = autostart._desktop_entry(["/ruta/con espacios/BlendTrack"])
+        self.assertIn('Exec="/ruta/con espacios/BlendTrack"', entry)
         self.assertIn("Type=Application", entry)
         self.assertIn("X-GNOME-Autostart-enabled=true", entry)
 
@@ -1607,7 +1607,7 @@ class OpenerTests(unittest.TestCase):
         from services import opener
 
         with mock.patch.dict("os.environ", {
-                "LD_LIBRARY_PATH": "/tmp/.mount/usr/bin/BlenderManager/_internal",
+                "LD_LIBRARY_PATH": "/tmp/.mount/usr/bin/BlendTrack/_internal",
                 "LD_LIBRARY_PATH_ORIG": "/usr/lib",
                 "LD_PRELOAD": "/tmp/.mount/libfoo.so",
                 "QT_PLUGIN_PATH": "/tmp/.mount/plugins",
@@ -1704,7 +1704,7 @@ class MacosDmgTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)
-            zip_path = base / "BlenderManager-macos.zip"
+            zip_path = base / "BlendTrack-macos.zip"
             zip_path.write_bytes(b"zip")
             calls = []
             with mock.patch.object(macos_dmg, "_run",

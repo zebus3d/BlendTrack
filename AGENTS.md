@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Guía para trabajar en **BlenderManager** (app PySide6 de descarga/gestión de
+Guía para trabajar en **BlendTrack** (app PySide6 de descarga/gestión de
 versiones de Blender; nació en Kivy y se portó a Qt, ver más abajo). El código
 y los comentarios están en español; las claves de i18n son cadenas en inglés y
 los textos viven en `src/locale/<idioma>.json`.
@@ -40,7 +40,7 @@ src/
       settings_view.py # la pantalla de Ajustes
       folder_library.py# la biblioteca de carpetas
       downloads.py     # descargar, instalar, lanzar y borrar versiones
-      updates.py       # actualizar BlenderManager
+      updates.py       # actualizar BlendTrack
       shell.py         # tablas y widgets que comparten la ventana y sus partes
       migrate/         # la migración: view + addons_tab/prefs_tab/factory_tab
       addons.py        # gestor de addons
@@ -446,7 +446,7 @@ X11, Windows y macOS no cambia nada. **No volver a forzar XWayland.**
 ## Instalar versiones de Blender
 
 - **Marcador de instalación**: al extraer una build se escribe
-  `.blendermanager.json` dentro de su carpeta con el hash de la compilación
+  `.blendtrack.json` dentro de su carpeta con el hash de la compilación
   (`src/services/installed.py`). Sin él no se pueden distinguir dos diarias de
   la misma versión, porque el nombre de la carpeta extraída no lleva el hash.
 - **macOS: el `.dmg` se monta y se instala** (`src/services/macos_dmg.py`). La
@@ -570,7 +570,7 @@ Empujar un tag `vX.Y.Z` compila los 3 binarios con esa versión y publica una
 release **final** directamente (sin pasar por el pre-release):
 
 ```bash
-git tag -a v1.3.0 -m "Blender Manager v1.3.0"
+git tag -a v1.3.0 -m "BlendTrack v1.3.0"
 git push origin main   # si aún no está empujado
 git push origin v1.3.0
 ```
@@ -591,8 +591,8 @@ minor** (`v1.3.0`).
 ### Reglas que no hay que romper
 
 - **Nombres de asset**: deben coincidir con `ASSET_NAMES` de
-  `src/services/updater.py` (`BlenderManager-x86_64.AppImage`,
-  `BlenderManager-windows-x86_64.zip`, `BlenderManager-macos.zip`). Si cambian
+  `src/services/updater.py` (`BlendTrack-x86_64.AppImage`,
+  `BlendTrack-windows-x86_64.zip`, `BlendTrack-macos.zip`). Si cambian
   en el CI, actualiza también el updater.
 - **`checksums.txt`**: el job `release` lo genera y el updater lo usa para
   verificar el SHA-256 antes de instalar (ver "Auto-update"). No quitar ese
@@ -670,7 +670,7 @@ Son estas (el job `linux:` las instala): `libxcb-icccm4`, `libxcb-image0`,
 (esta última es requisito desde Qt 6.5). Comprobar con:
 
 ```bash
-ldd dist/BlenderManager/_internal/PySide6/Qt/plugins/platforms/libqxcb.so | grep "not found"
+ldd dist/BlendTrack/_internal/PySide6/Qt/plugins/platforms/libqxcb.so | grep "not found"
 ```
 
 ### El otro gotcha: el OpenSSL del binario no encuentra las CAs
@@ -707,7 +707,7 @@ no hay contaminación, así que solo se veía en el binario. Comprobado leyendo
 `/proc/<pid>/environ` de un binario empaquetado:
 
 ```
-LD_LIBRARY_PATH=/ruta/dist/BlenderManager/_internal
+LD_LIBRARY_PATH=/ruta/dist/BlendTrack/_internal
 ```
 
 Por eso **nada externo se lanza a pelo**: `services/opener` (`clean_env`,
@@ -716,11 +716,11 @@ o lanzar Blender (`launcher.launch` le pasa `env=clean_env()`). Si añades una
 llamada a `xdg-open`/`webbrowser`/`Popen` de un programa de fuera, pásale ese
 entorno o el fallo vuelve.
 
-### El spec (`packaging/blendermanager.spec`)
+### El spec (`packaging/blendtrack.spec`)
 
 - **Windows se empaqueta `--onefile`, Linux/macOS one-folder.** El spec ramifica
   por `sys.platform`: en Windows la `EXE` se lleva `a.binaries`/`a.datas` y no hay
-  `COLLECT`, así que el asset es un **único `BlenderManager.exe`** (sin
+  `COLLECT`, así que el asset es un **único `BlendTrack.exe`** (sin
   `_internal`). Se hizo así porque el reparto Windows es un `.zip` manual y el
   error clásico del usuario era descomprimir solo el `.exe` (o borrar `_internal`)
   y encontrarse con `Failed to load Python DLL ... python312.dll`. El precio es un
@@ -729,7 +729,7 @@ entorno o el fallo vuelve.
   updater funciona en ambos layouts (`_apply_windows` busca el `.exe` y copia su
   carpeta, que en onefile es solo el ejecutable).
 - `datas` lleva `src/assets` y `src/locale` (ya no hay `views/`).
-- **Iconos**: `packaging/icons/blendermanager.ico` (Windows) y `.icns` (macOS)
+- **Iconos**: `packaging/icons/blendtrack.ico` (Windows) y `.icns` (macOS)
   los genera `packaging/make_icons.py` a partir de
   `src/assets/images/app_icon.png`, y se dejan en el repo para no depender de Qt
   antes de empaquetar. **Qt solo escribe un tamaño por fichero** (si encadenas
@@ -739,10 +739,10 @@ entorno o el fallo vuelve.
   tamaño (`icp4`=16, `icp5`=32, `icp6`=64, `ic07`=128, `ic08`=256, `ic09`=512).
   Si cambias el PNG, vuelve a ejecutar el script.
 - **El AppImage no usa esos ficheros**: `build_appimage.sh` copia el PNG como
-  `blendermanager.png`, el `.desktop` con `Icon=blendermanager` y un `.DirIcon`
+  `blendtrack.png`, el `.desktop` con `Icon=blendtrack` y un `.DirIcon`
   (que es lo que enseña el gestor de ficheros). Si alguien dice que "el AppImage
   sale sin icono", **el icono va dentro**: comprobarlo con
-  `./BlenderManager-x86_64.AppImage --appimage-extract` y mirar la raíz del
+  `./BlendTrack-x86_64.AppImage --appimage-extract` y mirar la raíz del
   AppDir. Lo que falta suele ser del sistema, no del paquete (comprobado con un
   usuario real):
   - **KDE/Dolphin**: `kio-extras` ya trae el plugin
@@ -878,7 +878,7 @@ podman exec -it bmtest bash
 # dentro: apt-get install python3-pip python3-venv <libs xcb de arriba> ; \
 #   pip install -r requirements-build.txt
 # pyinstaller ... ; y comprobar:
-#   - GUI:  QT_QPA_PLATFORM=offscreen ./dist/BlenderManager/BlenderManager --screenshot /tmp/x.png
+#   - GUI:  QT_QPA_PLATFORM=offscreen ./dist/BlendTrack/BlendTrack --screenshot /tmp/x.png
 #   - glibc máxima de _internal/*.so*: <= 2.35
 #     (objdump -T <lib> | grep -oE 'GLIBC_[0-9.]+' | sort -V | tail -1)
 ```
@@ -983,7 +983,7 @@ El AppImage resultante pesa ~70 MB.
 
 ## Una sola instancia (`ui/single_instance.py`)
 
-Abrir Blender Manager dos veces no crea una segunda ventana: la primera instancia
+Abrir BlendTrack dos veces no crea una segunda ventana: la primera instancia
 escucha en un `QLocalServer` con nombre (derivado del usuario y de la carpeta de
 config, así el modo portable no choca con la app instalada) y la segunda solo le
 pide que salga al frente y se va. `_restore_from_tray` trae la ventana al frente
@@ -996,7 +996,7 @@ podría conectarse y sacar nuestra ventana al frente (en Windows la opción
 restringe igual el *named pipe*). El icono de la bandeja y lo de minimizar
 están en "Interfaz → La bandeja del sistema".
 
-- **El relanzamiento del updater lleva `BLENDERMANAGER_RELAUNCH`** en el entorno
+- **El relanzamiento del updater lleva `BLENDTRACK_RELAUNCH`** en el entorno
   (`updater._relaunch_env`). El binario nuevo arranca **antes** de que el viejo
   acabe de cerrarse (el AppImage relanza y sale 1 s después); sin esa marca el
   nuevo le pediría el turno al viejo, el viejo cerraría y la app se quedaría sin

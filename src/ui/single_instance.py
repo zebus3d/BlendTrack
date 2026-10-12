@@ -1,4 +1,4 @@
-"""Una sola instancia de Blender Manager por usuario y configuración.
+"""Una sola instancia de BlendTrack por usuario y configuración.
 
 Abrir la aplicación dos veces no aporta nada: se solapan dos ventanas, dos
 iconos de bandeja y dos listados descargándose a la vez. La primera instancia
@@ -33,7 +33,7 @@ def socket_name() -> str:
     """
     base = f"{Path.home()}|{settings_service.config_dir()}"
     digest = hashlib.sha1(base.encode("utf-8")).hexdigest()[:16]
-    return f"blendermanager-{digest}"
+    return f"blendtrack-{digest}"
 
 
 class SingleInstance(QObject):

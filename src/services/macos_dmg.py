@@ -130,7 +130,7 @@ def install(dmg_path, dest_folder, version_hint: str = "",
     dest.mkdir(parents=True, exist_ok=True)
     prefix = "bforartists" if fork == FORK_BFORARTISTS else "blender"
     bundle_name = "Bforartists.app" if fork == FORK_BFORARTISTS else "Blender.app"
-    mount = Path(tempfile.mkdtemp(prefix="blendermanager-dmg-"))
+    mount = Path(tempfile.mkdtemp(prefix="blendtrack-dmg-"))
     try:
         _run(["/usr/bin/hdiutil", "attach", "-nobrowse", "-readonly",
               "-noautoopen", "-mountpoint", str(mount), str(dmg)])

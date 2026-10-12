@@ -129,7 +129,7 @@ def _probe_writable(folder: Path) -> None:
     """Crea la carpeta y comprueba que deja escribir, o lanza."""
     try:
         folder.mkdir(parents=True, exist_ok=True)
-        probe = folder / ".blendermanager-write-test"
+        probe = folder / ".blendtrack-write-test"
         probe.write_text("", encoding="utf-8")
         probe.unlink()
     except OSError as error:
@@ -183,7 +183,7 @@ def move_build(move: Move, on_progress=None, should_cancel=None) -> Path:
     **solo entonces** se borra el origen. Ante cualquier fallo se borra el
     temporal y el origen se queda intacto.
 
-    El marcador ``.blendermanager.json`` viaja dentro de la carpeta, así que no
+    El marcador ``.blendtrack.json`` viaja dentro de la carpeta, así que no
     hay que reescribirlo (a diferencia de ``installed.rename``, donde lo que se
     pierde es el nombre).
     """

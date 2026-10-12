@@ -40,13 +40,13 @@ MANIFEST_NAME = "blender_manifest.toml"
 
 
 # Marcador donde anotamos qué copiamos, para poder deshacer más adelante.
-MIGRATION_MARKER = ".blendermanager-migration.json"
+MIGRATION_MARKER = ".blendtrack-migration.json"
 # Sufijo de las copias de seguridad. **Solo se conserva una por destino** (ver
 # ``blender_addons.park_existing``), no un histórico con fecha.
-BACKUP_SUFFIX = ".blendermanager-bak"
+BACKUP_SUFFIX = ".blendtrack-bak"
 # Sufijo de la copia a medio hacer: se copia primero aquí y, solo cuando está
 # completa, se renombra a su sitio (ver ``blender_addons.replace_with_copy``).
-STAGING_SUFFIX = ".blendermanager-tmp"
+STAGING_SUFFIX = ".blendtrack-tmp"
 
 # Estados de compatibilidad de un addon. El texto lo pone la interfaz.
 OK = "ok"            # compatible

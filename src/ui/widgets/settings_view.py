@@ -128,7 +128,7 @@ class SettingsViewMixin:
                 tr("Language, zoom and how the window behaves."),
                 tr("Arguments and console for every Blender you launch."),
                 tr("Tray icon, autostart and other system integration."),
-                tr("Updates of BlenderManager itself."),
+                tr("Updates of BlendTrack itself."),
                 tr("Options still in development."))):
             tabs.setTabToolTip(index, tip)
         # Al entrar en una pestaña, sus listas se ajustan al hueco que tienen:
@@ -349,7 +349,7 @@ class SettingsViewMixin:
         row_tray_close.addWidget(QLabel(tr("Close to the system tray")))
         row_tray_close.addStretch()
         self.close_tray_switch = SwitchPill(self.close_to_tray, tooltip=tr(
-            "Keep BlenderManager running in the system tray when you close the "
+            "Keep BlendTrack running in the system tray when you close the "
             "window.\nClick the tray icon to open it again."))
         self.close_tray_switch.toggled.connect(self._on_close_to_tray_toggled)
         row_tray_close.addWidget(self.close_tray_switch)
@@ -382,7 +382,7 @@ class SettingsViewMixin:
         # Windows, LaunchAgent), así que su estado se lee del sistema y no del
         # settings.json; lo que sí guardamos es si debe empezar en la bandeja.
         self.autostart_switch = SwitchPill(autostart.is_enabled(), tooltip=tr(
-            "Open BlenderManager automatically when you sign in to your "
+            "Open BlendTrack automatically when you sign in to your "
             "computer."))
         self.autostart_switch.toggled.connect(self._on_autostart_toggled)
         row_autostart = QHBoxLayout()
@@ -469,7 +469,7 @@ class SettingsViewMixin:
         row.addStretch()
         self.update_switch = SwitchPill(
             self.auto_update, tooltip=tr(
-                "Check for new BlenderManager versions when the app starts.\n"
+                "Check for new BlendTrack versions when the app starts.\n"
                 "It only downloads one when you accept; checking is cheap."))
         self.update_switch.toggled.connect(self.set_auto_update)
         row.addWidget(self.update_switch)
@@ -480,7 +480,7 @@ class SettingsViewMixin:
         row_periodic.addWidget(QLabel(tr("Check for updates periodically")))
         row_periodic.addStretch()
         self.periodic_switch = SwitchPill(self.periodic_update, tooltip=tr(
-            "Look for new versions of BlenderManager every so often,\n"
+            "Look for new versions of BlendTrack every so often,\n"
             "even if the startup check is off."))
         self.periodic_switch.toggled.connect(self.set_periodic_update)
         row_periodic.addWidget(self.periodic_switch)
@@ -496,7 +496,7 @@ class SettingsViewMixin:
             self.settings.update_interval_min)
         self.update_interval_combo.setCurrentIndex(index if index >= 0 else 0)
         self.update_interval_combo.setToolTip(tr(
-            "How often BlenderManager looks for its own updates.\n"
+            "How often BlendTrack looks for its own updates.\n"
             "It only downloads one when you accept; checking is cheap."))
         self.update_interval_combo.setEnabled(self.periodic_update)
         self.update_interval_combo.currentIndexChanged.connect(
@@ -507,7 +507,7 @@ class SettingsViewMixin:
         row2 = QHBoxLayout()
         version_label = QLabel(tr("Version {version}", version=self.current_version))
         version_label.setToolTip(
-            tr("Version of BlenderManager you are using right now."))
+            tr("Version of BlendTrack you are using right now."))
         row2.addWidget(version_label)
         row2.addStretch()
         check = CardButton(tr("Check now"), tooltip=tr("Check for updates now"))

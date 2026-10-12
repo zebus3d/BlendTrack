@@ -21,7 +21,7 @@ from model.build import FORK_BFORARTISTS, FORK_UPBGE, version_tuple
 from paths import APP_DIR
 from services import channels
 
-APP_NAME = "BlenderManager"
+APP_NAME = "BlendTrack"
 PORTABLE_MARKERS = ("portable", "portable.txt", ".portable")
 
 

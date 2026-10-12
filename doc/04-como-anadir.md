@@ -228,7 +228,7 @@ segundo ejemplo.
    copiar".
 
 4. **Copiar nunca borra.** Si el addon ya existe en destino, se aparta con el
-   sufijo `.blendermanager-bak` y se anota en `.blendermanager-migration.json`,
+   sufijo `.blendtrack-bak` y se anota en `.blendtrack-migration.json`,
    que es lo que permite **deshacer** la última migración. Es el mismo espíritu
    que `write_problem` (`ui/widgets/shell.py`) o los guardados atómicos de
    `settings.py`.
@@ -400,7 +400,7 @@ Detalles que costó aprender:
 `set_config_aside` / `restore_snapshot` / `all_snapshots` / `delete_snapshot`
 (en `services/blender_snapshots.py`) hacen lo que mucha gente hace a mano: **mover la carpeta `config`** para probar
 una versión "de fábrica". La diferencia es que la apartan a una instantánea con
-fecha (`.blendermanager-snapshots/config-<fecha>-<etiqueta>`) en vez de
+fecha (`.blendtrack-snapshots/config-<fecha>-<etiqueta>`) en vez de
 renombrarla, así que:
 
 - se puede **recuperar** los ajustes anteriores (y al recuperar, la config

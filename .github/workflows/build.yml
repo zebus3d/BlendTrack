@@ -150,33 +150,33 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements-build.txt
-          pyinstaller --clean --noconfirm packaging/blendermanager.spec --distpath dist --workpath build
+          pyinstaller --clean --noconfirm packaging/blendtrack.spec --distpath dist --workpath build
           packaging/build_appimage.sh dist
           # Copiamos el AppImage a la raíz para que el artefacto contenga
           # únicamente el archivo, sin la carpeta dist/.
-          cp dist/BlenderManager-x86_64.AppImage BlenderManager-x86_64.AppImage
+          cp dist/BlendTrack-x86_64.AppImage BlendTrack-x86_64.AppImage
       - name: Smoke test del AppImage generado
         run: |
-          chmod +x BlenderManager-x86_64.AppImage
+          chmod +x BlendTrack-x86_64.AppImage
           # APPIMAGE_EXTRACT_AND_RUN=1 evita necesitar libfuse2 para montar.
-          APPIMAGE_EXTRACT_AND_RUN=1 ./BlenderManager-x86_64.AppImage --smoke
+          APPIMAGE_EXTRACT_AND_RUN=1 ./BlendTrack-x86_64.AppImage --smoke
           # Y ademas la GUI: --smoke no importa Qt, asi que por si solo no pilla
           # que falte shiboken6 (ya paso: el binario no arrancaba y el smoke
           # pasaba). El plugin offscreen monta la ventana sin pantalla.
-          APPIMAGE_EXTRACT_AND_RUN=1 QT_QPA_PLATFORM=offscreen ./BlenderManager-x86_64.AppImage --screenshot /tmp/shot.png
+          APPIMAGE_EXTRACT_AND_RUN=1 QT_QPA_PLATFORM=offscreen ./BlendTrack-x86_64.AppImage --screenshot /tmp/shot.png
           test "$(stat -c%s /tmp/shot.png)" -gt 5000
       - name: Comprobar que el AppImage lleva el icono dentro
         run: |
-          ./BlenderManager-x86_64.AppImage --appimage-extract >/dev/null
+          ./BlendTrack-x86_64.AppImage --appimage-extract >/dev/null
           # .DirIcon es lo que ensena el gestor de ficheros para el fichero
           # suelto, y appimagetool saca el resto del Icon= del .desktop.
           test -s squashfs-root/.DirIcon
-          grep -q "^Icon=blendermanager$" squashfs-root/blendermanager.desktop
+          grep -q "^Icon=blendtrack$" squashfs-root/blendtrack.desktop
           rm -rf squashfs-root
       - uses: actions/upload-artifact@v4
         with:
-          name: BlenderManager-linux
-          path: BlenderManager-x86_64.AppImage
+          name: BlendTrack-linux
+          path: BlendTrack-x86_64.AppImage
 
   windows:
     needs: version
@@ -211,7 +211,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements-build.txt
-          pyinstaller --clean --noconfirm packaging/blendermanager.spec --distpath dist --workpath build
+          pyinstaller --clean --noconfirm packaging/blendtrack.spec --distpath dist --workpath build
       # Firma con SignPath (gratis para open source). La accion firma a partir
       # de un artifact de GitHub, no de un fichero local, asi que hay que subir
       # el .exe sin firmar antes. Sin el secreto SIGNPATH_API_TOKEN todo esto se
@@ -221,8 +221,8 @@ jobs:
         if: steps.signpath.outputs.enabled == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: BlenderManager-windows-unsigned
-          path: dist/BlenderManager.exe
+          name: BlendTrack-windows-unsigned
+          path: dist/BlendTrack.exe
           # Sin zip: asi SignPath recibe el .exe tal cual.
           archive: false
           retention-days: 1
@@ -250,14 +250,14 @@ jobs:
         continue-on-error: true
         shell: powershell
         run: |
-          $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=BlenderManager" -CertStoreLocation Cert:\CurrentUser\My
-          Set-AuthenticodeSignature -FilePath dist\BlenderManager.exe -Certificate $cert
-          Get-AuthenticodeSignature dist\BlenderManager.exe | Format-List
+          $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=BlendTrack" -CertStoreLocation Cert:\CurrentUser\My
+          Set-AuthenticodeSignature -FilePath dist\BlendTrack.exe -Certificate $cert
+          Get-AuthenticodeSignature dist\BlendTrack.exe | Format-List
       - name: Empaquetar el .exe
         run: |
-          # En Windows el spec genera onefile: un unico BlenderManager.exe, sin
+          # En Windows el spec genera onefile: un unico BlendTrack.exe, sin
           # carpeta _internal que el usuario pueda borrar por error.
-          Compress-Archive -Path dist/BlenderManager.exe -DestinationPath BlenderManager-windows-x86_64.zip
+          Compress-Archive -Path dist/BlendTrack.exe -DestinationPath BlendTrack-windows-x86_64.zip
       # Que el .exe arranque de verdad. Sin esto, un Windows roto se descubre
       # cuando lo baja un usuario: no tenemos ninguna maquina Windows a mano.
       - name: Comprobar que el binario arranca (GUI incluida)
@@ -265,14 +265,14 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
-          ./dist/BlenderManager.exe --smoke
-          ./dist/BlenderManager.exe --screenshot shot.png
+          ./dist/BlendTrack.exe --smoke
+          ./dist/BlendTrack.exe --screenshot shot.png
           ls -l shot.png
           test "$(stat -c%s shot.png)" -gt 5000
       - uses: actions/upload-artifact@v4
         with:
-          name: BlenderManager-windows
-          path: BlenderManager-windows-x86_64.zip
+          name: BlendTrack-windows
+          path: BlendTrack-windows-x86_64.zip
 
   macos:
     needs: version
@@ -293,29 +293,29 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements-build.txt
-          pyinstaller --clean --noconfirm packaging/blendermanager.spec --distpath dist --workpath build
-          cd dist && zip -r ../BlenderManager-macos.zip BlenderManager.app
+          pyinstaller --clean --noconfirm packaging/blendtrack.spec --distpath dist --workpath build
+          cd dist && zip -r ../BlendTrack-macos.zip BlendTrack.app
       # Que el bundle arranque de verdad, GUI incluida (ver el job windows).
       - name: Comprobar que el bundle arranca (GUI incluida)
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
-          ./dist/BlenderManager.app/Contents/MacOS/BlenderManager --smoke
-          ./dist/BlenderManager.app/Contents/MacOS/BlenderManager --screenshot shot.png
+          ./dist/BlendTrack.app/Contents/MacOS/BlendTrack --smoke
+          ./dist/BlendTrack.app/Contents/MacOS/BlendTrack --screenshot shot.png
           ls -l shot.png
           test "$(stat -f%z shot.png)" -gt 5000
       # El .app tiene que llevar el .icns y declararlo en el Info.plist, o
       # Finder ensena el icono generico. PlistBuddy falla si falta la clave.
       - name: Comprobar que el bundle lleva el icono
         run: |
-          ICNS="$(find dist/BlenderManager.app -name '*.icns' | head -1)"
+          ICNS="$(find dist/BlendTrack.app -name '*.icns' | head -1)"
           test -n "${ICNS}"
           test -s "${ICNS}"
-          /usr/libexec/PlistBuddy -c "Print :CFBundleIconFile" dist/BlenderManager.app/Contents/Info.plist
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIconFile" dist/BlendTrack.app/Contents/Info.plist
       - uses: actions/upload-artifact@v4
         with:
-          name: BlenderManager-macos
-          path: BlenderManager-macos.zip
+          name: BlendTrack-macos
+          path: BlendTrack-macos.zip
 
   # Publica la release con los binarios adjuntos.
   #

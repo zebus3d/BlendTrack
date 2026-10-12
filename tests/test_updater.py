@@ -33,9 +33,9 @@ class VersionCompareTests(unittest.TestCase):
         self.assertTrue(updater.is_newer("1.2.39", "v1.7.0"))
 
     def test_asset_for(self):
-        self.assertEqual(updater.asset_for("linux"), "BlenderManager-x86_64.AppImage")
-        self.assertEqual(updater.asset_for("windows"), "BlenderManager-windows-x86_64.zip")
-        self.assertEqual(updater.asset_for("darwin"), "BlenderManager-macos.zip")
+        self.assertEqual(updater.asset_for("linux"), "BlendTrack-x86_64.AppImage")
+        self.assertEqual(updater.asset_for("windows"), "BlendTrack-windows-x86_64.zip")
+        self.assertEqual(updater.asset_for("darwin"), "BlendTrack-macos.zip")
         self.assertIsNone(updater.asset_for("plan9"))
 
 
@@ -77,12 +77,12 @@ class _FakeResponse:
 class ChecksumTests(unittest.TestCase):
     def test_checksum_for(self):
         body = (
-            b"abc123  BlenderManager-x86_64.AppImage\n"
-            b"def456  ./BlenderManager-linux/BlenderManager-x86_64.AppImage\n"
+            b"abc123  BlendTrack-x86_64.AppImage\n"
+            b"def456  ./BlendTrack-linux/BlendTrack-x86_64.AppImage\n"
         )
         assets = [{"name": "checksums.txt", "url": "http://checksums"}]
         with mock.patch("urllib.request.urlopen", return_value=_FakeResponse(body)):
-            value = updater.checksum_for(assets, "BlenderManager-x86_64.AppImage")
+            value = updater.checksum_for(assets, "BlendTrack-x86_64.AppImage")
         self.assertEqual(value, "abc123")
 
     def test_checksum_missing_asset(self):
@@ -129,12 +129,12 @@ class CleanupTests(unittest.TestCase):
     def test_cleanup_removes_downloads_but_keeps_cache(self):
         base = updater.updates_dir()
         (base / "staging-1").mkdir(parents=True)
-        (base / "BlenderManager-x86_64.AppImage").write_text("binario grande")
+        (base / "BlendTrack-x86_64.AppImage").write_text("binario grande")
         (base / "release.json").write_text("{}")
         (base / "release.etag").write_text("etag")
         updater.cleanup_staging()
         self.assertFalse((base / "staging-1").exists())
-        self.assertFalse((base / "BlenderManager-x86_64.AppImage").exists())
+        self.assertFalse((base / "BlendTrack-x86_64.AppImage").exists())
         self.assertTrue((base / "release.json").is_file())
         self.assertTrue((base / "release.etag").is_file())
 
@@ -227,7 +227,7 @@ class AppImageApplyTests(unittest.TestCase):
 
     def _archive(self):
         # Simula el .AppImage descargado (sin +x, como lo deja el downloader).
-        archive = self.root / "update" / "BlenderManager-x86_64.AppImage"
+        archive = self.root / "update" / "BlendTrack-x86_64.AppImage"
         archive.parent.mkdir(parents=True, exist_ok=True)
         archive.write_bytes(b"contenido")
         archive.chmod(0o644)
@@ -299,7 +299,7 @@ class SourceUpdateTests(unittest.TestCase):
         # cuenta como checkout propio.
         with tempfile.TemporaryDirectory() as tmp:
             (Path(tmp) / ".git").mkdir()
-            nested = Path(tmp) / "tools" / "BlenderManager"
+            nested = Path(tmp) / "tools" / "BlendTrack"
             nested.mkdir(parents=True)
             with mock.patch.object(updater, "APP_DIR", nested):
                 self.assertIsNone(updater.source_root())
@@ -358,7 +358,7 @@ class SourceUpdateTests(unittest.TestCase):
 class WindowsUpdateLayoutTests(unittest.TestCase):
     """El updater de Windows debe encontrar el `.exe` en cualquier layout.
 
-    El asset pasó a ser **onefile** (un único `BlenderManager.exe` en la raíz del
+    El asset pasó a ser **onefile** (un único `BlendTrack.exe` en la raíz del
     zip) para que nadie pueda romper la instalación borrando `_internal`. Antes
     `_apply_windows` daba por hecho que `extract()` devolvía la carpeta que
     contiene el ejecutable; con un zip plano eso ya no se cumple.
@@ -385,7 +385,7 @@ class WindowsUpdateLayoutTests(unittest.TestCase):
         self.assertIn("--apply-update", lanzado)
 
     def test_onefolder_con_carpeta(self):
-        ok, popen = self._apply_con([f"BlenderManager/{updater.EXE_NAME}"])
+        ok, popen = self._apply_con([f"BlendTrack/{updater.EXE_NAME}"])
         self.assertTrue(ok)
         self.assertTrue(popen.call_args.args[0][0].endswith(updater.EXE_NAME))
 
@@ -402,31 +402,31 @@ class MacosUpdateTests(unittest.TestCase):
     """
 
     def _fake_bundle(self, base):
-        bundle = base / "BlenderManager.app"
+        bundle = base / "BlendTrack.app"
         (bundle / "Contents" / "MacOS").mkdir(parents=True)
-        return bundle / "Contents" / "MacOS" / "BlenderManager"
+        return bundle / "Contents" / "MacOS" / "BlendTrack"
 
     def _zip(self, base):
         # El contenido da igual: la extracción (ditto) se mockea, porque en
         # Linux no existe.
-        archive = base / "BlenderManager-macos.zip"
+        archive = base / "BlendTrack-macos.zip"
         archive.write_bytes(b"zip")
         return archive
 
     @staticmethod
     def _extrae_app(_zip_path, dest):
         """Simula `ditto -x -k`: deja el Blender.app dentro del staging."""
-        app = Path(dest) / "BlenderManager.app"
+        app = Path(dest) / "BlendTrack.app"
         (app / "Contents" / "MacOS").mkdir(parents=True)
-        (app / "Contents" / "MacOS" / "BlenderManager").write_text("bin")
+        (app / "Contents" / "MacOS" / "BlendTrack").write_text("bin")
 
     def test_app_bundle_detecta_el_bundle(self):
         from pathlib import Path as _Path
 
         self.assertEqual(
             updater._app_bundle(
-                "/Applications/BlenderManager.app/Contents/MacOS/BlenderManager"),
-            _Path("/Applications/BlenderManager.app"))
+                "/Applications/BlendTrack.app/Contents/MacOS/BlendTrack"),
+            _Path("/Applications/BlendTrack.app"))
         self.assertIsNone(updater._app_bundle("/usr/bin/python3"))
         self.assertIsNone(
             updater._app_bundle("/Applications/Foo/Contents/MacOS/Bar"))

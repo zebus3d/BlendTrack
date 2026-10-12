@@ -862,7 +862,7 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
             return False
 
         with mock.patch.object(updates.updater, "apply", side_effect=apply):
-            window._apply_update("/tmp/BlenderManager-x86_64.AppImage")
+            window._apply_update("/tmp/BlendTrack-x86_64.AppImage")
             _wait_until(lambda: "size" in en_disco)
         self.assertEqual(en_disco["size"], (1111, 666))
 
@@ -2780,7 +2780,7 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
                       aviso.call_args.args[0])
 
     def test_extraer_anota_el_marcador(self):
-        """Al extraer se escribe ``.blendermanager.json`` (se perdió en el port).
+        """Al extraer se escribe ``.blendtrack.json`` (se perdió en el port).
 
         Sin marcador no se distinguen dos diarias de la misma versión ni se
         reconocen las ramas experimentales (ver ``services/installed.py``).
@@ -2817,7 +2817,7 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
         """Un fallo de red al actualizar no puede ser un callejón sin salida.
 
         Caso real (macOS): ``urlopen error _ssl.c:993: The handshake operation
-        timed out`` al bajar ``BlenderManager-macos.zip``. El navegador sigue
+        timed out`` al bajar ``BlendTrack-macos.zip``. El navegador sigue
         siendo una vía, así que se ofrece la página de releases.
         """
         from i18n import tr
@@ -3269,10 +3269,10 @@ class PeriodicUpdateTests(SettingsIsolated, unittest.TestCase):
 
         window = MainWindow()
         window.current_version = "1.0.0"
-        assets = [{"name": "BlenderManager-linux", "url": "u"}]
+        assets = [{"name": "BlendTrack-linux", "url": "u"}]
         with mock.patch.object(sys, "frozen", True, create=True), \
                 mock.patch.object(updates.updater, "asset_for",
-                                  return_value="BlenderManager-linux"), \
+                                  return_value="BlendTrack-linux"), \
                 mock.patch.object(window, "_show_update_available") as avisar:
             window._on_update_result("v1.1.0", assets, False)
             window._on_update_result("v1.1.0", assets, False)
@@ -3289,10 +3289,10 @@ class PeriodicUpdateTests(SettingsIsolated, unittest.TestCase):
         window = MainWindow()
         window.current_version = "1.0.0"
         window.settings.skipped_version = "v1.1.0"
-        assets = [{"name": "BlenderManager-linux", "url": "u"}]
+        assets = [{"name": "BlendTrack-linux", "url": "u"}]
         with mock.patch.object(sys, "frozen", True, create=True), \
                 mock.patch.object(updates.updater, "asset_for",
-                                  return_value="BlenderManager-linux"), \
+                                  return_value="BlendTrack-linux"), \
                 mock.patch.object(window, "_show_update_available") as avisar:
             # Automático: la versión saltada no se ofrece.
             window._on_update_result("v1.1.0", assets, False)
@@ -4111,7 +4111,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
             self.assertEqual((target.config_dir / "userpref.blend").read_bytes(),
                              b"NUEVO")
             backups = [p for p in target.config_dir.iterdir()
-                       if "blendermanager-bak" in p.name]
+                       if "blendtrack-bak" in p.name]
             self.assertEqual(len(backups), 1)
 
     def test_startup_no_se_migra_sin_marcarlo(self):

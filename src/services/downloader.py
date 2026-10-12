@@ -30,7 +30,7 @@ RETRY_DELAY = 3  # segundos entre intentos
 def log(message: str) -> None:
     """Registro sencillo a archivo, útil para diagnosticar fallos en otros equipos."""
     try:
-        path = cache_dir() / "blendermanager.log"
+        path = cache_dir() / "blendtrack.log"
         path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, "a", encoding="utf-8") as handle:
             handle.write(message.rstrip() + "\n")

@@ -1,4 +1,4 @@
-# Blender Manager
+# BlendTrack
 
 A desktop app for Linux, Windows and macOS that keeps your Blender versions in
 one place: browse the official builds (and the Bforartists and UPBGE forks),
@@ -7,7 +7,7 @@ browser. It is written in Python with PySide6/Qt and ships as a single portable
 file, so there is nothing to install.
 
 <p align="center">
-  <img width="80%" alt="Blender Manager store, grid view" src="docs/img/store_grid.png">
+  <img width="80%" alt="BlendTrack store, grid view" src="docs/img/store_grid.png">
 </p>
 
 <sub>The store in grid view. Versions already on disk are marked Local, and the
@@ -105,8 +105,8 @@ You need **Python 3.12 or newer**. The only dependency is **PySide6**, which the
 launcher script installs for you:
 
 ```bash
-git clone https://github.com/zebus3d/BlenderManager.git
-cd BlenderManager
+git clone https://github.com/zebus3d/BlendTrack.git
+cd BlendTrack
 ./run.sh
 ```
 
@@ -136,9 +136,9 @@ python src/main.py --smoke             # list builds in the console (no window)
 python src/main.py --screenshot r.png  # start, save a screenshot and quit
 ```
 
-The log is `blendermanager.log` in the app's cache folder:
-`~/.cache/blendermanager` on Linux, `~/Library/Caches/BlenderManager` on macOS
-and `%LOCALAPPDATA%\BlenderManager\cache` on Windows.
+The log is `blendtrack.log` in the app's cache folder:
+`~/.cache/blendtrack` on Linux, `~/Library/Caches/BlendTrack` on macOS
+and `%LOCALAPPDATA%\BlendTrack\cache` on Windows.
 
 ### Portable mode
 
@@ -163,8 +163,8 @@ Packaging uses **PyInstaller**. Linux produces a portable folder and, with
 compressed `.app`.
 
 ```bash
-packaging/build.sh             # dist/BlenderManager
-packaging/build.sh --appimage  # also dist/BlenderManager-x86_64.AppImage
+packaging/build.sh             # dist/BlendTrack
+packaging/build.sh --appimage  # also dist/BlendTrack-x86_64.AppImage
 ```
 
 `.github/workflows/build.yml` runs the tests and builds the three binaries.
@@ -189,7 +189,7 @@ do the two fork sources (Bforartists' public WebDAV share and UPBGE's GitHub
 releases). It also covers more ground (templates, `.blend` association, more
 fork types).
 
-Blender Manager bets on the opposite: fewer features, but the common flow — find
+BlendTrack bets on the opposite: fewer features, but the common flow — find
 a build, download it, launch it — with as little friction as possible. That is
 why the whole app is one screen you can read at a glance, why it renders on the
 CPU instead of OpenGL (so it does not care about your Mesa version), and why on
@@ -232,7 +232,7 @@ feature.
 ## Credits
 
 This project finishes earlier attempts of mine (`BlenderDownloader` in Qt and
-`BlenderManager` in Kivy) and is inspired by Blender Launcher V2. The Kivy
+`BlendTrack` in Kivy) and is inspired by Blender Launcher V2. The Kivy
 version worked, but its OpenGL/SDL2 requirement broke on newer Mesa releases, so
 the UI was ported to Qt Widgets.
 
@@ -244,7 +244,7 @@ Icons are from [Font Awesome Free](https://fontawesome.com/) (SIL OFL 1.1).
 
 ## Privacy
 
-Blender Manager has no accounts, no telemetry and no analytics. See
+BlendTrack has no accounts, no telemetry and no analytics. See
 [PRIVACY.md](PRIVACY.md) for what it stores locally and which servers it talks to.
 
 <!-- Code signing policy (SignPath): OCULTO hasta que aprueben la solicitud.
@@ -257,6 +257,6 @@ signpath.org/terms) y volver a anadir el bloque POLICY de promote.yml.
 
 ## License
 
-Blender Manager is free software, released under the
+BlendTrack is free software, released under the
 [GNU General Public License v3.0](LICENSE).
 Copyright (C) 2019-2026 zebus3d.

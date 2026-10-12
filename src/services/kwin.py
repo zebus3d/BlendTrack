@@ -25,8 +25,8 @@ from services.downloader import log
 
 # Nombre de clase con el que KWin ve la ventana: es el ``desktopFileName`` que
 # fija ``main.py`` (Qt lo publica como *app id* en Wayland).
-WINDOW_CLASS = "blendermanager"
-RULE_DESCRIPTION = "BlenderManager: remember window position"
+WINDOW_CLASS = "blendtrack"
+RULE_DESCRIPTION = "BlendTrack: remember window position"
 # Valores del enum de KWin (``rules.h``): la posición se **recuerda** al cerrar
 # (``Remember`` = 4) y la clase se empareja por **subcadena** (``Substring`` = 2),
 # que perdona mayúsculas o sufijos del app id.

@@ -35,7 +35,7 @@ BFA_VERSION_RE = re.compile(r"bforartists[-_ ]?(\d+\.\d+(?:\.\d+)?)", re.IGNOREC
 UPBGE_VERSION_RE = re.compile(r"upbge[-_ ]?(\d+\.\d+(?:\.\d+)?)", re.IGNORECASE)
 
 # Marcador que escribimos al instalar para recordar qué compilación es.
-MARKER_NAME = ".blendermanager.json"
+MARKER_NAME = ".blendtrack.json"
 
 
 def _write_marker_payload(folder, payload: dict) -> None:
@@ -89,7 +89,7 @@ def _is_file(path) -> bool:
 
 
 def read_marker(folder) -> dict:
-    """Lee el marcador ``.blendermanager.json`` de una build
+    """Lee el marcador ``.blendtrack.json`` de una build
     instalada.
     """
     path = Path(folder) / MARKER_NAME

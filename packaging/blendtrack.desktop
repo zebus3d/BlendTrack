@@ -1,10 +1,10 @@
 [Desktop Entry]
 Type=Application
-Name=Blender Manager
+Name=BlendTrack
 Comment=Download and manage Blender builds
 Comment[es]=Descarga y gestiona versiones de Blender
-Exec=BlenderManager
-Icon=blendermanager
+Exec=BlendTrack
+Icon=blendtrack
 Terminal=false
 Categories=Graphics;3DGraphics;
 Keywords=blender;3d;launcher;

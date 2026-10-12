@@ -93,7 +93,7 @@ DUMP_FORMAT = 2
 
 # Prefijo de la línea con el volcado en la salida de Blender (ver
 # ``blender_runner.parse_marker``). Escribir usa el ``RESULT_MARKER`` común.
-DUMP_MARKER = "BLENDERMANAGER_DUMP="
+DUMP_MARKER = "BLENDTRACK_DUMP="
 
 # --- Guion que corre dentro de Blender ------------------------------------
 #
@@ -263,7 +263,7 @@ print(DUMP_MARKER + json.dumps(payload))
 # pasarse no da un error claro, el proceso simplemente no arranca.
 #
 # Las preferencias de un addon solo existen si el addon está activado. Con
-# ``BLENDERMANAGER_ENABLE_ADDONS=1`` se intenta activar antes (en este mismo
+# ``BLENDTRACK_ENABLE_ADDONS=1`` se intenta activar antes (en este mismo
 # arranque, un solo ``save_userpref``); si no se puede, la clave falla con
 # ``ADDON_NOT_ENABLED`` y la interfaz explica que hay que copiar el addon.
 
@@ -272,12 +272,12 @@ import bpy
 import json
 import os
 
-pairs_file = os.environ.get("BLENDERMANAGER_PREFS_FILE", "")
+pairs_file = os.environ.get("BLENDTRACK_PREFS_FILE", "")
 pairs = []
 if pairs_file:
     with open(pairs_file, encoding="utf-8") as handle:
         pairs = json.load(handle)
-enable_addons = os.environ.get("BLENDERMANAGER_ENABLE_ADDONS") == "1"
+enable_addons = os.environ.get("BLENDTRACK_ENABLE_ADDONS") == "1"
 applied = []
 errors = []
 addons_enabled = []
@@ -613,7 +613,7 @@ def snapshot_preferences(executable, snapshot, timeout: int = 180) -> Preference
     if not snapshot.is_dir():
         return PreferenceDump(error="snapshot folder not found")
     with tempfile.TemporaryDirectory(
-            prefix="blendermanager-snapshot-") as tmp:
+            prefix="blendtrack-snapshot-") as tmp:
         config = Path(tmp) / "config"
         try:
             shutil.copytree(snapshot, config)
@@ -651,14 +651,14 @@ def write_preferences(executable, preferences, timeout: int = 180,
         return result
     # Los pares van en un fichero temporal (ver el comentario del guion): el
     # ``with`` lo borra en cuanto Blender termina.
-    with tempfile.TemporaryDirectory(prefix="blendermanager-prefs-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="blendtrack-prefs-") as tmp:
         pairs_file = Path(tmp) / "preferences.json"
         pairs_file.write_text(json.dumps(pairs), encoding="utf-8")
         code, out, err = blender_runner.run_blender(
             executable,
             ["--background", "--python-expr", _APPLY_SCRIPT],
-            extra_env={"BLENDERMANAGER_PREFS_FILE": str(pairs_file),
-                       "BLENDERMANAGER_ENABLE_ADDONS":
+            extra_env={"BLENDTRACK_PREFS_FILE": str(pairs_file),
+                       "BLENDTRACK_ENABLE_ADDONS":
                            "1" if enable_addons else "0"},
             timeout=timeout,
         )

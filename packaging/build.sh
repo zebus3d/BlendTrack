@@ -8,10 +8,10 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "${ROOT}"
 
 python3 -m pip install -r requirements-build.txt
-pyinstaller --clean --noconfirm packaging/blendermanager.spec --distpath dist --workpath build
+pyinstaller --clean --noconfirm packaging/blendtrack.spec --distpath dist --workpath build
 
 if [ "${1:-}" = "--appimage" ]; then
     packaging/build_appimage.sh dist
 fi
 
-echo "Binario listo en dist/BlenderManager"
+echo "Binario listo en dist/BlendTrack"

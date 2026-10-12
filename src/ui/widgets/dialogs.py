@@ -227,7 +227,7 @@ def update_dialog(parent, tag: str, with_skip: bool = True) -> tuple:
 
 
 def update_available(parent, tag: str, on_update, on_skip=None) -> bool:
-    """Diálogo de actualización disponible (de BlenderManager).
+    """Diálogo de actualización disponible (de BlendTrack).
 
     ``on_update`` se llama si acepta; ``on_skip`` si elige no volver a avisar de
     esa versión concreta. El aviso automático la silencia; "Buscar ahora" la

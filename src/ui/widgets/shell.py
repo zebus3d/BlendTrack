@@ -108,7 +108,7 @@ CHANNELS = (
 )
 
 # Título que se enseña en la cabecera según la vista. La cabecera lleva arriba
-# "Blender Manager" y debajo esto, para saber en qué sección se está.
+# "BlendTrack" y debajo esto, para saber en qué sección se está.
 SECTION_TITLES = {
     "installed": "Local",
     "store": "Cloud",
@@ -155,7 +155,7 @@ def write_problem(folder) -> str:
     path = Path(folder).expanduser()
     try:
         path.mkdir(parents=True, exist_ok=True)
-        probe = path / ".blendermanager-write-test"
+        probe = path / ".blendtrack-write-test"
         probe.write_text("", encoding="utf-8")
         probe.unlink()
     except OSError as error:

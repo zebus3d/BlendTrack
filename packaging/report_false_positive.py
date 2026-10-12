@@ -12,10 +12,10 @@ que pide el formulario y abre el portal. Subir el fichero y enviarlo hay que
 hacerlo a mano: el portal no tiene API.
 
 Uso:
-    python packaging/report_false_positive.py dist/BlenderManager.exe
-    python packaging/report_false_positive.py BlenderManager-windows-x86_64.zip
+    python packaging/report_false_positive.py dist/BlendTrack.exe
+    python packaging/report_false_positive.py BlendTrack-windows-x86_64.zip
 
-Sin argumentos usa ``dist/BlenderManager.exe`` (el que deja PyInstaller).
+Sin argumentos usa ``dist/BlendTrack.exe`` (el que deja PyInstaller).
 """
 
 import hashlib
@@ -24,7 +24,7 @@ import webbrowser
 from pathlib import Path
 
 WDSI_URL = "https://www.microsoft.com/en-us/wdsi/filesubmission"
-DEFAULT_TARGET = Path("dist") / "BlenderManager.exe"
+DEFAULT_TARGET = Path("dist") / "BlendTrack.exe"
 
 
 def sha256(path: Path) -> str:

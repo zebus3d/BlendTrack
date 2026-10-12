@@ -10,7 +10,7 @@ usando los propios exportadores de Blender:
 * **Mapa de teclas**: ``preferences.keyconfig_export`` /
   ``keyconfig_import`` (que copia el ``.py`` y lo activa).
 
-Así el destino se queda con un preset ``BlenderManager <serie>`` que puede
+Así el destino se queda con un preset ``BlendTrack <serie>`` que puede
 volver a elegir, en vez de perder lo suyo. Es el patrón de Blender Launcher V2
 y Blenderbase.
 
@@ -23,12 +23,12 @@ import tempfile
 from services import blender_runner
 from services.blender_runner import RESULT_MARKER
 
-# Prefijo de los presets que dejamos en el destino ("BlenderManager 5.2").
-STYLE_PREFIX = "BlenderManager"
+# Prefijo de los presets que dejamos en el destino ("BlendTrack 5.2").
+STYLE_PREFIX = "BlendTrack"
 
 # Nombre del preset temporal que se crea en el origen para copiar el tema. Se
 # quita en cuanto se copia, para no dejar rastro en la versión de origen.
-_TMP_THEME = "BlenderManager_export_tmp"
+_TMP_THEME = "BlendTrack_export_tmp"
 
 # --- Guion que exporta tema y keymap (corre en el Blender ORIGEN) ----------
 
@@ -38,8 +38,8 @@ import json
 import os
 import shutil
 
-out_dir = os.environ["BLENDERMANAGER_STYLE_DIR"]
-tmp_name = os.environ["BLENDERMANAGER_STYLE_TMP"]
+out_dir = os.environ["BLENDTRACK_STYLE_DIR"]
+tmp_name = os.environ["BLENDTRACK_STYLE_TMP"]
 theme_path = ""
 keymap_path = ""
 errors = []
@@ -85,9 +85,9 @@ import json
 import os
 import shutil
 
-name = os.environ["BLENDERMANAGER_STYLE_NAME"]
-theme = os.environ.get("BLENDERMANAGER_STYLE_THEME", "")
-keymap = os.environ.get("BLENDERMANAGER_STYLE_KEYMAP", "")
+name = os.environ["BLENDTRACK_STYLE_NAME"]
+theme = os.environ.get("BLENDTRACK_STYLE_THEME", "")
+keymap = os.environ.get("BLENDTRACK_STYLE_KEYMAP", "")
 applied = []
 errors = []
 
@@ -137,8 +137,8 @@ def export_style(executable, dest_dir, timeout: int = 180) -> dict:
         executable,
         ["--background", "--python-expr", _EXPORT_SCRIPT],
         extra_env={
-            "BLENDERMANAGER_STYLE_DIR": str(dest_dir),
-            "BLENDERMANAGER_STYLE_TMP": _TMP_THEME,
+            "BLENDTRACK_STYLE_DIR": str(dest_dir),
+            "BLENDTRACK_STYLE_TMP": _TMP_THEME,
         },
         timeout=timeout,
     )
@@ -170,9 +170,9 @@ def import_style(executable, name: str, theme_path: str = "",
         executable,
         ["--background", "--python-expr", _IMPORT_SCRIPT],
         extra_env={
-            "BLENDERMANAGER_STYLE_NAME": name,
-            "BLENDERMANAGER_STYLE_THEME": theme_path or "",
-            "BLENDERMANAGER_STYLE_KEYMAP": keymap_path or "",
+            "BLENDTRACK_STYLE_NAME": name,
+            "BLENDTRACK_STYLE_THEME": theme_path or "",
+            "BLENDTRACK_STYLE_KEYMAP": keymap_path or "",
         },
         timeout=timeout,
     )
@@ -198,7 +198,7 @@ def copy_style(source_executable, target_executable, name: str,
     que se pudo poner.
     """
     result = {"applied": [], "errors": []}
-    with tempfile.TemporaryDirectory(prefix="blendermanager-style-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="blendtrack-style-") as tmp:
         exported = export_style(source_executable, tmp, timeout=timeout)
         for error in exported.get("errors") or []:
             result["errors"].append(error)

@@ -1,8 +1,8 @@
-# Privacy Policy — Blender Manager
+# Privacy Policy — BlendTrack
 
 _Last updated: 2026-09-17_
 
-Blender Manager is a desktop application that downloads and manages Blender
+BlendTrack is a desktop application that downloads and manages Blender
 builds. It has **no user accounts, no telemetry and no analytics**. It does not
 collect, store or share personal information.
 
@@ -12,7 +12,7 @@ The app keeps its configuration and caches **locally**, on your own machine:
 
 - **Settings** (`settings.json`): your preferences (destination folder, filters,
   language, window size, favorites, ...).
-- **Cache** (`builds.json`, update caches and `blendermanager.log`): the last list
+- **Cache** (`builds.json`, update caches and `blendtrack.log`): the last list
   of Blender builds, cached release information to avoid extra API calls, and a
   plain-text log used to diagnose errors.
 
@@ -32,7 +32,7 @@ updates:
 - `download.blender.org` — official Blender releases (Blender Foundation).
 - `api.github.com` and GitHub release assets (`github.com`,
   `release-assets.githubusercontent.com`) — to check for and download updates of
-  Blender Manager itself (GitHub), and the UPBGE fork builds if you enable them.
+  BlendTrack itself (GitHub), and the UPBGE fork builds if you enable them.
 - `cloud.bforartists.de` — the Bforartists fork builds, if you enable that fork
   in Settings. Requests use the project's **public** WebDAV share, with no
   account of yours.
@@ -60,4 +60,4 @@ are uninstalled from within the app.
 ## Contact
 
 This is an open-source project. For any question about this policy, open an issue
-at <https://github.com/zebus3d/BlenderManager/issues>.
+at <https://github.com/zebus3d/BlendTrack/issues>.

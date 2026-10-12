@@ -22,7 +22,7 @@ from services.opener import clean_env
 
 # La salida del guion se busca por este prefijo: Blender escribe mucha cosa en
 # la consola y no queremos confundir un mensaje suyo con el resultado.
-RESULT_MARKER = "BLENDERMANAGER_RESULT="
+RESULT_MARKER = "BLENDTRACK_RESULT="
 
 # Tope por defecto para arrancar Blender. Habilitar unos cuantos addons tarda
 # segundos; si pasa de aquí, algo va mal (addon colgado) y se mata.
@@ -34,7 +34,7 @@ def with_constants(script: str, **constants) -> str:
 
     Los guiones que corren dentro de Blender son texto: no pueden importar
     nada de la app. Antes repetían a mano los marcadores
-    (``"BLENDERMANAGER_RESULT="``) y los mensajes de error estables, y bastaba
+    (``"BLENDTRACK_RESULT="``) y los mensajes de error estables, y bastaba
     con cambiar uno de los dos lados para que la app dejara de entender a
     Blender sin que fallase nada visible. Así cada constante vive en un solo
     sitio (aquí, en Python) y el guion la recibe ya definida. ``repr`` da un
@@ -54,7 +54,7 @@ import bpy
 import json
 import os
 
-payload = json.loads(os.environ.get("BLENDERMANAGER_ADDONS", "{}"))
+payload = json.loads(os.environ.get("BLENDTRACK_ADDONS", "{}"))
 enable = set(payload.get("enable") or [])
 disable = set(payload.get("disable") or [])
 enabled = []
@@ -198,7 +198,7 @@ def set_addons(executable, enable=None, disable=None,
     code, out, err = run_blender(
         executable,
         ["--background", "--python-expr", _ADDON_SCRIPT],
-        extra_env={"BLENDERMANAGER_ADDONS": json.dumps(wanted)},
+        extra_env={"BLENDTRACK_ADDONS": json.dumps(wanted)},
         timeout=timeout,
     )
     result["log"] = (err or "")[-4000:]

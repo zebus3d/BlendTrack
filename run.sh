@@ -1,5 +1,5 @@
 #!/bin/sh
-# Lanza BlenderManager en desarrollo usando el venv del proyecto.
+# Lanza BlendTrack en desarrollo usando el venv del proyecto.
 #
 #   ./run.sh                 -> abre la interfaz
 #   ./run.sh --smoke         -> lista builds por consola
@@ -18,10 +18,10 @@ if [ ! -x .venv/bin/python ]; then
 fi
 
 # Silencia el aviso del portal de escritorio: Qt intenta registrarse con el
-# xdg-desktop-portal usando el App ID ("blendermanager") y, al correr desde el
-# código fuente, no hay un blendermanager.desktop instalado en el sistema. Es
+# xdg-desktop-portal usando el App ID ("blendtrack") y, al correr desde el
+# código fuente, no hay un blendtrack.desktop instalado en el sistema. Es
 # inofensivo (la app funciona igual), pero ensucia el arranque. En el AppImage
-# el .desktop va dentro (packaging/blendermanager.desktop).
+# el .desktop va dentro (packaging/blendtrack.desktop).
 QT_LOGGING_RULES="qt.qpa.services=false${QT_LOGGING_RULES:+;$QT_LOGGING_RULES}"
 export QT_LOGGING_RULES
 

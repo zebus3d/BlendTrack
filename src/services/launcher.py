@@ -2,7 +2,7 @@
 
 Blender se ejecuta en un proceso aparte y **desacoplado** del gestor:
 en Linux/macOS se inicia en su propia sesión (``start_new_session``) y en
-Windows en un grupo de procesos propio. Así, aunque cierres Blender Manager,
+Windows en un grupo de procesos propio. Así, aunque cierres BlendTrack,
 los Blender que hayas lanzado desde él siguen abiertos.
 
 Guardamos las referencias a los procesos lanzados solo para poder descartar

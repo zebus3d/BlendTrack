@@ -20,7 +20,7 @@ from services.blender_config import (STARTUP_FILE, USERPREF_FILE,
 # Carpeta, junto a la config de una versión, donde se guardan las instantáneas
 # de ``config`` antes de resetear. El nombre lleva fecha y hora para que se
 # puedan tener varias (resetear a fábrica y volver a intentarlo es normal).
-SNAPSHOT_DIR = ".blendermanager-snapshots"
+SNAPSHOT_DIR = ".blendtrack-snapshots"
 SNAPSHOT_PREFIX = "config"
 
 # Ficheros de texto de ``config`` que no son ajustes pero sí datos del usuario:

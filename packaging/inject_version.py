@@ -50,9 +50,9 @@ def build_version_info(version: str) -> str:
             StringStruct("CompanyName", "zebus3d"),
             StringStruct("FileDescription", "Blender Downloads Manager"),
             StringStruct("FileVersion", "{version}"),
-            StringStruct("InternalName", "BlenderManager"),
-            StringStruct("OriginalFilename", "BlenderManager.exe"),
-            StringStruct("ProductName", "BlenderManager"),
+            StringStruct("InternalName", "BlendTrack"),
+            StringStruct("OriginalFilename", "BlendTrack.exe"),
+            StringStruct("ProductName", "BlendTrack"),
             StringStruct("ProductVersion", "{version}")
           ]
         )

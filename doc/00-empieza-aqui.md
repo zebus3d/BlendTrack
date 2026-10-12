@@ -1,6 +1,6 @@
 # 00 - Empieza aquí
 
-## ¿Qué es Blender Manager?
+## ¿Qué es BlendTrack?
 
 Una aplicación de escritorio hecha con **Python** y **PySide6 (Qt Widgets)** que
 sirve para buscar, descargar, organizar y lanzar versiones de
@@ -101,7 +101,7 @@ src/
       settings_view.py # la pantalla de Ajustes
       folder_library.py# la biblioteca de carpetas
       downloads.py     # descargar, instalar, lanzar y borrar versiones
-      updates.py       # actualizar BlenderManager
+      updates.py       # actualizar BlendTrack
       shell.py         # lo que comparten la ventana y sus partes
       migrate/         # la pantalla de migración, un módulo por pestaña
       addons.py        # el gestor de addons

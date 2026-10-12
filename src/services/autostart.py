@@ -34,14 +34,14 @@ from services.downloader import log
 from services.opener import clean_env
 
 # Nombre del fichero/clave/etiqueta según el sistema.
-DESKTOP_FILE = "blendermanager.desktop"
-MACOS_LABEL = "com.blendermanager"
-WINDOWS_VALUE = "BlenderManager"
+DESKTOP_FILE = "blendtrack.desktop"
+MACOS_LABEL = "com.blendtrack"
+WINDOWS_VALUE = "BlendTrack"
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 STARTUP_APPROVED_KEY = (
     r"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run")
 
-NAME = "Blender Manager"
+NAME = "BlendTrack"
 COMMENT = "Download and manage Blender builds"
 
 
@@ -107,7 +107,7 @@ def _desktop_entry(command: list[str]) -> str:
         f"Name={NAME}\n"
         f"Comment={COMMENT}\n"
         f"Exec={exec_line}\n"
-        "Icon=blendermanager\n"
+        "Icon=blendtrack\n"
         "Terminal=false\n"
         # Clave de GNOME; en KDE/XFCE/Cinnamon es inocua, pero ayuda a que
         # algunos ajustes la muestren como activada.

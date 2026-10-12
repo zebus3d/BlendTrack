@@ -27,8 +27,8 @@ class DesktopExecQuotingTests(unittest.TestCase):
                          '"/a b/\\\\"x\\\\"\\\\$"')
 
     def test_una_ruta_normal_se_queda_igual(self):
-        self.assertEqual(autostart._quote_desktop("/opt/BlenderManager"),
-                         "/opt/BlenderManager")
+        self.assertEqual(autostart._quote_desktop("/opt/BlendTrack"),
+                         "/opt/BlendTrack")
         self.assertEqual(autostart._quote_desktop("/ruta/con espacios/BM"),
                          '"/ruta/con espacios/BM"')
 

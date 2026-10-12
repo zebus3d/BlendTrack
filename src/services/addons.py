@@ -127,7 +127,7 @@ def install(entry, source, platform: str, env=None) -> dict:
     if suffix != ".zip":
         raise AddonError("unsupported", suffix)
 
-    with tempfile.TemporaryDirectory(prefix="blendermanager-addon-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="blendtrack-addon-") as tmp:
         try:
             extracted = Path(extractor.extract(source, Path(tmp)))
         except Exception as error:  # noqa: BLE001 - zip roto, truncado, sin permisos...

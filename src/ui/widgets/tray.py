@@ -39,7 +39,7 @@ class TrayIcon(QObject):
         icon = QIcon(str(ASSETS_DIR / "images" / "app_icon.png"))
         if not icon.isNull():
             self._tray.setIcon(icon)
-        self._tray.setToolTip(tr("Blender Manager"))
+        self._tray.setToolTip(tr("BlendTrack"))
 
         # El menú contextual es lo que se ve al pulsar el icono en la mayoría
         # de escritorios. Se estiliza en ``qss.py`` (objectName TrayMenu): el
@@ -49,11 +49,11 @@ class TrayIcon(QObject):
         # Qt no enseña los tooltips de las acciones si no se le pide.
         self._menu.setToolTipsVisible(True)
         self.show_action = self._menu.addAction(tr("Show"))
-        self.show_action.setToolTip(tr("Bring the BlenderManager window back."))
+        self.show_action.setToolTip(tr("Bring the BlendTrack window back."))
         self.show_action.triggered.connect(lambda: self.restore_requested.emit())
         self._menu.addSeparator()
         self.quit_action = self._menu.addAction(tr("Quit"))
-        self.quit_action.setToolTip(tr("Close BlenderManager completely."))
+        self.quit_action.setToolTip(tr("Close BlendTrack completely."))
         self.quit_action.triggered.connect(lambda: self.quit_requested.emit())
         self._tray.setContextMenu(self._menu)
 

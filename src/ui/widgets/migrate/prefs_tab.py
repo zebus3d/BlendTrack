@@ -173,13 +173,13 @@ class PrefsTabMixin:
         """Tarjeta para llevar el tema y el mapa de teclas como presets.
 
         No copia el ``userpref`` entero: deja en el destino un preset con
-        nombre (``BlenderManager <serie>``) que el usuario puede volver a
+        nombre (``BlendTrack <serie>``) que el usuario puede volver a
         elegir, sin perder lo que tuviera.
         """
         card, lay = settings_card("Theme and keymap")
         hint = QLabel(tr(
             "Copy your theme and key map as named presets, without replacing "
-            "the whole preferences file. They arrive as \"BlenderManager\" and "
+            "the whole preferences file. They arrive as \"BlendTrack\" and "
             "you can pick them again in Blender's preferences."))
         hint.setWordWrap(True)
         lay.addWidget(hint)

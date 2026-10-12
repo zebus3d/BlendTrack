@@ -16,7 +16,7 @@ def _apartar_log() -> None:
     """Que los tests NO escriban en el log real del usuario.
 
     ``services.downloader.log`` es la herramienta de diagnóstico de la
-    aplicación (``~/.cache/blendermanager/blendermanager.log``) y acababa con
+    aplicación (``~/.cache/blendtrack/blendtrack.log``) y acababa con
     basura de cada ejecución de los tests: rutas ``/tmp/tmpXXXX``, un
     ``git pull failed: boom`` de un test que simula un fallo... Así, cuando de
     verdad hay que mirar el log para ayudar a alguien, no se sabe qué es real.

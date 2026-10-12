@@ -1,4 +1,4 @@
-"""Actualizar **BlenderManager** (no Blender): comprobar, bajar y aplicar.
+"""Actualizar **BlendTrack** (no Blender): comprobar, bajar y aplicar.
 
 La comprobación periódica, el diálogo de versión disponible, el camino del
 binario (AppImage, Windows, macOS) y el del modo fuente (``git pull`` y

@@ -1,4 +1,4 @@
-"""PoC: ventana PySide6 con el look de BlenderManager, sin OpenGL.
+"""PoC: ventana PySide6 con el look de BlendTrack, sin OpenGL.
 
 Objetivo de esta prueba (Fase 0 del port):
   1. Reproducir la identidad visual actual con QSS (tema oscuro, esquinas
@@ -291,7 +291,7 @@ def card(version: str, channel: str, meta: str, zebra: bool, installed: bool,
 
 def main() -> int:
     app = QApplication(sys.argv)
-    app.setApplicationName("BlenderManagerPoC")
+    app.setApplicationName("BlendTrackPoC")
 
     icon_font = QFontDatabase.systemFont(QFontDatabase.GeneralFont)
     if ICON_TTF.is_file():

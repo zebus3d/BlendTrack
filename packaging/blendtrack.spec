@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""Especificación de PyInstaller para empaquetar Blender Manager.
+"""Especificación de PyInstaller para empaquetar BlendTrack.
 
 En Linux y macOS se genera un paquete "one-folder" (o un bundle `.app`), porque
 es más rápido de arrancar y más fácil de depurar que `--onefile`.
@@ -13,7 +13,7 @@ que perder. El precio es un arranque más lento (descomprime ~100 MB cada vez) y
 algo más de ruido con los antivirus heurísticos.
 
 Uso:
-    pyinstaller --clean --noconfirm packaging/blendermanager.spec \
+    pyinstaller --clean --noconfirm packaging/blendtrack.spec \
         --distpath dist --workpath build
 """
 
@@ -39,8 +39,8 @@ VERSION_INFO = ROOT / "packaging" / "version_info.txt"
 # dejan en el repo para no depender de Qt antes de empaquetar. El AppImage no
 # usa estos: ver build_appimage.sh (.DirIcon + .desktop).
 ICONS = ROOT / "packaging" / "icons"
-ICON_ICO = ICONS / "blendermanager.ico"
-ICON_ICNS = ICONS / "blendermanager.icns"
+ICON_ICO = ICONS / "blendtrack.ico"
+ICON_ICNS = ICONS / "blendtrack.icns"
 
 block_cipher = None
 
@@ -91,7 +91,7 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 # Opciones comunes del ejecutable (recurso de versión e icono solo aplican en
 # Windows; en el resto de plataformas PyInstaller las ignora).
 _EXE_OPTIONS = dict(
-    name="BlenderManager",
+    name="BlendTrack",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -116,15 +116,15 @@ else:
         a.datas,
         strip=False,
         upx=False,
-        name="BlenderManager",
+        name="BlendTrack",
     )
 
     if sys.platform == "darwin":
         app = BUNDLE(
             coll,
-            name="BlenderManager.app",
+            name="BlendTrack.app",
             icon=str(ICON_ICNS) if ICON_ICNS.is_file() else None,
-            bundle_identifier="org.zebus3d.blendermanager",
+            bundle_identifier="org.zebus3d.blendtrack",
             info_plist={
                 "NSHighResolutionCapable": True,
                 "CFBundleShortVersionString": APP_VERSION,

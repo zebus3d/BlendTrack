@@ -9,7 +9,7 @@ repartido por responsabilidad en módulos vecinos, que se montan como
 * ``settings_view.py`` — la pantalla de Ajustes y sus controles.
 * ``folder_library.py`` — la biblioteca de carpetas (dónde vive cada versión).
 * ``downloads.py`` — descargar, instalar, lanzar y borrar versiones de Blender.
-* ``updates.py`` — actualizar BlenderManager.
+* ``updates.py`` — actualizar BlendTrack.
 * ``shell.py`` — las tablas y los widgets que comparten todos.
 
 Son mixins y no objetos independientes porque todos trabajan sobre el estado
@@ -103,7 +103,7 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle(f"{tr('Blender Manager')} {updater.app_version()}")
+        self.setWindowTitle(f"{tr('BlendTrack')} {updater.app_version()}")
         # El mínimo sale de ``shell`` (una sola definición): antes estaba a mano
         # aquí (880x540) y pisaba el de allí, así que bajar ``MIN_WINDOW_*`` no
         # dejaba encoger la ventana.
@@ -221,7 +221,7 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
         # Versión de la app de la que ya se avisó en esta sesión (para que el
         # chequeo periódico no repita el diálogo cada X minutos).
         self._offered_update_tag = ""
-        # Chequeo periódico de la propia aplicación (BlenderManager).
+        # Chequeo periódico de la propia aplicación (BlendTrack).
         self._update_timer = QTimer(self)
         self._update_timer.timeout.connect(self._periodic_update_check)
         self._apply_update_timer()
@@ -376,7 +376,7 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
         if not pix.isNull():
             logo.setPixmap(pix.scaled(52, 52, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         logo_shadow(logo, 52)
-        logo.setToolTip(tr("Blender Manager"))
+        logo.setToolTip(tr("BlendTrack"))
         lay.addWidget(logo)
 
         # Dos líneas: la marca (grande) y la sección actual (un poco más
@@ -384,7 +384,7 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
         # ventana sigue llevando la marca + versión.
         titles = QVBoxLayout()
         titles.setSpacing(2)
-        self.app_label = QLabel(tr("Blender Manager"))
+        self.app_label = QLabel(tr("BlendTrack"))
         self.app_label.setObjectName("HeaderTitle")
         # La misma sombra suave que el logo (y las tarjetas): despega el texto
         # del gris de la cabecera.
@@ -563,7 +563,7 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
         # Abre un diálogo para elegir el importe y luego PayPal en el navegador
         # por defecto (con el entorno limpio).
         self.donate_btn = IconFlatButton(icons.DONATE, tr(
-            "Support Blender Manager with a PayPal donation."))
+            "Support BlendTrack with a PayPal donation."))
         self.donate_btn.setFont(icon_font())
         self.donate_btn.clicked.connect(self._offer_donation)
         lay.addWidget(self.donate_btn, 0, Qt.AlignRight)
@@ -815,7 +815,7 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
         if not self.settings.tray_hint_shown:
             tray.notify(
                 tr("Still running in the system tray"),
-                tr("BlenderManager keeps running in the tray. Click its icon to "
+                tr("BlendTrack keeps running in the tray. Click its icon to "
                    "bring the window back."))
             self.settings.tray_hint_shown = True
             self.settings.save()

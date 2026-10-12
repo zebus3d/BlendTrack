@@ -1,4 +1,4 @@
-"""Punto de entrada de Blender Manager (versión PySide6).
+"""Punto de entrada de BlendTrack (versión PySide6).
 
 Modos de uso:
 
@@ -99,7 +99,7 @@ def _clean_previous_session(settings) -> None:
 def _log_unhandled(exc_type, exc_value, exc_traceback, where: str) -> None:
     """Escribe en el log de la app el traceback de un fallo no controlado.
 
-    El log (``blendermanager.log``) es lo que un usuario nos puede mandar desde
+    El log (``blendtrack.log``) es lo que un usuario nos puede mandar desde
     su equipo; la consola, en un binario sin terminal, no la ve nadie.
     """
     detail = "".join(traceback.format_exception(exc_type, exc_value,
@@ -178,7 +178,7 @@ def _enable_crash_log() -> None:
     from services.settings import cache_dir
 
     try:
-        path = cache_dir() / "blendermanager.log"
+        path = cache_dir() / "blendtrack.log"
         path.parent.mkdir(parents=True, exist_ok=True)
         _crash_log = open(path, "a", encoding="utf-8")
     except OSError:
@@ -246,11 +246,11 @@ def run_ui(screenshot: str | None = None) -> int:
     _install_thread_exception_hook()
 
     app = QApplication(sys.argv)
-    app.setApplicationName("BlenderManager")
+    app.setApplicationName("BlendTrack")
     app.setApplicationVersion(updater.app_version())
     # En Wayland/KDE el compositor empareja la ventana con el .desktop por este
     # nombre; sin él, la barra de tareas no encuentra el icono.
-    app.setDesktopFileName("blendermanager")
+    app.setDesktopFileName("blendtrack")
 
     # Una sola instancia por usuario: si ya hay una abierta, se le pide que
     # vuelva al frente y esta se va sin crear ventana. Se salta en los modos que
@@ -316,7 +316,7 @@ def _parser() -> argparse.ArgumentParser:
     La ayuda va en inglés, como el resto de textos que no pasan por ``tr()``;
     los de uso interno lo dicen para que nadie los use a mano.
     """
-    parser = argparse.ArgumentParser(description="Blender Manager")
+    parser = argparse.ArgumentParser(description="BlendTrack")
     parser.add_argument("--smoke", action="store_true",
                         help="List Blender versions without opening the UI")
     parser.add_argument("--debug", action="store_true",

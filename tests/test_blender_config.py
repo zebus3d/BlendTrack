@@ -508,7 +508,7 @@ class ApplyMigrationTest(unittest.TestCase):
             (destination / "a.py").write_text("v2", encoding="utf-8")
             baddons.apply_migration([plan], target)   # v2 -> v3 (bak v1)
             backups = [p for p in destination.parent.iterdir()
-                       if "blendermanager-bak" in p.name]
+                       if "blendtrack-bak" in p.name]
             self.assertEqual(len(backups), 1)
             self.assertEqual((backups[0] / "a.py").read_text(), "v1")
 

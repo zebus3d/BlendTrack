@@ -1,7 +1,7 @@
 """Tests de la instancia única (``ui.single_instance``).
 
 Se usa un nombre de socket propio en cada test: con el de verdad, el test
-hablaría con la Blender Manager que el usuario tenga abierta.
+hablaría con la BlendTrack que el usuario tenga abierta.
 """
 
 import os
@@ -29,7 +29,7 @@ class SingleInstanceTests(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
 
     def _instance(self):
-        name = f"blendermanager-test-{uuid.uuid4().hex[:12]}"
+        name = f"blendtrack-test-{uuid.uuid4().hex[:12]}"
         with mock.patch.object(single_instance, "socket_name", return_value=name):
             instance = single_instance.SingleInstance()
         self.addCleanup(instance.close)

@@ -19,7 +19,7 @@ def _completed(stdout="", stderr="", code=0):
 
 class EnableAddonsTest(unittest.TestCase):
     def test_parsea_el_resultado(self):
-        output = ('BLENDERMANAGER_RESULT={"enabled": ["foo"], "errors": []}\n')
+        output = ('BLENDTRACK_RESULT={"enabled": ["foo"], "errors": []}\n')
         with mock.patch.object(blender_runner.subprocess, "run",
                                return_value=_completed(output)):
             result = blender_runner.enable_addons("/bin/blender", ["foo"])

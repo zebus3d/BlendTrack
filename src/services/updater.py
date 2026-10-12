@@ -40,19 +40,19 @@ from services.downloader import log
 from services.extractor import extract
 from services.settings import cache_dir, write_json_atomic
 
-REPO = "zebus3d/BlenderManager"
+REPO = "zebus3d/BlendTrack"
 API_URL = f"https://api.github.com/repos/{REPO}/releases/latest"
 RELEASES_URL = f"https://github.com/{REPO}/releases/latest"
-USER_AGENT = f"BlenderManager/{version.__version__} (+https://github.com/{REPO})"
+USER_AGENT = f"BlendTrack/{version.__version__} (+https://github.com/{REPO})"
 
 # Un asset por plataforma. El nombre debe coincidir con lo que sube el CI.
 ASSET_NAMES = {
-    "linux": "BlenderManager-x86_64.AppImage",
-    "windows": "BlenderManager-windows-x86_64.zip",
-    "darwin": "BlenderManager-macos.zip",
+    "linux": "BlendTrack-x86_64.AppImage",
+    "windows": "BlendTrack-windows-x86_64.zip",
+    "darwin": "BlendTrack-macos.zip",
 }
 CHECKSUM_NAME = "checksums.txt"
-EXE_NAME = "BlenderManager.exe" if sys.platform.startswith("win") else "BlenderManager"
+EXE_NAME = "BlendTrack.exe" if sys.platform.startswith("win") else "BlendTrack"
 
 _CREATE_NO_WINDOW = 0x08000000
 _DETACHED_PROCESS = 0x00000008
@@ -63,7 +63,7 @@ _CREATE_NEW_PROCESS_GROUP = 0x00000200
 #: que no debe pedirle el turno por el socket de instancia única: le pediría al
 #: viejo que salga al frente, el viejo se cerraría y la app se quedaría sin
 #: ninguna instancia. Con esta marca el proceso nuevo toma el relevo directo.
-RELAUNCH_ENV = "BLENDERMANAGER_RELAUNCH"
+RELAUNCH_ENV = "BLENDTRACK_RELAUNCH"
 
 
 def _relaunch_env() -> dict:
@@ -454,7 +454,7 @@ def _apply_windows(archive: Path) -> bool:
 def _app_bundle(executable) -> Path | None:
     """Bundle ``.app`` del ejecutable en marcha, o ``None``.
 
-    El binario va en ``<bundle>.app/Contents/MacOS/BlenderManager``, así que el
+    El binario va en ``<bundle>.app/Contents/MacOS/BlendTrack``, así que el
     bundle es el tercer padre. Si no encaja (modo fuente, layout raro), se
     devuelve ``None`` y se cae al plan B.
     """

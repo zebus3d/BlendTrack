@@ -4,15 +4,15 @@ Uso:  .venv/bin/python packaging/make_icons.py
 
 Escribe en ``packaging/icons/``:
 
-* ``blendermanager.ico``  -> icono del .exe de Windows, a varias resoluciones.
-* ``blendermanager.icns`` -> icono del bundle .app de macOS, a varias.
+* ``blendtrack.ico``  -> icono del .exe de Windows, a varias resoluciones.
+* ``blendtrack.icns`` -> icono del bundle .app de macOS, a varias.
 
 Los ficheros generados se dejan en el repo, para que PyInstaller no necesite Qt
 antes de empaquetar. Vuelve a ejecutar esto si cambias
 ``src/assets/images/app_icon.png``.
 
 El AppImage no usa estos ficheros: appimagetool coge el ``.desktop`` con
-``Icon=blendermanager``, el ``blendermanager.png`` del AppDir y el ``.DirIcon``
+``Icon=blendtrack``, el ``blendtrack.png`` del AppDir y el ``.DirIcon``
 (lo que ensena el gestor de ficheros), todo desde ``build_appimage.sh``.
 
 Notas de formato (comprobadas, no de oídas):
@@ -157,12 +157,12 @@ def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
 
     ico = build_ico(image)
-    (OUT / "blendermanager.ico").write_bytes(ico)
-    print(f"blendermanager.ico: {check_ico(ico)}")
+    (OUT / "blendtrack.ico").write_bytes(ico)
+    print(f"blendtrack.ico: {check_ico(ico)}")
 
     icns = build_icns(image)
-    (OUT / "blendermanager.icns").write_bytes(icns)
-    print(f"blendermanager.icns: {check_icns(icns)}")
+    (OUT / "blendtrack.icns").write_bytes(icns)
+    print(f"blendtrack.icns: {check_icns(icns)}")
     return 0
 
 

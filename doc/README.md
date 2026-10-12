@@ -1,4 +1,4 @@
-# Guía de Blender Manager
+# Guía de BlendTrack
 
 Esta carpeta explica **cómo está montado el programa** para que puedas
 entenderlo y modificarlo a mano con el tiempo. Está escrita pensando en alguien

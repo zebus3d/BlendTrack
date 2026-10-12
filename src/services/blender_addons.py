@@ -651,7 +651,7 @@ def _copies_in_marker(target: BlenderConfig, key: str) -> dict:
     """Destinos que copió la última migración (``key``), con su respaldo.
 
     Devuelve ``{ruta destino: respaldo o None}``. Es lo que permite reconocer,
-    al migrar otra vez, que lo que hay en destino lo puso BlenderManager. Los
+    al migrar otra vez, que lo que hay en destino lo puso BlendTrack. Los
     marcadores de versiones anteriores de la app anotaban dos entradas por copia
     (una con respaldo y otra sin él): se queda la que lo tiene.
     """
@@ -680,7 +680,7 @@ def _copy_with_undo(source: Path, destination: Path, previous: dict,
     de migrar. Así que, si el marcador dice que ese destino lo copiamos
     nosotros (``previous``, de ``_copies_in_marker``), la copia vieja se tira
     sin respaldarla y se hereda el respaldo original: deshacer vuelve al estado
-    de antes de BlenderManager, no a una copia intermedia.
+    de antes de BlendTrack, no a una copia intermedia.
 
     El precio, a sabiendas: si el usuario retocó a mano esa copia entre una
     migración y otra, el retoque se pierde. Es una copia del origen, que sigue
@@ -735,7 +735,7 @@ def apply_migration(plans, target: BlenderConfig,
     """Copia los addons marcados y devuelve el resumen.
 
     Es conservador a propósito: lo que ya exista en destino **no se borra**,
-    se aparta como ``.blendermanager-bak`` (por si el usuario tenía su propia
+    se aparta como ``.blendtrack-bak`` (por si el usuario tenía su propia
     versión de ese addon), y solo cuando la copia nueva ya está completa (ver
     ``replace_with_copy``). Con ``dry_run`` no toca el disco.
     """
@@ -926,7 +926,7 @@ def copy_preference_files(items, target: BlenderConfig,
 
     ``shutil.copy2`` (no ``copy``): conserva los tiempos del fichero, que es lo
     que Blender usa para decidir si las preferencias están al día. Lo que ya
-    exista **no se borra**: se aparta como ``.blendermanager-bak``.
+    exista **no se borra**: se aparta como ``.blendtrack-bak``.
     """
     result = PreferenceResult(dry_run=dry_run)
     actions = []

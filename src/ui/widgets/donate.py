@@ -50,7 +50,7 @@ class DonationPopup(QWidget):
         lay = QVBoxLayout(self)
         lay.setContentsMargins(14, 12, 14, 12)
         lay.setSpacing(8)
-        heading = QLabel(tr("Support Blender Manager"))
+        heading = QLabel(tr("Support BlendTrack"))
         heading.setObjectName("DialogTitle")
         lay.addWidget(heading)
         message = QLabel(tr(

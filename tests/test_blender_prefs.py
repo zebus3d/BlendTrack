@@ -291,8 +291,8 @@ class ApplyScriptExecTest(unittest.TestCase):
         pairs_file = os.path.join(self.tmp.name, "preferences.json")
         with open(pairs_file, "w", encoding="utf-8") as handle:
             json.dump(pairs, handle)
-        env = {"BLENDERMANAGER_PREFS_FILE": pairs_file,
-               "BLENDERMANAGER_ENABLE_ADDONS": enable}
+        env = {"BLENDTRACK_PREFS_FILE": pairs_file,
+               "BLENDTRACK_ENABLE_ADDONS": enable}
         out = _run_script(bp._APPLY_SCRIPT, self.bpy, addon_utils, env)
         payload = blender_runner.parse_marker(out, blender_runner.RESULT_MARKER)
         self.assertIsNotNone(payload, out)
@@ -369,7 +369,7 @@ class ReadPreferencesTest(unittest.TestCase):
         run.assert_not_called()
 
     def test_pasa_factory_startup_y_la_config(self):
-        run = self._patch_run((0, 'BLENDERMANAGER_DUMP={"format": 2, "values": {}}', ""))
+        run = self._patch_run((0, 'BLENDTRACK_DUMP={"format": 2, "values": {}}', ""))
         bp.read_preferences("/opt/blender", factory=True, config_dir="/tmp/cfg")
         args = run.call_args[0][1]
         self.assertIn("--background", args)
@@ -400,7 +400,7 @@ class ReadPreferencesTest(unittest.TestCase):
                    "meta": {"view.ui_scale": {"name": "Scale"}},
                    "skipped": [{"path": "x", "reason": "y"}],
                    "addons": ["cycles"]}
-        self._patch_run((0, "BLENDERMANAGER_DUMP=" + json.dumps(payload), ""))
+        self._patch_run((0, "BLENDTRACK_DUMP=" + json.dumps(payload), ""))
         dump = bp.read_preferences("/opt/blender")
         self.assertTrue(dump.ok)
         self.assertEqual(dump.values, {"view.ui_scale": 1.25})
@@ -409,13 +409,13 @@ class ReadPreferencesTest(unittest.TestCase):
         self.assertEqual(dump.addons, ["cycles"])
 
     def test_volcado_vacio_legitimo_es_ok(self):
-        self._patch_run((0, 'BLENDERMANAGER_DUMP={"format": 2, "values": {}}', ""))
+        self._patch_run((0, 'BLENDTRACK_DUMP={"format": 2, "values": {}}', ""))
         dump = bp.read_preferences("/opt/blender")
         self.assertTrue(dump.ok)
         self.assertEqual(dump.values, {})
 
     def test_volcado_del_esquema_viejo_sigue_valiendo(self):
-        self._patch_run((0, 'BLENDERMANAGER_DUMP={"view.ui_scale": 1.5}', ""))
+        self._patch_run((0, 'BLENDTRACK_DUMP={"view.ui_scale": 1.5}', ""))
         dump = bp.read_preferences("/opt/blender")
         self.assertTrue(dump.ok)
         self.assertEqual(dump.values, {"view.ui_scale": 1.5})
@@ -428,7 +428,7 @@ class ReadPreferencesTest(unittest.TestCase):
             with open(os.path.join(snapshot, "userpref.blend"), "wb") as fh:
                 fh.write(b"X")
             run = self._patch_run(
-                (0, 'BLENDERMANAGER_DUMP={"format": 2, "values": {}}', ""))
+                (0, 'BLENDTRACK_DUMP={"format": 2, "values": {}}', ""))
             dump = bp.snapshot_preferences("/opt/blender", snapshot)
             self.assertTrue(dump.ok)
             used = run.call_args[1]["extra_env"]["BLENDER_USER_CONFIG"]
@@ -450,11 +450,11 @@ class WritePreferencesTest(unittest.TestCase):
         recibido = {}
 
         def run(executable, args, extra_env=None, timeout=None):
-            with open(extra_env["BLENDERMANAGER_PREFS_FILE"],
+            with open(extra_env["BLENDTRACK_PREFS_FILE"],
                       encoding="utf-8") as handle:
                 recibido["pairs"] = json.load(handle)
             recibido["env"] = dict(extra_env)
-            return (0, 'BLENDERMANAGER_RESULT={"applied": ["view.ui_scale"], '
+            return (0, 'BLENDTRACK_RESULT={"applied": ["view.ui_scale"], '
                        '"errors": [], "addons_enabled": []}', "")
 
         muchas = [bp.Preference(f"view.clave_{index}", "x" * 100)
@@ -467,11 +467,11 @@ class WritePreferencesTest(unittest.TestCase):
         self.assertEqual(len(recibido["pairs"]), 401)
         self.assertTrue(all(len(value) < 1000
                             for value in recibido["env"].values()))
-        self.assertEqual(recibido["env"]["BLENDERMANAGER_ENABLE_ADDONS"], "1")
+        self.assertEqual(recibido["env"]["BLENDTRACK_ENABLE_ADDONS"], "1")
         self.assertEqual(result["applied"], ["view.ui_scale"])
         # El temporal no se queda en disco.
         self.assertFalse(os.path.exists(
-            recibido["env"]["BLENDERMANAGER_PREFS_FILE"]))
+            recibido["env"]["BLENDTRACK_PREFS_FILE"]))
 
     def test_sin_nada_que_escribir_no_arranca_blender(self):
         with mock.patch.object(bp.blender_runner, "run_blender") as run:

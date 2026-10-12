@@ -15,6 +15,6 @@ No importa Qt.
 
 from version import __version__
 
-PROJECT_URL = "https://github.com/zebus3d/BlenderManager"
+PROJECT_URL = "https://github.com/zebus3d/BlendTrack"
 
-USER_AGENT = f"BlenderManager/{__version__} (+{PROJECT_URL})"
+USER_AGENT = f"BlendTrack/{__version__} (+{PROJECT_URL})"

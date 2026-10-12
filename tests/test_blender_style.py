@@ -19,7 +19,7 @@ from tests import fake_bpy
 
 
 def _completed(payload, code=0):
-    line = "BLENDERMANAGER_RESULT=" + json.dumps(payload) + "\n"
+    line = "BLENDTRACK_RESULT=" + json.dumps(payload) + "\n"
     return code, line, ""
 
 
@@ -74,8 +74,8 @@ class ExportScriptExecTest(unittest.TestCase):
                         interface_theme_preset_remove=preset_remove),
                     preferences=types.SimpleNamespace(
                         keyconfig_export=lambda filepath: None)))
-            env = {"BLENDERMANAGER_STYLE_DIR": str(out_dir),
-                   "BLENDERMANAGER_STYLE_TMP": bs._TMP_THEME}
+            env = {"BLENDTRACK_STYLE_DIR": str(out_dir),
+                   "BLENDTRACK_STYLE_TMP": bs._TMP_THEME}
             restore = fake_bpy.install(bpy)
             out = io.StringIO()
             try:
@@ -87,7 +87,7 @@ class ExportScriptExecTest(unittest.TestCase):
             finally:
                 restore()
             self.assertEqual(list(presets.iterdir()), [])
-            self.assertIn("BLENDERMANAGER_RESULT=", out.getvalue())
+            self.assertIn("BLENDTRACK_RESULT=", out.getvalue())
             self.assertIn("disco lleno", out.getvalue())
 
 class ImportStyleTest(unittest.TestCase):
@@ -95,7 +95,7 @@ class ImportStyleTest(unittest.TestCase):
         payload = {"applied": ["theme", "keymap"], "errors": []}
         with mock.patch.object(bs.blender_runner, "run_blender",
                                return_value=_completed(payload)):
-            result = bs.import_style("/bin/blender", "BlenderManager 5.2",
+            result = bs.import_style("/bin/blender", "BlendTrack 5.2",
                                      "/t.xml", "/k.py")
         self.assertEqual(result["applied"], ["theme", "keymap"])
 
@@ -105,9 +105,9 @@ class ImportStyleTest(unittest.TestCase):
                                                         "errors": []})) as run:
             bs.import_style("/bin/blender", "BM 5.2", "/t.xml", "/k.py")
         env = run.call_args[1]["extra_env"]
-        self.assertEqual(env["BLENDERMANAGER_STYLE_NAME"], "BM 5.2")
-        self.assertEqual(env["BLENDERMANAGER_STYLE_THEME"], "/t.xml")
-        self.assertEqual(env["BLENDERMANAGER_STYLE_KEYMAP"], "/k.py")
+        self.assertEqual(env["BLENDTRACK_STYLE_NAME"], "BM 5.2")
+        self.assertEqual(env["BLENDTRACK_STYLE_THEME"], "/t.xml")
+        self.assertEqual(env["BLENDTRACK_STYLE_KEYMAP"], "/k.py")
 
 
 class CopyStyleTest(unittest.TestCase):
