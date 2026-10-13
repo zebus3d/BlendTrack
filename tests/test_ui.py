@@ -2813,6 +2813,44 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
         self.assertEqual(marcador.get("version"), "5.2.1")
         self.assertEqual(marcador.get("hash"), "abc123")
 
+    def test_cancelar_durante_la_extraccion_la_para(self):
+        """El botón de cancelar seguía visible al extraer pero no hacía nada:
+        decía "Cancelado" y la versión acababa instalándose igual. Mientras se
+        extrae, además, no se puede empezar otra descarga."""
+        import tempfile
+        import threading
+        from pathlib import Path as _Path
+
+        from services.extractor import ExtractCancelled
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        build = _build("5.2.2", "v52", "lts")
+        empezada = threading.Event()
+
+        def extraer_lento(archive, dest, on_progress=None, cancel=None):
+            empezada.set()
+            while not cancel.is_set():
+                cancel.wait(0.01)
+            raise ExtractCancelled()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            archivo = _Path(tmp) / "blender-5.2.2-linux-x64.tar.xz"
+            archivo.write_bytes(b"x")
+            with mock.patch.object(downloads, "extract",
+                                   side_effect=extraer_lento), \
+                    mock.patch.object(window, "_on_download_error") as error, \
+                    mock.patch.object(window, "_on_extract_done") as hecho:
+                window.download_error.disconnect()
+                window.download_error.connect(error)
+                window._on_download_done(str(archivo), build)
+                _wait_until(empezada.is_set)
+                self.assertTrue(window._download_busy())
+                window.cancel_download()
+                _wait_until(lambda: error.called)
+            error.assert_called_once_with("cancelled")
+            hecho.assert_not_called()
+
     def test_si_falla_bajar_la_actualizacion_ofrece_los_releases(self):
         """Un fallo de red al actualizar no puede ser un callejón sin salida.
 

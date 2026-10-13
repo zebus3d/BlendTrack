@@ -20,13 +20,20 @@ from model.build import minor_of
 from services import api, channels, launcher, macos_dmg, opener, sources
 from services import installed as installed_service
 from services.downloader import log as download_log
-from services.extractor import extract, is_archive
+from services.extractor import ExtractCancelled, extract, is_archive
 from ui.widgets.dialogs import AppDialog, confirm, show_error
 from ui.widgets.shell import WorkerBridge, write_problem
 
 
 class DownloadFlowMixin:
     """Parte de ``MainWindow``; ver el docstring del módulo."""
+
+    # Extracción en curso: su hilo (para no arrancar otra descarga encima),
+    # la marca para cancelarla y el puente de su progreso. Van aquí y no en el
+    # ``__init__`` de la ventana porque solo los usa este mixin.
+    _extract_thread = None
+    _extract_cancel = None
+    _extract_bridge = None
 
     # ----------------------------------------------------- descarga / instalación
     def install_build(self, build) -> None:
@@ -62,9 +69,13 @@ class DownloadFlowMixin:
 
         ``downloader.running`` solo se enciende cuando empieza a bajar; mientras
         se mide qué fuente es más rápida (unos segundos) vale False, y dos clics
-        seguidos colaban dos descargas a la vez.
+        seguidos colaban dos descargas a la vez. Lo mismo pasa al extraer: la
+        descarga ya acabó, pero la barra y el "Reemplazar" siguen ocupados.
         """
-        return self.downloader.running or self._pending_source is not None
+        extracting = (self._extract_thread is not None
+                      and self._extract_thread.is_alive())
+        return (self.downloader.running or self._pending_source is not None
+                or extracting)
 
     def _on_source_chosen(self, request: int, build, source) -> None:
         """Llega la fuente elegida: arranca la descarga si sigue pedida."""
@@ -131,6 +142,10 @@ class DownloadFlowMixin:
         """
         self.downloader.cancel()
         self.update_downloader.cancel()
+        # Si ya se estaba extrayendo, el hilo lo ve entre fichero y fichero,
+        # borra lo extraído y avisa como una descarga cancelada.
+        if self._extract_cancel is not None:
+            self._extract_cancel.set()
         if self._pending_source is not None:
             self._pending_source = None
             self._set_downloading(False)
@@ -158,6 +173,13 @@ class DownloadFlowMixin:
             return
         self._set_status(tr("Extracting..."))
         self._set_downloading(True)
+        # La barra vuelve a 0 y avanza con la extracción. Antes se quedaba en
+        # el 100 % de la descarga mientras se extraía (un minuto o más con
+        # Defender revisando el .zip) y parecía que la app se había colgado.
+        self._set_progress(0, 1)
+        cancel = self._extract_cancel = threading.Event()
+        bridge = self._extract_bridge = WorkerBridge()
+        bridge.progress.connect(self._set_progress)
 
         # El archivo ya está bajado, así que se extrae **junto a él**: es la
         # carpeta que recibió la descarga. Preguntar otra vez por el destino
@@ -167,7 +189,10 @@ class DownloadFlowMixin:
 
         def worker():
             try:
-                target = extract(archive, destination)
+                target = extract(
+                    archive, destination, cancel=cancel,
+                    on_progress=lambda done, total:
+                        bridge.progress.emit(done, total))
                 # El nombre de la carpeta extraída no lleva el hash de la
                 # compilación, así que lo anotamos nosotros: es lo único que
                 # distingue dos diarias de la misma versión bajadas en días
@@ -181,13 +206,25 @@ class DownloadFlowMixin:
                         archive.unlink()
                     except OSError:
                         pass
+            except ExtractCancelled:
+                download_log(f"extract cancelled: {archive}")
+                # Cancelar no deja nada a medias: ``extract`` ya borró lo
+                # extraído y el comprimido se trata como al acabar bien.
+                if self.delete_archive:
+                    try:
+                        archive.unlink(missing_ok=True)
+                    except OSError:
+                        pass
+                self.download_error.emit("cancelled")
+                return
             except Exception as error:
                 download_log(f"extract failed: {error}")
                 self.download_error.emit(str(error))
                 return
             self.extract_done.emit(str(target))
 
-        threading.Thread(target=worker, daemon=True).start()
+        self._extract_thread = threading.Thread(target=worker, daemon=True)
+        self._extract_thread.start()
 
     def _install_dmg(self, archive: Path, build) -> None:
         """Monta el .dmg e instala el ``Blender.app`` en un hilo de trabajo.

@@ -729,6 +729,84 @@ class ExtractorTests(unittest.TestCase):
             dest = Path(tmp) / "out"
             self.assertEqual(extract(archive_path, dest), dest)
 
+    def _make_big_tar(self, path, top, files=200):
+        """Un .tar.gz con bastantes ficheros, para ver el progreso avanzar.
+
+        Unos 3 MB: el gzip lee el comprimido a bocados de decenas de KB, así
+        que con menos el progreso salta del 0 al 100 % sin pasos intermedios.
+        """
+        source = Path(path).parent / "payload-big"
+        source.mkdir()
+        with tarfile.open(path, "w:gz") as archive:
+            for index in range(files):
+                member = source / f"f{index}.bin"
+                member.write_bytes(os.urandom(16384))
+                archive.add(member, arcname=f"{top}/f{index}.bin")
+
+    def test_extraer_avisa_del_progreso_hasta_el_final(self):
+        """Sin progreso, la barra se quedaba en el 100 % de la descarga
+        mientras se extraía y parecía que la app se había colgado."""
+        for suffix in (".tar.gz", ".zip"):
+            with self.subTest(suffix=suffix), \
+                    tempfile.TemporaryDirectory() as tmp:
+                archive_path = Path(tmp) / f"build{suffix}"
+                if suffix == ".zip":
+                    with zipfile.ZipFile(archive_path, "w") as archive:
+                        for index in range(40):
+                            archive.writestr(f"blender-1.0/f{index}.bin",
+                                             os.urandom(4096))
+                else:
+                    self._make_big_tar(archive_path, "blender-1.0")
+                calls = []
+                extract(archive_path, Path(tmp) / "out",
+                        on_progress=lambda done, total, calls=calls:
+                            calls.append((done, total)))
+                self.assertGreater(len(calls), 2)
+                self.assertEqual(calls[-1][0], calls[-1][1])
+                hechos = [done for done, _ in calls]
+                self.assertEqual(hechos, sorted(hechos))
+
+    def test_cancelar_la_extraccion_borra_lo_extraido(self):
+        """Una carpeta a medias aparecería luego como versión instalada."""
+        import threading
+
+        from services.extractor import ExtractCancelled
+
+        with tempfile.TemporaryDirectory() as tmp:
+            archive_path = Path(tmp) / "build.tar.gz"
+            self._make_big_tar(archive_path, "blender-1.0")
+            dest = Path(tmp) / "out"
+            cancel = threading.Event()
+
+            def on_progress(done, total):
+                if done:
+                    cancel.set()
+
+            with self.assertRaises(ExtractCancelled):
+                extract(archive_path, dest, on_progress=on_progress,
+                        cancel=cancel)
+            self.assertFalse((dest / "blender-1.0").exists())
+
+    def test_cancelar_no_borra_una_carpeta_que_ya_existia(self):
+        """Reinstalar encima y cancelar: la versión de antes no se toca."""
+        import threading
+
+        from services.extractor import ExtractCancelled
+
+        with tempfile.TemporaryDirectory() as tmp:
+            archive_path = Path(tmp) / "build.zip"
+            with zipfile.ZipFile(archive_path, "w") as archive:
+                archive.writestr("blender-1.0/blender.exe", "bin")
+            dest = Path(tmp) / "out"
+            previa = dest / "blender-1.0"
+            previa.mkdir(parents=True)
+            (previa / "mio.txt").write_text("no me borres")
+            cancel = threading.Event()
+            cancel.set()
+            with self.assertRaises(ExtractCancelled):
+                extract(archive_path, dest, cancel=cancel)
+            self.assertTrue((previa / "mio.txt").is_file())
+
     def test_extract_rejects_traversal(self):
         with tempfile.TemporaryDirectory() as tmp:
             archive_path = Path(tmp) / "evil.zip"
