@@ -34,6 +34,11 @@ class DownloadFlowMixin:
     _extract_thread = None
     _extract_cancel = None
     _extract_bridge = None
+    # El puente de la descarga en curso. Tiene que vivir en la ventana: si solo
+    # lo sujetan las lambdas que se lleva el hilo, se destruye al acabar ese
+    # hilo y Qt descarta con él la señal ``done`` que aún no se había
+    # entregado. La barra llegaba al 100 % y no se extraía nada.
+    _download_bridge = None
 
     # ----------------------------------------------------- descarga / instalación
     def install_build(self, build) -> None:
@@ -112,10 +117,11 @@ class DownloadFlowMixin:
         self._set_status(tr("Downloading..."))
         download_log(f"downloading {build.filename} from {source.label}")
         # Un puente **propio** de esta descarga, capturado por las lambdas. Antes
-        # se guardaba en ``self._bridge``, que también usaba la actualización de
-        # la app: si se actualizaba la app con un Blender bajando, al acabar el
-        # Blender se "aplicaba" su .tar.xz como si fuera la actualización.
-        bridge = WorkerBridge()
+        # se compartía con la actualización de la app (``self._bridge``): si se
+        # actualizaba la app con un Blender bajando, al acabar el Blender se
+        # "aplicaba" su .tar.xz como si fuera la actualización. Por eso cada
+        # flujo guarda el suyo en un atributo distinto (ver la clase).
+        bridge = self._download_bridge = WorkerBridge()
         bridge.progress.connect(self._set_progress)
         bridge.done.connect(lambda path: self._on_download_done(path, build))
         bridge.error.connect(self._on_download_error)

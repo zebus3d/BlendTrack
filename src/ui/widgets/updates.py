@@ -25,6 +25,9 @@ from ui.widgets.shell import WorkerBridge
 class UpdateFlowMixin:
     """Parte de ``MainWindow``; ver el docstring del módulo."""
 
+    # El puente de la descarga de la actualización (ver ``_do_update``).
+    _update_bridge = None
+
     def set_auto_update(self, active: bool) -> None:
         """Guarda si hay que comprobar actualizaciones al arrancar.
 
@@ -249,7 +252,10 @@ class UpdateFlowMixin:
         """
         self._set_status(tr("Downloading..."))
         self._set_downloading(True)
-        bridge = WorkerBridge()
+        # Guardado en la ventana por lo mismo que ``_download_bridge``
+        # (``downloads.py``): si solo lo sujeta el hilo, muere con él y la señal
+        # ``done`` se pierde por el camino.
+        bridge = self._update_bridge = WorkerBridge()
         bridge.progress.connect(self._set_progress)
         bridge.done.connect(self._apply_update)
         # El error de la actualización no es el de una descarga de Blender: aquí

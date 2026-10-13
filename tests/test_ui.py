@@ -2629,6 +2629,44 @@ class DownloadSourceTests(SettingsIsolated, unittest.TestCase):
         self.assertTrue(arranque.called)
         self.assertEqual(problemas["n"], 2)
 
+    def test_el_fin_de_la_descarga_llega_aunque_el_hilo_ya_haya_muerto(self):
+        """La barra llegaba al 100 % y no se extraía nada: el puente de la
+        descarga solo lo sujetaba el hilo y, al morir este, Qt descartaba la
+        señal ``done`` que aún no había entregado. Aquí el hilo avisa y acaba
+        antes de que el bucle de eventos procese nada, como en la realidad."""
+        import gc
+        import threading
+        from unittest import mock
+
+        from services.sources import Source
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        build = _build("4.2.23", "v42", "stable")
+        fuente = Source("Blender CDN", "https://x/f.zip")
+        hilos = []
+
+        # Una función normal y no un ``Mock``: el mock guarda los argumentos de
+        # cada llamada, y con ellos el puente, que así nunca moriría.
+        def arranque(url, dest, filename, checksum, on_progress=None,
+                     on_done=None, on_error=None, headers=None):
+            def run():
+                on_progress(1, 1)
+                on_done("/tmp/f.zip")
+            hilo = threading.Thread(target=run)
+            hilos.append(hilo)
+            hilo.start()
+
+        with mock.patch.object(downloads, "write_problem", return_value=""), \
+                mock.patch.object(window.downloader, "start", new=arranque), \
+                mock.patch.object(window, "_on_download_done") as hecho:
+            window._start_download(build, fuente)
+            hilos[0].join()
+            # Sin nadie más que lo sujete, el puente se iría aquí.
+            gc.collect()
+            _wait_until(lambda: hecho.called)
+        hecho.assert_called_once_with("/tmp/f.zip", build)
+
     def test_actualizar_la_app_no_cruza_la_descarga_de_blender(self):
         """Cada descarga vuelve por su propio puente.
 
