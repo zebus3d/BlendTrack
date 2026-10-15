@@ -738,10 +738,13 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         """Las cuatro tarjetas enseñan la fecha: la de la tienda (la de
         publicación) y la instalada (la de descarga, del sistema de archivos).
         Si no se sabe, no se inventa nada: no aparece."""
+        from datetime import datetime
         from pathlib import Path
 
         from PySide6.QtWidgets import QLabel
 
+        import i18n
+        from i18n import format_date
         from model.build import Build, InstalledBuild
         from ui.widgets.cards import (BuildCard, GridBuildCard, GridInstalledCard,
                                       InstalledCard)
@@ -755,11 +758,24 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         def texts(card):
             return " ".join(lbl.text() for lbl in card.findChildren(QLabel))
 
+        # El formato (con barras y el orden del idioma) lo pone i18n: se calcula
+        # lo que toca en vez de fijar un texto, que cambiaría con el idioma del
+        # entorno donde corran los tests.
+        esperado = format_date(datetime.fromtimestamp(1700000000))
+        self.assertRegex(esperado, r"^\d{2}/\d{2}/\d{4}$")
         for card in (BuildCard(build, False, False),
                      GridBuildCard(build, False, False, 1.0),
                      InstalledCard(entry, False),
                      GridInstalledCard(entry, False, 1.0)):
-            self.assertIn("2023-11-14", texts(card), type(card).__name__)
+            self.assertIn(esperado, texts(card), type(card).__name__)
+
+        # En español el orden es día/mes/año, no el de EE. UU.
+        idioma = i18n.get_language()
+        i18n.set_language("es")
+        try:
+            self.assertIn("14/11/2023", texts(BuildCard(build, False, False)))
+        finally:
+            i18n.set_language(idioma)
 
         # Sin fecha conocida (0), ninguna tarjeta la enseña.
         sin_fecha = InstalledBuild(name="blender-5.2.1", path=Path("/tmp/b"),

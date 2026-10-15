@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+import i18n
 from i18n import tr
 from model.build import FORK_BLENDER
 from paths import ASSETS_DIR
@@ -264,19 +265,20 @@ def _dim_unless(label, installed: bool) -> None:
 
 
 def build_date_text(item) -> str:
-    """Fecha de la build en corto ('2025-10-13'), o "" si no se sabe.
+    """Fecha de la build en corto ('13/10/2025'), o "" si no se sabe.
 
     En la tienda es la fecha con la que Blender publicó el archivo
     (``Build.mtime``); en una instalada, la fecha de descarga que sacamos del
     sistema de archivos (``InstalledBuild.downloaded``). Se enseña solo el día
     porque el dato va pequeño en la tarjeta; la hora completa queda en el
-    tooltip y en la galería.
+    tooltip y en la galería. El orden (día-mes-año o mes-día-año) lo pone
+    ``i18n.format_date`` según el idioma en uso.
     """
     mtime = getattr(item, "mtime", 0) or getattr(item, "downloaded", 0)
     if not mtime:
         return ""
     try:
-        return datetime.fromtimestamp(mtime).strftime("%Y-%m-%d")
+        return i18n.format_date(datetime.fromtimestamp(mtime))
     except (OSError, OverflowError, ValueError):
         return ""
 

@@ -127,6 +127,46 @@ def get_language() -> str:
     return _current
 
 
+# Orden de los campos de una fecha (solo el día, mes y año) por idioma. Cada
+# cultura escribe la fecha a su manera y con barras la confusión es real: para
+# media app, "03/04/2025" es 3 de abril; para la otra, el 4 de marzo. Se usa
+# el orden que de verdad usa cada idioma, no el que le parezca a nadie:
+#   dmy -> día/mes/año (España, Latinoamérica, Portugal, Brasil).
+#   mdy -> mes/día/año (inglés de EE. UU., que es el que usamos aquí).
+#   ymd -> año/mes/día (japonés y chino, que ordenan de mayor a menor).
+# El separador no lleva guion largo ni puntuación rara: barras, que es lo que
+# pidió el usuario y lo que se ve en cualquier estantería.
+_DATE_ORDER = {
+    "es": "dmy",
+    "pt_BR": "dmy",
+    "en": "mdy",
+    "ja": "ymd",
+    "zh": "ymd",
+    "ru": "dmy",
+}
+
+
+def format_date(moment, with_time: bool = False) -> str:
+    """Fecha de un ``datetime`` con el orden de campos del idioma en uso.
+
+    'dmy' -> 13/10/2025, 'mdy' -> 10/13/2025, 'ymd' -> 2025/10/13. Con
+    ``with_time`` se añade ' HH:MM' detrás (o delante, si el orden es 'ymd',
+    que es donde un japonés o un chino espera la hora).
+    """
+    day = f"{moment.day:02d}"
+    month = f"{moment.month:02d}"
+    year = f"{moment.year:04d}"
+    order = _DATE_ORDER.get(_current, "dmy")
+    parts = {"dmy": f"{day}/{month}/{year}",
+             "mdy": f"{month}/{day}/{year}",
+             "ymd": f"{year}/{month}/{day}"}
+    text = parts[order]
+    if with_time:
+        clock = f"{moment.hour:02d}:{moment.minute:02d}"
+        text = f"{text} {clock}" if order != "ymd" else f"{clock} {text}"
+    return text
+
+
 def tr(text, **kwargs) -> str:
     """Traduce una cadena (las claves van en inglés).
 

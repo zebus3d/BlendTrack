@@ -6,7 +6,6 @@ objetos claros en lugar de diccionarios sueltos.
 
 import re
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 
 # Versiones de Blender con soporte de larga duración (Long Term Support).
@@ -205,10 +204,3 @@ class InstalledBuild:
     def favorite_key(self) -> str:
         """La misma clave que la de la tienda, para compartir los favoritos."""
         return favorite_key(self.branch, self.version)
-
-    @property
-    def downloaded_text(self) -> str:
-        """Fecha de descarga legible ('2025-10-13 17:48'), o "" si no la hay."""
-        if not self.downloaded:
-            return ""
-        return datetime.fromtimestamp(self.downloaded).strftime("%Y-%m-%d %H:%M")

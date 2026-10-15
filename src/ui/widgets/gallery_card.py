@@ -24,6 +24,7 @@ from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QColor, QLinearGradient, QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import QFrame, QGridLayout, QLabel, QVBoxLayout, QWidget
 
+import i18n
 from i18n import tr
 from ui import theme as t
 from ui.widgets.cards import _HoverCard, card_shadow
@@ -164,7 +165,8 @@ def build_rows(build) -> list:
     rows = []
     if build.mtime:
         rows.append((tr("Build date"),
-                     datetime.fromtimestamp(build.mtime).strftime("%Y-%m-%d %H:%M")))
+                     i18n.format_date(datetime.fromtimestamp(build.mtime),
+                                      with_time=True)))
     rows.append((tr("File"), build.filename))
     if build.build_hash:
         rows.append((tr("Build"), build.build_hash[:12]))
@@ -177,7 +179,8 @@ def installed_rows(entry) -> list:
     downloaded = getattr(entry, "downloaded", 0)
     if downloaded:
         rows.append((tr("Downloaded"),
-                     datetime.fromtimestamp(downloaded).strftime("%Y-%m-%d %H:%M")))
+                     i18n.format_date(datetime.fromtimestamp(downloaded),
+                                      with_time=True)))
     if entry.branch:
         rows.append((tr("Branch"), entry.branch))
     if entry.build_hash:

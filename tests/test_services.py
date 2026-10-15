@@ -5,7 +5,6 @@ import tarfile
 import tempfile
 import unittest
 import zipfile
-from datetime import datetime
 from unittest import mock
 from pathlib import Path
 
@@ -358,13 +357,10 @@ class InstalledTests(unittest.TestCase):
             os.utime(folder, (cuando, cuando))
             results = installed.scan_folders([root], "linux")
             self.assertEqual(len(results), 1)
+            # El modelo guarda el epoch; el formato (orden de campos y barras)
+            # lo pone la interfaz con ``i18n.format_date`` según el idioma, así
+            # que aquí solo se comprueba el dato crudo.
             self.assertEqual(results[0].downloaded, cuando)
-            # ``downloaded_text`` se formatea en hora LOCAL, y el CI corre en
-            # UTC: no se puede fijar la hora exacta. Se comprueba que la fecha
-            # coincide con la del epoch en la zona del sistema (que es lo que
-            # enseña la tarjeta), sin depender de dónde se ejecute el test.
-            esperado = datetime.fromtimestamp(cuando).strftime("%Y-%m-%d %H:%M")
-            self.assertEqual(results[0].downloaded_text, esperado)
 
     def test_scan_ignora_carpetas_sin_permiso(self):
         # Al apuntar al home del usuario aparece ~/.gvfs (montaje FUSE): en

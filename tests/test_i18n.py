@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime
 from unittest import mock
 
 import i18n
@@ -44,6 +45,40 @@ class I18nTests(unittest.TestCase):
             i18n.set_language(language)
             self.assertNotEqual(i18n.tr("Download"), "Download", language)
             self.assertEqual(i18n.tr("Unknown key"), "Unknown key", language)
+
+    def test_la_fecha_usa_el_orden_de_cada_idioma(self):
+        """Con barras el orden importa: 03/04/2025 son dos fechas distintas."""
+        momento = datetime(2025, 3, 4, 17, 48)
+        esperado = {
+            "es": "04/03/2025",
+            "pt_BR": "04/03/2025",
+            "ru": "04/03/2025",
+            "en": "03/04/2025",   # mes/día/año (EE. UU.)
+            "ja": "2025/03/04",   # año/mes/día
+            "zh": "2025/03/04",
+        }
+        for language, text in esperado.items():
+            i18n.set_language(language)
+            self.assertEqual(i18n.format_date(momento), text, language)
+
+    def test_la_hora_va_donde_espera_cada_idioma(self):
+        i18n.set_language("es")
+        self.assertEqual(i18n.format_date(datetime(2025, 3, 4, 17, 48),
+                                          with_time=True),
+                         "04/03/2025 17:48")
+        # En japonés y chino la hora va delante.
+        i18n.set_language("ja")
+        self.assertEqual(i18n.format_date(datetime(2025, 3, 4, 17, 48),
+                                          with_time=True),
+                         "17:48 2025/03/04")
+
+    def test_la_fecha_no_depende_del_idioma_desconocido(self):
+        # Un idioma no soportado cae a inglés (mes/día/año), pero la fecha sale
+        # completa: no puede quedar a medias por un idioma raro.
+        i18n.set_language("fr")
+        self.assertEqual(i18n.get_language(), "en")
+        self.assertEqual(i18n.format_date(datetime(2025, 3, 4)),
+                         "03/04/2025")
 
 
 if __name__ == "__main__":
