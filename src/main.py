@@ -29,6 +29,7 @@ import os
 import sys
 import threading
 import traceback
+import urllib.error
 from pathlib import Path
 
 SRC_DIR = Path(__file__).resolve().parent
@@ -46,6 +47,64 @@ from services import api, detector, downloader, updater
 _crash_log = None
 
 
+# Códigos de salida de ``--smoke``. El CI los distingue (ver build.yml):
+#   0 -> todo bien.
+#   1 -> fallo REAL del binario (sin red, TLS roto, listado vacío): bloquea.
+#   2 -> el servidor de Blender está caído o responde mal: no es culpa del
+#        binario, así que el build sigue adelante. Se separa a propósito del 1
+#        para no tapar un fallo de red de verdad (nos pasó: un binario incapaz
+#        de hacer HTTPS parecía funcionar durante días).
+SMOKE_OK = 0
+SMOKE_BINARY_BROKEN = 1
+SMOKE_SERVER_DOWN = 2
+
+# Subcadenas que delatan que el fallo es del servidor de Blender y no del
+# binario. ``builder.blender.org`` sirvió durante horas un fatal error de PHP
+# con código 200 en vez del JSON: el binario estaba perfecto, pero el listado
+# no llegaba. Sin esto, un fallo ajeno bloqueaba la publicación entera.
+_SERVER_DOWN_MARKERS = (
+    "getfilenamurl",       # el bug concreto de builder.blender.org
+    "fatal error",
+    "stack trace",
+    "<br",                 # HTML donde se esperaba JSON
+    "<html",
+    "<?php",
+    "undefined method",
+    "call to undefined",
+)
+
+
+def _server_seems_down(error: Exception) -> bool:
+    """¿El fallo es del servidor de Blender y no del binario?
+
+    La idea es NO tapar un fallo de red real: si no se pudo conectar, no
+    resolvió el DNS o falló el TLS, eso es cosa nuestra y hay que fallar (1).
+    Solo se considera "servidor caído" (2) cuando el servidor SÍ respondió
+    pero con algo que no es el JSON esperado: un error 5xx, HTML de error (el
+    fatal de PHP de builder.blender.org) o un cuerpo que no es JSON.
+    """
+    # Fallo de red de verdad: sin conexión, DNS, timeout, TLS... -> binario.
+    if isinstance(error, (urllib.error.URLError, TimeoutError, OSError)):
+        # ``URLError`` envuelve también HTTPError (que es OSError), así que se
+        # comprueba primero el caso del servidor que responde y falla.
+        if not isinstance(error, urllib.error.HTTPError):
+            return False
+    # El servidor respondió con un 5xx: es su problema, no del binario. Un 4xx
+    # (403, 404...) sí puede ser un cambio de la API que hay que mirar.
+    if isinstance(error, urllib.error.HTTPError):
+        return 500 <= error.code < 600
+    # El servidor respondió 200 pero con algo que no es JSON (el fatal de PHP).
+    text = str(error).lower()
+    if any(marker in text for marker in _SERVER_DOWN_MARKERS):
+        return True
+    # ``json.JSONDecodeError`` sobre una respuesta no vacía: contestó, pero no
+    # con JSON. Se trata como servidor caído salvo que el mensaje diga otra
+    # cosa (por ejemplo un cuerpo vacío, que sí puede ser un problema raro).
+    if error.__class__.__name__ == "JSONDecodeError":
+        return "expecting value" in text or "char 0" in text or "line 1" in text
+    return False
+
+
 def smoke() -> int:
     """Comprobación rápida sin interfaz: descarga el listado y lo imprime.
 
@@ -54,6 +113,12 @@ def smoke() -> int:
     cae al caché de disco cuando falla: imprimía las compilaciones guardadas y
     salía con 0, así que un binario incapaz de hacer HTTPS *parecía* funcionar
     (nos pasó en Arch y lo tapó durante días).
+
+    Devuelve 2 (``SMOKE_SERVER_DOWN``) cuando el fallo es del servidor de
+    Blender (5xx, HTML de error...) y no del binario: así un mantenimiento de
+    ``builder.blender.org`` no bloquea una publicación que no tiene nada que
+    ver con él. El binario y su red se comprueban igual; lo que cambia es de
+    quién es la culpa.
     """
     info = detector.detect()
     try:
@@ -61,11 +126,15 @@ def smoke() -> int:
         # builds.
         builds, _ = api.fetch_builds()
     except Exception as error:
+        if _server_seems_down(error):
+            print(f"AVISO: el servidor de Blender no da el listado ({error}); "
+                  "el binario parece bien, se sigue adelante", file=sys.stderr)
+            return SMOKE_SERVER_DOWN
         print(f"ERROR: no se pudo descargar el listado: {error}", file=sys.stderr)
-        return 1
+        return SMOKE_BINARY_BROKEN
     if not builds:
         print("ERROR: el listado vino vacío", file=sys.stderr)
-        return 1
+        return SMOKE_BINARY_BROKEN
     print("system:", info)
     print("total builds:", len(builds))
     # El filtro usa el nombre normalizado (Windows es "amd64" en la API): si no,

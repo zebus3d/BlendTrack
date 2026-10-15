@@ -166,8 +166,18 @@ jobs:
       - name: Smoke test del AppImage generado
         run: |
           chmod +x BlendTrack-x86_64.AppImage
-          # APPIMAGE_EXTRACT_AND_RUN=1 evita necesitar libfuse2 para montar.
+          # ``--smoke`` sale con 2 si el servidor de Blender esta caido (5xx o
+          # HTML en vez de JSON): eso no es culpa del binario, asi que se sigue.
+          # Cualquier otro codigo distinto de 0 si bloquea.
+          set +e
           APPIMAGE_EXTRACT_AND_RUN=1 ./BlendTrack-x86_64.AppImage --smoke
+          smoke=$?
+          set -e
+          if [ "$smoke" = "2" ]; then
+            echo "::warning::El servidor de Blender no da el listado; se publica igual."
+          elif [ "$smoke" != "0" ]; then
+            exit "$smoke"
+          fi
           # Y ademas la GUI: --smoke no importa Qt, asi que por si solo no pilla
           # que falte shiboken6 (ya paso: el binario no arrancaba y el smoke
           # pasaba). El plugin offscreen monta la ventana sin pantalla.
@@ -275,7 +285,16 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
+          # 2 = el servidor de Blender esta caido (no es culpa del binario).
+          set +e
           ./dist/BlendTrack.exe --smoke
+          smoke=$?
+          set -e
+          if [ "$smoke" = "2" ]; then
+            echo "::warning::El servidor de Blender no da el listado; se publica igual."
+          elif [ "$smoke" != "0" ]; then
+            exit "$smoke"
+          fi
           ./dist/BlendTrack.exe --screenshot shot.png
           ls -l shot.png
           test "$(stat -c%s shot.png)" -gt 5000
@@ -310,7 +329,16 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
+          # 2 = el servidor de Blender esta caido (no es culpa del binario).
+          set +e
           ./dist/BlendTrack.app/Contents/MacOS/BlendTrack --smoke
+          smoke=$?
+          set -e
+          if [ "$smoke" = "2" ]; then
+            echo "::warning::El servidor de Blender no da el listado; se publica igual."
+          elif [ "$smoke" != "0" ]; then
+            exit "$smoke"
+          fi
           ./dist/BlendTrack.app/Contents/MacOS/BlendTrack --screenshot shot.png
           ls -l shot.png
           test "$(stat -f%z shot.png)" -gt 5000
