@@ -6,6 +6,7 @@ objetos claros en lugar de diccionarios sueltos.
 
 import re
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 # Versiones de Blender con soporte de larga duración (Long Term Support).
@@ -190,6 +191,10 @@ class InstalledBuild:
     # nombre de la carpeta y por el marcador; decide el ejecutable que hay que
     # buscar y en qué carpeta de configuración vive la versión.
     fork: str = FORK_BLENDER
+    # Fecha (epoch) de descarga de la versión, leída del sistema de archivos
+    # (la fecha de modificación de la carpeta instalada). No siempre está: 0 es
+    # "no lo sabemos" y entonces la tarjeta no la enseña.
+    downloaded: int = 0
 
     @property
     def fork_name(self) -> str:
@@ -200,3 +205,10 @@ class InstalledBuild:
     def favorite_key(self) -> str:
         """La misma clave que la de la tienda, para compartir los favoritos."""
         return favorite_key(self.branch, self.version)
+
+    @property
+    def downloaded_text(self) -> str:
+        """Fecha de descarga legible ('2025-10-13 17:48'), o "" si no la hay."""
+        if not self.downloaded:
+            return ""
+        return datetime.fromtimestamp(self.downloaded).strftime("%Y-%m-%d %H:%M")

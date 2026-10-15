@@ -345,6 +345,21 @@ class InstalledTests(unittest.TestCase):
         self.assertEqual(
             installed.scan_folders(["/nonexistent/path/xyz"], "linux"), [])
 
+    def test_scan_apunta_la_fecha_de_descarga_de_la_carpeta(self):
+        # No guardamos cuándo se descargó una versión, así que la fecha sale de
+        # la carpeta instalada (su ``st_mtime``). Se toca la fecha a mano y el
+        # escaneo tiene que devolverla.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            folder = root / "blender-5.2.1-linux-x64"
+            folder.mkdir()
+            cuando = 1700000000
+            os.utime(folder, (cuando, cuando))
+            results = installed.scan_folders([root], "linux")
+            self.assertEqual(len(results), 1)
+            self.assertEqual(results[0].downloaded, cuando)
+            self.assertEqual(results[0].downloaded_text, "2023-11-14 19:13")
+
     def test_scan_ignora_carpetas_sin_permiso(self):
         # Al apuntar al home del usuario aparece ~/.gvfs (montaje FUSE): en
         # Python 3.12 ``is_dir()``/``is_file()`` lanzan PermissionError al no

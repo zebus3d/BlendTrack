@@ -174,6 +174,10 @@ def build_rows(build) -> list:
 def installed_rows(entry) -> list:
     """Qué se cuenta de una versión instalada."""
     rows = [(tr("Folder"), str(entry.path))]
+    downloaded = getattr(entry, "downloaded", 0)
+    if downloaded:
+        rows.append((tr("Downloaded"),
+                     datetime.fromtimestamp(downloaded).strftime("%Y-%m-%d %H:%M")))
     if entry.branch:
         rows.append((tr("Branch"), entry.branch))
     if entry.build_hash:

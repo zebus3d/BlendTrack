@@ -88,6 +88,20 @@ def _is_file(path) -> bool:
         return False
 
 
+def _folder_mtime(path) -> int:
+    """Fecha de modificación de una carpeta, en epoch (0 si no se puede leer).
+
+    La usamos como "fecha de descarga" de una instalación: no guardamos esa
+    fecha en el marcador, pero la carpeta se creó al extraer la build, así que
+    su ``st_mtime`` es lo más cerca que el sistema de archivos nos deja estar.
+    Tolerante a errores como ``_is_dir``: una carpeta ilegible no tiene fecha.
+    """
+    try:
+        return int(path.stat().st_mtime)
+    except OSError:
+        return 0
+
+
 def read_marker(folder) -> dict:
     """Lee el marcador ``.blendtrack.json`` de una build
     instalada.
@@ -283,6 +297,12 @@ def _scan_root(root: Path, platform: str):
                 risk=str(marker.get("risk") or ""),
                 root=root,
                 fork=fork,
+                # Fecha de descarga: no la guardamos en ningún sitio, así que
+                # se pregunta al sistema de archivos por la fecha de
+                # modificación de la carpeta instalada (que se crea al
+                # extraer, o sea justo al descargar). Es lo único disponible
+                # y es aproximada, pero suficiente para el dato de la tarjeta.
+                downloaded=_folder_mtime(entry),
             )
         )
     return results

@@ -734,6 +734,39 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         # El destino del reset arranca en el mismo valor de fabrica.
         self.assertEqual(Settings().reset_zoom, 0.5)
 
+    def test_las_tarjetas_ensenan_la_fecha_de_la_build(self):
+        """Las cuatro tarjetas enseñan la fecha: la de la tienda (la de
+        publicación) y la instalada (la de descarga, del sistema de archivos).
+        Si no se sabe, no se inventa nada: no aparece."""
+        from pathlib import Path
+
+        from PySide6.QtWidgets import QLabel
+
+        from model.build import Build, InstalledBuild
+        from ui.widgets.cards import (BuildCard, GridBuildCard, GridInstalledCard,
+                                      InstalledCard)
+
+        build = Build(version="5.2.1", branch="v52", risk="stable",
+                      platform="linux", arch="x86_64", url="u",
+                      filename="f.tar.xz", size=100, mtime=1700000000)
+        entry = InstalledBuild(name="blender-5.2.1", path=Path("/tmp/b"),
+                               version="5.2.1", downloaded=1700000000)
+
+        def texts(card):
+            return " ".join(lbl.text() for lbl in card.findChildren(QLabel))
+
+        for card in (BuildCard(build, False, False),
+                     GridBuildCard(build, False, False, 1.0),
+                     InstalledCard(entry, False),
+                     GridInstalledCard(entry, False, 1.0)):
+            self.assertIn("2023-11-14", texts(card), type(card).__name__)
+
+        # Sin fecha conocida (0), ninguna tarjeta la enseña.
+        sin_fecha = InstalledBuild(name="blender-5.2.1", path=Path("/tmp/b"),
+                                   version="5.2.1", downloaded=0)
+        self.assertNotIn("2023", texts(InstalledCard(sin_fecha, False)))
+        self.assertNotIn("2023", texts(GridInstalledCard(sin_fecha, False, 1.0)))
+
     def test_el_zoom_minimo_no_recorta_ni_solapa_el_contenido(self):
         """Al bajar el zoom el logo y el alto encogen, pero el contenido tiene
         que seguir cabiendo: ni el layout se aprieta por debajo de su mínimo

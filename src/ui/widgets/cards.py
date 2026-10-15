@@ -6,6 +6,8 @@ conecta. Aquí viven también ``settings_card``/``GripCard``, la tarjeta de
 Ajustes, Migración y Add-ons.
 """
 
+from datetime import datetime
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QPainter, QPixmap
 from PySide6.QtWidgets import (
@@ -261,6 +263,41 @@ def _dim_unless(label, installed: bool) -> None:
     label.setProperty("dim", "false" if installed else "true")
 
 
+def build_date_text(item) -> str:
+    """Fecha de la build en corto ('2025-10-13'), o "" si no se sabe.
+
+    En la tienda es la fecha con la que Blender publicó el archivo
+    (``Build.mtime``); en una instalada, la fecha de descarga que sacamos del
+    sistema de archivos (``InstalledBuild.downloaded``). Se enseña solo el día
+    porque el dato va pequeño en la tarjeta; la hora completa queda en el
+    tooltip y en la galería.
+    """
+    mtime = getattr(item, "mtime", 0) or getattr(item, "downloaded", 0)
+    if not mtime:
+        return ""
+    try:
+        return datetime.fromtimestamp(mtime).strftime("%Y-%m-%d")
+    except (OSError, OverflowError, ValueError):
+        return ""
+
+
+def _add_date_label(row, text: str, tip: str = "Build date") -> QLabel | None:
+    """Añade una fecha al final de una fila, si se conoce.
+
+    Va en ``Muted`` y sin elidir (es corta), pegada a la derecha de lo que ya
+    hubiera en la fila: así el dato no empuja ni descoloca el resto de la
+    tarjeta. La comparten las cuatro tarjetas (tienda e instaladas, lista y
+    rejilla).
+    """
+    if not text:
+        return None
+    label = QLabel(text)
+    label.setObjectName("Muted")
+    label.setToolTip(tr(tip))
+    row.addWidget(label)
+    return label
+
+
 def _read_only_reason() -> str:
     """Por qué una instalada de una carpeta con candado no se borra ni renombra."""
     return tr("This version lives in a folder with the lock closed.\n"
@@ -471,9 +508,14 @@ class BuildCard(BaseBuildCard):
         top.addWidget(self._badge(), 1)
         top.addStretch()
         text_col.addLayout(top)
+        meta_row = QHBoxLayout()
+        meta_row.setContentsMargins(0, 0, 0, 0)
+        meta_row.setSpacing(8)
         meta = ElidedLabel(self.meta_text, Qt.ElideRight)
         meta.setObjectName("Muted")
-        text_col.addWidget(meta)
+        meta_row.addWidget(meta, 1)
+        _add_date_label(meta_row, build_date_text(self.build))
+        text_col.addLayout(meta_row)
         lay.addLayout(text_col, 1)
 
         # Los botones de la derecha van juntos y apretados (6 px entre ellos, no
@@ -554,10 +596,18 @@ class GridBuildCard(BaseBuildCard):
         _dim_unless(title, installed)
         lay.addWidget(title)
 
-        sub = ElidedLabel(f"{self.channel_text}  ·  {self.meta_text}",
-                          Qt.ElideRight)
+        # La fecha de la build va al final de la línea de datos: es corta y así
+        # no añade una fila nueva que descuadraría el alto (compartido con las
+        # instaladas, que también tiene que medir lo mismo).
+        date = build_date_text(self.build)
+        sub_text = f"{self.channel_text}  ·  {self.meta_text}"
+        if date:
+            sub_text += f"  ·  {date}"
+        sub = ElidedLabel(sub_text, Qt.ElideRight)
         sub.setObjectName("Warning" if self.is_lts else "Info")
         sub.setAlignment(Qt.AlignHCenter)
+        if date:
+            sub.setToolTip(tr("Build date"))
         lay.addWidget(sub)
         # Las etiquetas que llevan sombra cuando el efecto está encendido.
         self._shadow_labels = [title, sub]
@@ -638,11 +688,16 @@ class InstalledCard(_HoverCard, QFrame):
         detail = f"{self.program} {entry.version}   ·   {entry.path}"
         if read_only:
             detail += "   ·   " + tr("Read-only")
+        meta_row = QHBoxLayout()
+        meta_row.setContentsMargins(0, 0, 0, 0)
+        meta_row.setSpacing(8)
         meta = ElidedLabel(detail, Qt.ElideRight)
         meta.setObjectName("Muted")
         if read_only:
             meta.setToolTip(_read_only_reason())
-        text_col.addWidget(meta)
+        meta_row.addWidget(meta, 1)
+        _add_date_label(meta_row, build_date_text(entry), "Downloaded")
+        text_col.addLayout(meta_row)
         lay.addLayout(text_col, 1)
 
         # Estrella e "i" van juntas y en ese orden en las cuatro tarjetas
@@ -742,11 +797,19 @@ class GridInstalledCard(_HoverCard, QFrame):
             # Como en la lista: en la línea que ya existe, no en una nueva
             # (las tarjetas de la rejilla tienen que medir todas lo mismo).
             detail += "  ·  " + tr("Read-only")
+        # La fecha de descarga va en esta línea (igual que la fecha de la build
+        # en la rejilla de la tienda): añadir una fila nueva descuadraría el
+        # alto compartido con esa rejilla.
+        downloaded = build_date_text(entry)
+        if downloaded:
+            detail += f"  ·  {downloaded}"
         meta = ElidedLabel(detail, Qt.ElideRight)
         meta.setObjectName("Muted")
         meta.setAlignment(Qt.AlignHCenter)
         if read_only:
             meta.setToolTip(_read_only_reason())
+        elif downloaded:
+            meta.setToolTip(tr("Downloaded"))
         lay.addWidget(meta)
 
         # El aviso va como texto elidido (no pide ancho y no ensancha la
