@@ -41,6 +41,17 @@ RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 STARTUP_APPROVED_KEY = (
     r"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run")
 
+# El autoarranque que dejó la versión antigua, cuando el proyecto se llamaba
+# BlenderManager. Al renombrar (commit 51b88e2) el registro pasó a los nombres
+# de arriba, pero el viejo **no se borró**. Quien lo tuviera activado además del
+# nuevo arrancaba dos instancias con la sesión, y la segunda sacaba al frente la
+# ventana que la primera acababa de esconder ("arrancar minimizado" no servía).
+# ``remove_legacy`` limpia ese caso al arrancar; el fichero suelto de la versión
+# antigua no se toca (ver su docstring).
+LEGACY_DESKTOP_FILE = "blendermanager.desktop"
+LEGACY_MACOS_LABEL = "com.blendermanager"
+LEGACY_WINDOWS_VALUE = "BlenderManager"
+
 NAME = "BlendTrack"
 COMMENT = "Download and manage Blender builds"
 
@@ -137,8 +148,16 @@ def _desktop_path() -> Path:
     return _autostart_dir() / DESKTOP_FILE
 
 
+def _legacy_desktop_path() -> Path:
+    return _autostart_dir() / LEGACY_DESKTOP_FILE
+
+
 def _launch_agent_path() -> Path:
     return _launch_agents_dir() / f"{MACOS_LABEL}.plist"
+
+
+def _legacy_launch_agent_path() -> Path:
+    return _launch_agents_dir() / f"{LEGACY_MACOS_LABEL}.plist"
 
 
 def _run_launchctl(args: list[str]) -> bool:
@@ -171,7 +190,23 @@ def _linux_apply(enable: bool) -> bool:
         log(f"autostart: no se pudo {'activar' if enable else 'desactivar'} "
             f"({path}): {error}")
         return False
+    # Al activar el nuestro, el de la versión antigua ya sobra: dos entradas
+    # arrancarían dos instancias. Al desactivar **no se toca**, porque ese
+    # fichero es de otra aplicación (BlenderManager) y desactivar la nuestra no
+    # es motivo para cambiar la suya.
+    if enable:
+        _linux_remove_legacy()
     return True
+
+
+def _linux_remove_legacy() -> None:
+    legacy = _legacy_desktop_path()
+    try:
+        if legacy.exists():
+            legacy.unlink()
+    except OSError as error:
+        log(f"autostart: no se pudo borrar el autoarranque antiguo "
+            f"({legacy}): {error}")
 
 
 # ------------------------------------------------------------- macOS
@@ -192,17 +227,18 @@ def _macos_apply(enable: bool) -> bool:
         # Puede estar ya cargado de una sesión anterior: se descarga y se
         # vuelve a cargar para que coja el contenido nuevo.
         _run_launchctl(["bootout", domain, str(path)])
-        if _run_launchctl(["bootstrap", domain, str(path)]):
-            return True
-        # Si no se pudo cargar, no dejamos el plist: el estado que enseña la
-        # interfaz (existencia del fichero) tiene que corresponderse con lo que
-        # hará el sistema al iniciar sesión.
-        log("autostart: launchctl bootstrap falló")
-        try:
-            path.unlink()
-        except OSError:
-            pass
-        return False
+        if not _run_launchctl(["bootstrap", domain, str(path)]):
+            # Si no se pudo cargar, no dejamos el plist: el estado que enseña la
+            # interfaz (existencia del fichero) tiene que corresponderse con lo
+            # que hará el sistema al iniciar sesión.
+            log("autostart: launchctl bootstrap falló")
+            try:
+                path.unlink()
+            except OSError:
+                pass
+            return False
+        _macos_remove_legacy(domain)
+        return True
     _run_launchctl(["bootout", domain, str(path)])
     try:
         if path.exists():
@@ -210,24 +246,40 @@ def _macos_apply(enable: bool) -> bool:
     except OSError as error:
         log(f"autostart: no se pudo borrar {path}: {error}")
         return False
+    # El agente antiguo no se toca: es de otra aplicación y apagarla a ella no
+    # nos autoriza a cambiar su autoarranque.
     return True
 
 
+def _macos_remove_legacy(domain: str) -> None:
+    legacy = _legacy_launch_agent_path()
+    _run_launchctl(["bootout", domain, str(legacy)])
+    try:
+        if legacy.exists():
+            legacy.unlink()
+    except OSError as error:
+        log(f"autostart: no se pudo borrar el autoarranque antiguo "
+            f"({legacy}): {error}")
+
+
 # ----------------------------------------------------------- Windows
-def _windows_enabled() -> bool:
+def _windows_value_enabled(name: str) -> bool | None:
+    """Estado de un valor de ``Run``: True/False, o None si no existe.
+
+    ``False`` es que existe pero Windows lo tiene desactivado desde el
+    Administrador de tareas (la entrada de ``StartupApproved``).
+    """
     import winreg
 
     try:
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY) as key:
-            winreg.QueryValueEx(key, WINDOWS_VALUE)
+            winreg.QueryValueEx(key, name)
     except OSError:
-        return False
-    # Windows puede haberla desactivado desde el Administrador de tareas sin
-    # borrar el valor de Run: entonces hay una entrada en StartupApproved.
+        return None
     try:
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
                             STARTUP_APPROVED_KEY) as key:
-            data, _ = winreg.QueryValueEx(key, WINDOWS_VALUE)
+            data, _ = winreg.QueryValueEx(key, name)
         if data and data[0] & 1:
             return False
     except OSError:
@@ -235,28 +287,71 @@ def _windows_enabled() -> bool:
     return True
 
 
+def _windows_enabled() -> bool:
+    return _windows_value_enabled(WINDOWS_VALUE) is True
+
+
+def _windows_remove_legacy() -> None:
+    """Borra el valor ``Run`` antiguo y su marca de ``StartupApproved``.
+
+    La marca es el *tombstone* que deja el Administrador de tareas al
+    desactivar una entrada; sin borrarla queda basura en el registro.
+    """
+    import winreg
+
+    for root, name in ((RUN_KEY, LEGACY_WINDOWS_VALUE),
+                       (STARTUP_APPROVED_KEY, LEGACY_WINDOWS_VALUE)):
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, root, 0,
+                                winreg.KEY_SET_VALUE) as key:
+                try:
+                    winreg.DeleteValue(key, name)
+                except FileNotFoundError:
+                    pass
+        except FileNotFoundError:
+            # La clave o el valor no existen: no hay nada que borrar. Pasa,
+            # por ejemplo, con ``StartupApproved`` en un perfil donde nadie ha
+            # tocado el Administrador de tareas todavía.
+            pass
+        except OSError as error:
+            log(f"autostart: no se pudo borrar el autoarranque antiguo "
+                f"({root}\\{name}): {error}")
+
+
 def _windows_apply(enable: bool) -> bool:
     import winreg
 
     try:
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY, 0,
-                            winreg.KEY_SET_VALUE) as key:
-            if enable:
+        if enable:
+            # ``CreateKeyEx`` y no ``OpenKey``: en un perfil nuevo la clave
+            # ``Run`` puede no existir todavía, y ``OpenKey`` fallaba (lo
+            # destapó la prueba contra el registro de Wine).
+            with winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, RUN_KEY, 0,
+                                    winreg.KEY_SET_VALUE) as key:
                 # ``list2cmdline`` entrecomilla la ruta si lleva espacios y
                 # respeta los argumentos (sin comillas, una ruta con espacios
                 # dejaría que otro programa se colara en el arranque).
                 winreg.SetValueEx(
                     key, WINDOWS_VALUE, 0, winreg.REG_SZ,
                     subprocess.list2cmdline(_exec_command()))
-            else:
+        else:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY, 0,
+                                winreg.KEY_SET_VALUE) as key:
                 try:
                     winreg.DeleteValue(key, WINDOWS_VALUE)
                 except FileNotFoundError:
                     pass
+    except FileNotFoundError:
+        # Sin clave ``Run`` al desactivar no hay nada que quitar: ya está.
+        return not enable
     except OSError as error:
         log(f"autostart: no se pudo {'activar' if enable else 'desactivar'}: "
             f"{error}")
         return False
+    # Al activar el nuestro, el valor antiguo ya sobra (dos entradas =
+    # dos instancias). Al desactivar no se toca: es de otra aplicación.
+    if enable:
+        _windows_remove_legacy()
     return True
 
 
@@ -296,3 +391,30 @@ def disable() -> bool:
     if sys.platform == "darwin":
         return _macos_apply(False)
     return _linux_apply(False)
+
+
+def remove_legacy() -> None:
+    """Borra el autoarranque de BlenderManager **solo si amenaza con duplicar**.
+
+    Al renombrar el proyecto, quien tuviera activado el autoarranque en las dos
+    versiones se quedaba con las dos entradas: la sesión arrancaba dos
+    instancias y la segunda sacaba al frente la ventana que la primera acababa
+    de esconder, así que "arrancar minimizado" no servía.
+
+    Se limpia únicamente cuando el autoarranque de BlendTrack **está activo**,
+    que es el caso que produce el doble arranque. Si solo existe el de la
+    versión antigua, no se toca: es la configuración de *otra* aplicación y
+    apagar la nuestra (o no haberla encendido) no es motivo para cambiarla.
+    """
+    if not supported():
+        return
+    if sys.platform.startswith("win"):
+        if _windows_value_enabled(WINDOWS_VALUE) is True:
+            _windows_remove_legacy()
+        return
+    if sys.platform == "darwin":
+        if _launch_agent_path().is_file():
+            _macos_remove_legacy(f"gui/{os.getuid()}")
+        return
+    if _desktop_path().is_file():
+        _linux_remove_legacy()

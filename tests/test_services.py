@@ -1478,6 +1478,53 @@ class DetectorTests(unittest.TestCase):
         self.assertTrue(detector.minimize_to_tray_supported({}))
 
 
+class _FakeWinreg:
+    """``winreg`` mínimo en memoria, para probar la rama de Windows en Linux.
+
+    Solo cubre lo que usa ``services.autostart``: abrir una clave, leer, escribir
+    y borrar un valor, con ``FileNotFoundError`` cuando no existe.
+    """
+
+    HKEY_CURRENT_USER = object()
+    KEY_SET_VALUE = 2
+    REG_SZ = 1
+
+    def __init__(self, tables):
+        self.tables = tables
+
+    def OpenKey(self, root, path, reserved=0, access=0):
+        if path not in self.tables:
+            raise FileNotFoundError(path)
+        return _FakeWinregKey(self.tables[path])
+
+    def CreateKeyEx(self, root, path, reserved=0, access=0):
+        return _FakeWinregKey(self.tables.setdefault(path, {}))
+
+    def QueryValueEx(self, values, name):
+        if name not in values:
+            raise FileNotFoundError(name)
+        return values[name], 1
+
+    def SetValueEx(self, values, name, reserved, kind, value):
+        values[name] = value
+
+    def DeleteValue(self, values, name):
+        if name not in values:
+            raise FileNotFoundError(name)
+        del values[name]
+
+
+class _FakeWinregKey:
+    def __init__(self, values):
+        self.values = values
+
+    def __enter__(self):
+        return self.values
+
+    def __exit__(self, *exc):
+        return False
+
+
 class AutostartTests(unittest.TestCase):
     """Autoarranque con la sesión (Linux: XDG autostart)."""
 
@@ -1553,6 +1600,168 @@ class AutostartTests(unittest.TestCase):
             self.assertTrue(autostart._macos_apply(True))
         self.assertTrue(agent.exists())
 
+    def test_macos_al_activar_borra_el_agente_antiguo(self):
+        if not hasattr(os, "getuid"):
+            self.skipTest("getuid es de Unix")
+        from services import autostart
+
+        agent = (Path(self.tmp.name) / "LaunchAgents"
+                 / f"{autostart.MACOS_LABEL}.plist")
+        legacy = (Path(self.tmp.name) / "LaunchAgents"
+                  / f"{autostart.LEGACY_MACOS_LABEL}.plist")
+        legacy.parent.mkdir(parents=True, exist_ok=True)
+        legacy.write_text("viejo", encoding="utf-8")
+        calls = []
+
+        def fake_launchctl(args):
+            calls.append(args)
+            return True
+
+        with mock.patch.object(autostart, "_launch_agent_path",
+                               return_value=agent), \
+                mock.patch.object(autostart, "_legacy_launch_agent_path",
+                                  return_value=legacy), \
+                mock.patch.object(autostart, "_exec_command",
+                                  return_value=["/opt/BM"]), \
+                mock.patch.object(autostart.os, "getuid", return_value=1000), \
+                mock.patch.object(autostart, "_run_launchctl",
+                                  side_effect=fake_launchctl):
+            self.assertTrue(autostart._macos_apply(True))
+
+        self.assertTrue(agent.is_file())
+        self.assertFalse(legacy.exists())
+        # Antes de borrar el plist hay que descargar el agente, o seguiría
+        # cargado hasta cerrar la sesión.
+        self.assertIn(["bootout", "gui/1000", str(legacy)], calls)
+
+    def test_macos_remove_legacy_solo_borra_si_el_nuestro_existe(self):
+        if not hasattr(os, "getuid"):
+            self.skipTest("getuid es de Unix")
+        from services import autostart
+
+        agent = (Path(self.tmp.name) / "LaunchAgents"
+                 / f"{autostart.MACOS_LABEL}.plist")
+        legacy = (Path(self.tmp.name) / "LaunchAgents"
+                  / f"{autostart.LEGACY_MACOS_LABEL}.plist")
+        legacy.parent.mkdir(parents=True, exist_ok=True)
+        legacy.write_text("viejo", encoding="utf-8")
+
+        with mock.patch.object(autostart, "sys",
+                               mock.Mock(platform="darwin")), \
+                mock.patch.object(autostart, "_launch_agent_path",
+                                  return_value=agent), \
+                mock.patch.object(autostart, "_legacy_launch_agent_path",
+                                  return_value=legacy), \
+                mock.patch.object(autostart.os, "getuid", return_value=1000), \
+                mock.patch.object(autostart, "_run_launchctl",
+                                  return_value=True):
+            # Solo existe el agente antiguo: es de la otra aplicación.
+            autostart.remove_legacy()
+            self.assertTrue(legacy.exists())
+
+            agent.write_text("nuevo", encoding="utf-8")
+            autostart.remove_legacy()
+            self.assertFalse(legacy.exists())
+            self.assertTrue(agent.exists())
+
+    def test_windows_limpia_el_valor_antiguo_si_el_nuestro_esta_activo(self):
+        from services import autostart
+
+        fake = _FakeWinreg({
+            autostart.RUN_KEY: {
+                autostart.WINDOWS_VALUE: "nuevo",
+                autostart.LEGACY_WINDOWS_VALUE: "viejo",
+            },
+            autostart.STARTUP_APPROVED_KEY: {
+                autostart.LEGACY_WINDOWS_VALUE: b"\x03",
+            },
+        })
+        with mock.patch.dict(sys.modules, {"winreg": fake}), \
+                mock.patch.object(autostart, "sys",
+                                  mock.Mock(platform="win32")):
+            autostart.remove_legacy()
+
+        run = fake.tables[autostart.RUN_KEY]
+        approved = fake.tables[autostart.STARTUP_APPROVED_KEY]
+        self.assertNotIn(autostart.LEGACY_WINDOWS_VALUE, run)
+        self.assertNotIn(autostart.LEGACY_WINDOWS_VALUE, approved)
+        self.assertIn(autostart.WINDOWS_VALUE, run)
+
+    def test_windows_no_limpia_si_el_nuestro_esta_desactivado(self):
+        from services import autostart
+
+        fake = _FakeWinreg({
+            autostart.RUN_KEY: {
+                autostart.WINDOWS_VALUE: "nuevo",
+                autostart.LEGACY_WINDOWS_VALUE: "viejo",
+            },
+            autostart.STARTUP_APPROVED_KEY: {
+                autostart.WINDOWS_VALUE: b"\x03",
+            },
+        })
+        with mock.patch.dict(sys.modules, {"winreg": fake}), \
+                mock.patch.object(autostart, "sys",
+                                  mock.Mock(platform="win32")):
+            autostart.remove_legacy()
+
+        # El nuestro lo apagó el usuario desde el Administrador de tareas: no
+        # hay doble arranque, así que no se toca el de la otra aplicación.
+        self.assertIn(autostart.LEGACY_WINDOWS_VALUE,
+                      fake.tables[autostart.RUN_KEY])
+
+    def test_windows_al_activar_borra_el_valor_antiguo_y_su_marca(self):
+        from services import autostart
+
+        fake = _FakeWinreg({
+            autostart.RUN_KEY: {autostart.LEGACY_WINDOWS_VALUE: "viejo"},
+            autostart.STARTUP_APPROVED_KEY: {
+                autostart.LEGACY_WINDOWS_VALUE: b"\x03",
+            },
+        })
+        with mock.patch.dict(sys.modules, {"winreg": fake}), \
+                mock.patch.object(autostart, "_exec_command",
+                                  return_value=["C:\\BlendTrack.exe"]):
+            self.assertTrue(autostart._windows_apply(True))
+
+        run = fake.tables[autostart.RUN_KEY]
+        approved = fake.tables[autostart.STARTUP_APPROVED_KEY]
+        self.assertIn(autostart.WINDOWS_VALUE, run)
+        self.assertNotIn(autostart.LEGACY_WINDOWS_VALUE, run)
+        self.assertNotIn(autostart.LEGACY_WINDOWS_VALUE, approved)
+
+    def test_windows_al_desactivar_no_toca_el_valor_antiguo(self):
+        from services import autostart
+
+        fake = _FakeWinreg({
+            autostart.RUN_KEY: {
+                autostart.WINDOWS_VALUE: "nuevo",
+                autostart.LEGACY_WINDOWS_VALUE: "viejo",
+            },
+        })
+        with mock.patch.dict(sys.modules, {"winreg": fake}):
+            self.assertTrue(autostart._windows_apply(False))
+
+        run = fake.tables[autostart.RUN_KEY]
+        self.assertNotIn(autostart.WINDOWS_VALUE, run)
+        self.assertIn(autostart.LEGACY_WINDOWS_VALUE, run)
+
+    def test_windows_sin_la_clave_run(self):
+        from services import autostart
+
+        # Perfil nuevo: ``Run`` todavía no existe. ``enable`` debe crearla y
+        # ``disable`` debe dar por hecho que no había nada que quitar.
+        fake = _FakeWinreg({})
+        with mock.patch.dict(sys.modules, {"winreg": fake}), \
+                mock.patch.object(autostart, "_exec_command",
+                                  return_value=["C:\\BlendTrack.exe"]):
+            self.assertTrue(autostart._windows_apply(True))
+            self.assertIn(autostart.WINDOWS_VALUE,
+                          fake.tables[autostart.RUN_KEY])
+
+        fake = _FakeWinreg({})
+        with mock.patch.dict(sys.modules, {"winreg": fake}):
+            self.assertTrue(autostart._windows_apply(False))
+
     def test_en_appimage_usa_la_variable_appimage(self):
         from services import autostart
 
@@ -1566,6 +1775,56 @@ class AutostartTests(unittest.TestCase):
         command = autostart._exec_command()
         self.assertEqual(command[0], sys.executable)
         self.assertTrue(command[1].endswith("main.py"))
+
+    def test_el_autoarranque_antiguo_no_cuenta_como_el_nuestro(self):
+        if not sys.platform.startswith("linux"):
+            self.skipTest("el fichero .desktop es solo de Linux")
+        from services import autostart
+
+        legacy = (Path(self.tmp.name) / "autostart"
+                  / autostart.LEGACY_DESKTOP_FILE)
+        legacy.parent.mkdir(parents=True, exist_ok=True)
+        legacy.write_text("viejo", encoding="utf-8")
+
+        # Arrancará BlenderManager, no BlendTrack: el interruptor debe decir la
+        # verdad. Y sin el nuestro activo no hay doble instancia, así que el
+        # fichero ajeno no se toca.
+        self.assertFalse(autostart.is_enabled())
+        autostart.remove_legacy()
+        self.assertTrue(legacy.exists())
+        self.assertTrue(autostart.disable())
+        self.assertTrue(legacy.exists())
+
+    def test_limpia_el_autoarranque_antiguo_si_el_nuestro_esta_activo(self):
+        if not sys.platform.startswith("linux"):
+            self.skipTest("el fichero .desktop es solo de Linux")
+        from services import autostart
+
+        legacy = (Path(self.tmp.name) / "autostart"
+                  / autostart.LEGACY_DESKTOP_FILE)
+        self.assertTrue(autostart.enable())
+        legacy.write_text("viejo", encoding="utf-8")
+
+        autostart.remove_legacy()
+
+        self.assertFalse(legacy.exists())
+        self.assertTrue(autostart.is_enabled())
+
+    def test_activar_toma_el_relevo_del_autoarranque_antiguo(self):
+        if not sys.platform.startswith("linux"):
+            self.skipTest("el fichero .desktop es solo de Linux")
+        from services import autostart
+
+        legacy = (Path(self.tmp.name) / "autostart"
+                  / autostart.LEGACY_DESKTOP_FILE)
+        new = (Path(self.tmp.name) / "autostart" / autostart.DESKTOP_FILE)
+        legacy.parent.mkdir(parents=True, exist_ok=True)
+        legacy.write_text("viejo", encoding="utf-8")
+
+        self.assertTrue(autostart.enable())
+
+        self.assertFalse(legacy.exists())
+        self.assertTrue(new.is_file())
 
 
 class ElevateTests(unittest.TestCase):

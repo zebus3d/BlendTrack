@@ -299,6 +299,15 @@ def run_ui(screenshot: str | None = None) -> int:
     settings = settings_service.Settings.load()
     i18n.set_language(settings.language)
 
+    # El renombrado BlenderManager → BlendTrack dejó el autoarranque antiguo
+    # huérfano: quien lo tuviera activado en las dos versiones arrancaba **dos**
+    # instancias con la sesión, y la segunda sacaba al frente la ventana que la
+    # primera acababa de esconder (rompiendo "arrancar minimizado"). Se limpia
+    # una vez aquí, y solo si el nuestro está activo: el de la versión antigua
+    # es de otra aplicación y no se toca por las buenas.
+    from services import autostart
+    autostart.remove_legacy()
+
     from PySide6.QtCore import QTimer
     from PySide6.QtWidgets import QApplication
 
