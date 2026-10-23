@@ -5,6 +5,12 @@ solo el primer nivel. Las builds oficiales se descomprimen en carpetas con un
 nombre del estilo ``blender-4.5.13-linux-x64``. De ahí sacamos la versión y
 localizamos el ejecutable, que cambia según la plataforma (y según el fork).
 
+No todas las carpetas llevan ese nombre: Blender Launcher guarda las suyas como
+``2.79`` y una build customizada por un estudio puede llamarse cualquier cosa.
+Para las primeras se acepta el nombre que es solo la versión; para las segundas
+se deduce la serie de lo que hay dentro (``2.79/datafiles``), y solo se dan por
+buenas si además hay un ejecutable que lanzar.
+
 Ese nombre **no** incluye el hash de la compilación, así que dos alfa de
 ``main`` bajadas en días distintos producen exactamente la misma carpeta. Para
 poder distinguirlas dejamos un marcador propio (``MARKER_NAME``) dentro de la
@@ -33,6 +39,20 @@ VERSION_RE = re.compile(r"blender[-_ ]?(\d+\.\d+(?:\.\d+)?)", re.IGNORECASE)
 # (que no lleva "blender" en el nombre) se ignoraba por completo.
 BFA_VERSION_RE = re.compile(r"bforartists[-_ ]?(\d+\.\d+(?:\.\d+)?)", re.IGNORECASE)
 UPBGE_VERSION_RE = re.compile(r"upbge[-_ ]?(\d+\.\d+(?:\.\d+)?)", re.IGNORECASE)
+# Carpeta cuyo nombre es **solo** la versión: ``2.79``, ``2.82a``, ``4.2.1``.
+# Así es como Blender Launcher guarda lo que descarga, y por eso sus carpetas
+# no se reconocían: no llevan la palabra "blender" por ningún lado. La letra
+# final (``2.82a``, ``2.79b``) se cae de la versión, que es lo que usan la
+# carpeta de configuración de Blender y las comparaciones.
+BARE_VERSION_RE = re.compile(r"^(\d+\.\d+(?:\.\d+)?)[a-z]?$", re.IGNORECASE)
+# Dentro de la carpeta extraída, Blender trae un directorio con su serie
+# (``4.5/datafiles``, ``2.79/scripts``). Es la forma barata de saber qué es
+# cuando el nombre de la carpeta no dice la versión: una build renombrada o una
+# customizada por un estudio (NVIDIA, un estudio con su parche...). Ejecutar
+# ``blender --version`` daría el número exacto, pero cuesta arrancar Blender
+# entero por cada carpeta sospechosa.
+SERIES_DIR_RE = re.compile(r"^\d+\.\d+$")
+SERIES_DATA_DIRS = ("datafiles", "scripts", "python")
 
 # Marcador que escribimos al instalar para recordar qué compilación es.
 MARKER_NAME = ".blendtrack.json"
@@ -232,29 +252,73 @@ def _executable_for(directory: Path, platform: str, depth: int = 1,
     return None
 
 
+def _has_known_executable(directory: Path, platform: str) -> bool:
+    """True si en la raíz hay un ejecutable con alguno de los nombres que conocemos.
+
+    Es el filtro barato de antes de adivinar la versión mirando dentro: tres o
+    cuatro ``is_file`` frente a recorrer la carpeta entera. Importa porque una
+    biblioteca puede ser la carpeta personal del usuario (con Descargas,
+    proyectos, repos...): enumerar cada una de esas carpetas en cada escaneo
+    —y el escaneo corre al arrancar y en cada refresco— se nota.
+    """
+    names = {relative for options in _EXECUTABLES.values()
+             for relative in options.get(platform, options["linux"])}
+    return any(_is_file(directory / name) for name in names)
+
+def _version_from_tree(directory) -> str:
+    """Serie de Blender deducida de lo que hay **dentro** de la carpeta.
+
+    Una instalación extraída lleva un directorio con su serie
+    (``4.5/datafiles``, ``2.79/scripts``). Sirve para las carpetas cuyo nombre
+    no dice la versión: una build renombrada a mano o una custom de un estudio.
+    Devuelve solo la serie (``4.5``), porque el número de parche no está ahí.
+
+    Es a propósito barato —un nivel de ``iterdir`` y tres ``is_dir``— porque
+    esto corre sobre cada carpeta sospechosa de la biblioteca.
+    """
+    try:
+        children = sorted(directory.iterdir())
+    except OSError:
+        return ""
+    for child in children:
+        if not SERIES_DIR_RE.match(child.name) or not _is_dir(child):
+            continue
+        if any(_is_dir(child / name) for name in SERIES_DATA_DIRS):
+            return child.name
+    return ""
+
+
 def _fork_and_match(name: str, marker: dict):
-    """Fork y versión de una carpeta, por el marcador o por su nombre.
+    """Fork, versión y si esa versión es una suposición.
 
     El marcador manda (lo escribimos nosotros al instalar). Sin él —carpetas
     que no bajó la app, o instaladas antes del marcador— se reconoce el fork
     por el prefijo del nombre y se saca la versión de ahí.
+
+    El tercer valor es ``True`` cuando la versión sale de un nombre que **no**
+    la declara (``blender-4.5.13-...``): una carpeta que solo se llama ``2.79``.
+    En ese caso es una apuesta, y el escaneo exige que además haya un
+    ejecutable antes de creerse que eso es una instalación.
     """
     fork = str(marker.get("fork") or "")
     version = str(marker.get("version") or "")
     match = VERSION_RE.search(name)
     bfa = BFA_VERSION_RE.search(name)
     upbge = UPBGE_VERSION_RE.search(name)
+    bare = BARE_VERSION_RE.match(name.strip())
     if not fork:
         if bfa:
             fork = FORK_BFORARTISTS
         elif upbge:
             fork = FORK_UPBGE
+    guessed = False
     if not version:
-        for candidate in (bfa, upbge, match):
+        for candidate in (bfa, upbge, match, bare):
             if candidate:
                 version = candidate.group(1)
+                guessed = candidate is bare
                 break
-    return fork, version
+    return fork, version, guessed
 
 
 def _scan_root(root: Path, platform: str):
@@ -275,14 +339,32 @@ def _scan_root(root: Path, platform: str):
         if entry.name.startswith(".") or not _is_dir(entry):
             continue
         marker = read_marker(entry)
-        fork, version = _fork_and_match(entry.name, marker)
-        # Sirve si el nombre lleva la versión (lo normal) o si tiene marcador
-        # propio: al renombrar una instalación el nombre puede dejar de llevar
-        # la versión, pero el marcador sigue diciendo qué es.
+        fork, version, guessed = _fork_and_match(entry.name, marker)
+        if not version and not marker:
+            # Ni el nombre ni el marcador dicen qué es: se mira dentro. Es lo
+            # que salva una build renombrada a mano y las customizadas por un
+            # estudio (el caso del Blender 2.79 de NVIDIA), que no llevan
+            # "blender" en el nombre de la carpeta. Antes de recorrer nada se
+            # pide el ejecutable en la raíz, que es lo único que no cuesta.
+            if not _has_known_executable(entry, platform):
+                continue
+            version = _version_from_tree(entry)
+            guessed = bool(version)
+        # Sirve si el nombre lleva la versión (lo normal), si se ha deducido de
+        # dentro o si tiene marcador propio: al renombrar una instalación el
+        # nombre puede dejar de llevar la versión, pero el marcador sigue
+        # diciendo qué es.
         if not version and not marker:
             # Ignoramos carpetas que no son de Blender (archivos temporales, etc.).
             continue
         executable = _executable_for(entry, platform, fork=fork)
+        if guessed and executable is None:
+            # Un ``4.5/`` dentro de una carpeta puede ser cualquier cosa (una
+            # copia de scripts, un backup) y una carpeta llamada ``4.5`` sin
+            # Blender dentro, un resto de una extracción. Adivinar la versión
+            # solo vale si además hay un Blender que lanzar; sin eso la lista se
+            # llenaría de fantasmas que no se pueden abrir.
+            continue
         results.append(
             InstalledBuild(
                 name=entry.name,

@@ -451,6 +451,62 @@ class InstalledTests(unittest.TestCase):
             self.assertEqual([(e.version, e.fork) for e in results],
                              [("0.53", "upbge")])
 
+    def test_scan_encuentra_una_carpeta_que_se_llama_solo_como_la_version(self):
+        """Blender Launcher nombra sus carpetas ``2.79``, sin "blender" dentro.
+
+        Esas builds —una oficial importada o una custom de un estudio— se
+        ignoraban por completo: el nombre no casaba con ninguno de los patrones
+        (``blender-4.5.13-...``, ``bforartists-...``, ``upbge-...``).
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            folder = root / "2.79"
+            folder.mkdir()
+            (folder / "blender").write_text("#!/bin/sh\n")
+            results = installed.scan_folders([root], "linux")
+            self.assertEqual([e.version for e in results], ["2.79"])
+            self.assertIsNotNone(results[0].executable)
+
+    def test_scan_acepta_la_letra_de_la_version(self):
+        # "2.82a" y "2.79b" son releases de verdad. La letra se cae porque la
+        # carpeta de configuración de Blender es "2.82" / "2.79", sin ella.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            folder = root / "2.82a"
+            folder.mkdir()
+            (folder / "blender").write_text("#!/bin/sh\n")
+            self.assertEqual(
+                [e.version for e in installed.scan_folders([root], "linux")],
+                ["2.82"])
+
+    def test_scan_deduce_la_version_de_dentro_de_la_carpeta(self):
+        """Una build con nombre propio no dice su versión por fuera.
+
+        Es el caso del Blender 2.79 custom de NVIDIA (y el de cualquier estudio
+        que renombre su compilación): dentro lleva el directorio de su serie
+        (``2.79/datafiles``), que es lo único que la identifica.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            folder = root / "NVIDIA Blender"
+            (folder / "2.79" / "datafiles").mkdir(parents=True)
+            (folder / "blender").write_text("#!/bin/sh\n")
+            results = installed.scan_folders([root], "linux")
+            self.assertEqual([e.version for e in results], ["2.79"])
+            self.assertIsNotNone(results[0].executable)
+
+    def test_no_inventa_una_instalacion_sin_ejecutable(self):
+        # Deducir la versión de dentro solo vale si además hay un Blender que
+        # lanzar: una carpeta con ``4.5/datafiles`` puede ser una copia de
+        # scripts o un backup, y una carpeta que solo se llama ``4.5`` sin nada
+        # dentro, el resto de una extracción a medias.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            folder = root / "scripts copiados"
+            (folder / "4.5" / "datafiles").mkdir(parents=True)
+            (root / "4.5").mkdir()
+            self.assertEqual(installed.scan_folders([root], "linux"), [])
+
     def test_find_installed_no_confunde_un_fork_con_blender(self):
         """Bforartists 5.2.0 y Blender 5.2.0 comparten número, no son lo mismo."""
         bfa_entry = installed.InstalledBuild(

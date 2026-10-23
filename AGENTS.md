@@ -454,6 +454,15 @@ X11, Windows y macOS no cambia nada. **No volver a forzar XWayland.**
   `.blendtrack.json` dentro de su carpeta con el hash de la compilación
   (`src/services/installed.py`). Sin él no se pueden distinguir dos diarias de
   la misma versión, porque el nombre de la carpeta extraída no lleva el hash.
+- **Se reconocen también las builds que no se llaman como las descarga Blender.**
+  Blender Launcher nombra sus carpetas solo con la versión (`2.79`, `2.82a`) y
+  una build customizada por un estudio puede llamarse cualquier cosa (`NVIDIA
+  Blender`). Por eso `installed._scan_root` acepta el nombre que es solo la
+  versión y, si el nombre no dice nada, deduce la serie de lo que hay dentro
+  (`2.79/datafiles`, `4.5/scripts`) — solo si además encuentra un ejecutable,
+  para no llenar la lista con copias de scripts. Sin esto, esas versiones no
+  aparecían y no había forma de lanzarlas. Ojo: deducir de dentro da la **serie**
+  (`4.5`), no el parche, que no está en disco.
 - **macOS: el `.dmg` se monta y se instala** (`src/services/macos_dmg.py`). La
   API solo publica `.dmg`, que no es un comprimido, así que `hdiutil attach
   -mountpoint` lo monta, se copian los `.app` a la carpeta destino con `ditto`
