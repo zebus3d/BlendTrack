@@ -690,6 +690,8 @@ class InstalledCard(_HoverCard, QFrame):
         detail = f"{self.program} {entry.version}   ·   {entry.path}"
         if read_only:
             detail += "   ·   " + tr("Read-only")
+        if getattr(entry, "custom", False):
+            detail += "   ·   " + tr("Custom")
         meta_row = QHBoxLayout()
         meta_row.setContentsMargins(0, 0, 0, 0)
         meta_row.setSpacing(8)
@@ -799,6 +801,8 @@ class GridInstalledCard(_HoverCard, QFrame):
             # Como en la lista: en la línea que ya existe, no en una nueva
             # (las tarjetas de la rejilla tienen que medir todas lo mismo).
             detail += "  ·  " + tr("Read-only")
+        if getattr(entry, "custom", False):
+            detail += "  ·  " + tr("Custom")
         # La fecha de descarga va en esta línea (igual que la fecha de la build
         # en la rejilla de la tienda): añadir una fila nueva descuadraría el
         # alto compartido con esa rejilla.

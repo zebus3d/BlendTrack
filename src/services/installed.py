@@ -418,6 +418,20 @@ def scan_folders(folders, platform: str) -> list[InstalledBuild]:
     return results
 
 
+def mark_custom(entries, custom_builds) -> list[InstalledBuild]:
+    """Anota en cada instalación si el usuario la declaró como custom.
+
+    El escaneo no puede saberlo: desde el disco, una build parcheada por un
+    estudio se ve igual que una oficial (misma estructura, mismo ejecutable).
+    La marca viene de los ajustes, y se aplica aquí, que es donde están las dos
+    cosas juntas: la lista recién escaneada y las rutas que el usuario guardó.
+    """
+    marks = {channels.normalize_path(path) for path in custom_builds or ()}
+    for entry in entries:
+        entry.custom = channels.normalize_path(entry.path) in marks
+    return entries
+
+
 def find_installed(installed, build) -> InstalledBuild | None:
     """Devuelve la instalación que corresponde a ``build``, o None.
 
@@ -429,10 +443,16 @@ def find_installed(installed, build) -> InstalledBuild | None:
 
     El fork también cuenta: Blender 5.2.0 y Bforartists 5.2.0 comparten número
     de versión, pero no son la misma instalación (ni el mismo programa).
+
+    Las marcadas como custom no cuentan: si alguien parcheó su 5.2.0, la tienda
+    no puede decir "ya la tienes" ni ofrecer lanzarla al pulsar el 5.2.0
+    oficial. Son programas distintos con el mismo número.
     """
     target = version_tuple(build.version)
     target_fork = getattr(build, "fork", FORK_BLENDER)
     for entry in installed:
+        if getattr(entry, "custom", False):
+            continue
         if getattr(entry, "fork", FORK_BLENDER) != target_fork:
             continue
         if version_tuple(entry.version) != target:
@@ -526,6 +546,10 @@ def available_updates(installed, builds) -> list[Update]:
     plataforma. Solo se miran instaladas estables y compilaciones ``stable``;
     las diarias/alfa se renumeran solas y aquí serían ruido.
 
+    Las marcadas como custom tampoco entran: actualizarlas es reemplazar el
+    programa que el usuario se hizo a medida por el oficial, que es justo lo
+    contrario de lo que quiere.
+
     El aviso es **por serie**, no por cada carpeta: se coge la instalada más
     nueva de cada serie, porque avisar en la 5.2.0 después de bajarte la 5.2.2
     como copia es ruido. Y si esa versión nueva ya está instalada, tampoco se
@@ -538,7 +562,9 @@ def available_updates(installed, builds) -> list[Update]:
     """
     stable_builds = [build for build in builds
                      if build.risk == "stable" and not build.fork]
-    entries = [entry for entry in installed if _is_stable_install(entry)]
+    entries = [entry for entry in installed
+               if _is_stable_install(entry)
+               and not getattr(entry, "custom", False)]
     installed_versions = {version_tuple(entry.version) for entry in entries}
 
     # La instalada más nueva de cada serie: sobre esa se avisa.

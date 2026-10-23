@@ -523,6 +523,19 @@ class InstalledTests(unittest.TestCase):
                       plain)
         self.assertIsNone(installed.find_installed([plain], bfa_build))
 
+    def test_mark_custom_marca_por_ruta(self):
+        # La marca es por ruta, no por versión: dos 5.2.0 pueden ser una oficial
+        # y una parcheada.
+        oficial = installed.InstalledBuild("blender-5.2.0-linux-x64",
+                                           Path("/tmp/oficial"), "5.2.0")
+        propia = installed.InstalledBuild("mi 5.2", Path("/tmp/propia"), "5.2.0")
+        installed.mark_custom([oficial, propia], ["/tmp/propia"])
+        self.assertFalse(oficial.custom)
+        self.assertTrue(propia.custom)
+        # Volver a marcarlas con otra lista las desmarca.
+        installed.mark_custom([oficial, propia], [])
+        self.assertFalse(propia.custom)
+
     def test_rename_failure(self):
         with tempfile.TemporaryDirectory() as tmp:
             folder = Path(tmp) / "blender-5.2.1-linux-x64"
@@ -675,6 +688,15 @@ class FindInstalledTests(unittest.TestCase):
         entry = self._entry()
         build = make_build("5.3.0", "alpha", "main", "f.tar.xz", build_hash="bbbbbbbbbbbb")
         self.assertIsNotNone(installed.find_installed([entry], build))
+
+    def test_una_custom_no_cuenta_como_la_oficial(self):
+        # Una 5.2.0 parcheada y la 5.2.0 oficial son programas distintos: la
+        # tienda no puede decir "ya la tienes" (ni lanzar la custom).
+        entry = installed.InstalledBuild("blender-5.2.0-linux-x64",
+                                         Path("/tmp/custom"), "5.2.0",
+                                         custom=True)
+        build = make_build("5.2.0", "stable", "v52", "f.tar.xz")
+        self.assertIsNone(installed.find_installed([entry], build))
 
     def test_marker_roundtrip(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1319,6 +1341,22 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(settings.favorites, ["main|5.3.0"])
         # Una clave vacía se ignora.
         self.assertFalse(settings.set_favorite("", True))
+
+    def test_las_builds_custom_se_marcan_por_ruta_y_se_guardan(self):
+        settings = settings_module.Settings()
+        self.assertTrue(settings.set_custom_build("/tmp/propia", True))
+        # Repetirlo no cambia nada (ni duplica la ruta en el JSON).
+        self.assertFalse(settings.set_custom_build("/tmp/propia", True))
+        self.assertTrue(settings.is_custom_build("/tmp/propia"))
+        self.assertFalse(settings.is_custom_build("/tmp/oficial"))
+        settings.save()
+        loaded = settings_module.Settings.load()
+        self.assertTrue(loaded.is_custom_build("/tmp/propia"))
+        self.assertTrue(loaded.set_custom_build("/tmp/propia", False))
+        self.assertFalse(loaded.is_custom_build("/tmp/propia"))
+        # Sin ruta no hay nada que marcar.
+        self.assertFalse(loaded.set_custom_build("", True))
+        self.assertFalse(loaded.is_custom_build(""))
 
     def test_recuerda_el_filtro_de_canal(self):
         settings = settings_module.Settings()
@@ -2003,6 +2041,17 @@ class AvailableUpdatesTests(unittest.TestCase):
         builds = [make_build("5.3.0", "stable", "v53", "c.tar.xz")]
         entries = [self._entry("5.2.0"), self._entry("5.3.0", branch="v53")]
         self.assertEqual(installed.available_updates(entries, builds), [])
+
+    def test_una_custom_no_recibe_avisos_de_actualizacion(self):
+        """Reemplazar una build parcheada por la oficial es lo contrario de
+        lo que quiere quien la marcó como custom."""
+        builds = [
+            make_build("5.2.2", "stable", "v52", "b.tar.xz"),
+            make_build("5.3.0", "stable", "v53", "c.tar.xz"),
+        ]
+        entry = self._entry("5.2.0")
+        entry.custom = True
+        self.assertEqual(installed.available_updates([entry], builds), [])
 
 
 class OpenerTests(unittest.TestCase):

@@ -487,6 +487,12 @@ class Settings:
     # pulsó "Nunca" en el aviso de actualización: no se le vuelve a ofrecer
     # actualizar esas instaladas. Se puede reactivar desde Ajustes.
     ignored_blender_series: list[str] = field(default_factory=list)
+    # Rutas normalizadas (``channels.normalize_path``) de las instalaciones que
+    # el usuario marcó como custom: builds parcheadas por un estudio (el 2.79 de
+    # NVIDIA) o por él mismo. No se actualizan ni se emparejan con la tienda.
+    # Se guarda la **ruta** y no la versión: un 5.2 oficial y uno custom
+    # comparten número y son programas distintos.
+    custom_builds: list[str] = field(default_factory=list)
     window_width: int = 0
     window_height: int = 0
     # Esquina superior izquierda donde el usuario dejó la ventana, y si hay una
@@ -606,6 +612,7 @@ class Settings:
             skipped_version=str(data.get("skipped_version") or ""),
             ignored_blender_series=_clean_string_list(
                 data.get("ignored_blender_series")),
+            custom_builds=_clean_string_list(data.get("custom_builds")),
             close_to_tray=bool(data.get("close_to_tray", True)),
             minimize_to_tray=bool(data.get("minimize_to_tray", False)),
             tray_hint_shown=bool(data.get("tray_hint_shown", False)),
@@ -820,6 +827,32 @@ class Settings:
         else:
             return False
         self.favorites = current
+        return True
+
+    def is_custom_build(self, path) -> bool:
+        """True si esa instalación está marcada como custom por el usuario."""
+        key = channels.normalize_path(path)
+        return bool(key) and key in set(self.custom_builds)
+
+    def set_custom_build(self, path, custom: bool) -> bool:
+        """Marca o desmarca una instalación como custom; True si cambió.
+
+        Igual que ``set_favorite``: se fija el estado, no se alterna, para que
+        la interfaz no dependa del orden de las señales. Se guarda la ruta
+        normalizada, que es lo único que distingue dos builds de la misma
+        versión (una oficial y una parcheada).
+        """
+        key = channels.normalize_path(path)
+        if not key:
+            return False
+        current = list(self.custom_builds)
+        if custom and key not in current:
+            current.append(key)
+        elif not custom and key in current:
+            current.remove(key)
+        else:
+            return False
+        self.custom_builds = current
         return True
 
     def save(self) -> Path:

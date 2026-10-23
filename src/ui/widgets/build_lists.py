@@ -454,6 +454,17 @@ class BuildListsMixin(GalleryFeedMixin):
         copy.triggered.connect(
             lambda: QApplication.clipboard().setText(str(entry.path)))
         menu.addSeparator()
+        # Una build custom es una que el usuario parcheó (un estudio, o él
+        # mismo): la app deja de ofrecerle actualizaciones, porque reemplazarla
+        # por la oficial borraría justo lo que la hace suya.
+        custom = bool(getattr(entry, "custom", False))
+        mark = menu.addAction(tr("Stop treating as custom") if custom
+                              else tr("Mark as custom build"))
+        mark.setToolTip(tr("BlendTrack will not offer updates for this build, "
+                           "and the store will not count it as installed."))
+        mark.triggered.connect(
+            lambda: self.set_custom_build(entry, not custom))
+        menu.addSeparator()
         remove = menu.addAction(tr("Uninstall"))
         remove.setToolTip(tr("Remove this installed version"))
         remove.triggered.connect(lambda: self.delete_installed(entry))
@@ -540,6 +551,19 @@ class BuildListsMixin(GalleryFeedMixin):
         if self.view in ("store", "installed"):
             self.refresh(force=True)
 
+    def _scan_installed(self) -> list:
+        """Escanea la biblioteca y anota qué instalaciones son custom.
+
+        La marca no la puede poner el escaneo (desde el disco, una build
+        parcheada se ve igual que una oficial): viene de lo que el usuario
+        declaró en los ajustes. Se aplica aquí, con la lista recién escaneada y
+        las rutas guardadas a mano.
+        """
+        return installed_service.mark_custom(
+            installed_service.scan_folders(self.settings.library_roots(),
+                                           self.platform),
+            self.settings.custom_builds)
+
     def refresh_installed(self, only_if_changed: bool = False) -> None:
         """Vuelve a escanear las carpetas y repinta las instaladas.
 
@@ -548,8 +572,7 @@ class BuildListsMixin(GalleryFeedMixin):
         abrir la app), que casi nunca encuentra cambios y rehacía todas las
         tarjetas, con su parpadeo, cada vez que se volvía a la ventana.
         """
-        installed = installed_service.scan_folders(self.settings.library_roots(),
-                                                   self.platform)
+        installed = self._scan_installed()
         if only_if_changed and installed == self.installed:
             return
         self.installed = installed

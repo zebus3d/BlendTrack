@@ -489,6 +489,24 @@ class DownloadFlowMixin:
         self._rebuild_installed()
         self._rebuild_store()
 
+    def set_custom_build(self, entry, custom: bool) -> None:
+        """Declara una instalación como custom (o la devuelve al redil).
+
+        No toca nada en disco: mientras esté marcada, la app no le ofrece
+        actualizaciones ni la empareja con la tienda, así que no puede
+        reemplazar por la oficial una build que el usuario parcheó. Es la única
+        forma honesta de saberlo: desde el disco, una custom se ve igual que
+        una oficial.
+        """
+        if not self.settings.set_custom_build(entry.path, custom):
+            return
+        self.settings.save()
+        self._show_message(tr("This build will not be updated") if custom
+                           else tr("This build will be updated again"))
+        # Reescanea para que la marca llegue a la tarjeta y a los avisos.
+        self.refresh_installed()
+        self._rebuild_store()
+
     def _launch_with_console(self, entry) -> None:
         """Lanza esa versión con consola sin cambiar el ajuste guardado."""
         self.launch_installed(entry, console=True)

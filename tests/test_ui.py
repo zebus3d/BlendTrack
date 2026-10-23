@@ -1482,6 +1482,42 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         self.assertEqual(
             window.settings.launch_console_overrides[one.favorite_key], True)
 
+    def test_marcar_una_build_como_custom_la_aparta_de_la_tienda(self):
+        """La marca es del usuario y no toca el disco: una build parcheada se
+        ve igual que una oficial, así que la declara él.
+
+        Efecto: no se le ofrecen actualizaciones (reemplazarla por la oficial
+        borraría lo que la hace suya) y la tienda no la cuenta como instalada.
+        """
+        import i18n
+
+        from PySide6.QtWidgets import QLabel
+
+        from services import installed as installed_service
+        from ui.widgets.cards import InstalledCard
+        from ui.widgets.main_window import MainWindow
+
+        self.addCleanup(i18n.set_language, i18n.get_language())
+        window = MainWindow()
+        i18n.set_language("en")
+        entry = _fake_installed("5.2.1")
+        official = _build("5.2.1", "v52", "stable")
+        newer = _build("5.2.2", "v52", "stable")
+        self.assertIsNotNone(installed_service.find_installed([entry], official))
+
+        window.set_custom_build(entry, True)
+        self.assertTrue(window.settings.is_custom_build(entry.path))
+        entry.custom = True
+        self.assertIsNone(installed_service.find_installed([entry], official))
+        self.assertEqual(installed_service.available_updates([entry], [newer]), [])
+
+        labels = [action.text()
+                  for action in window._installed_menu(entry).actions()]
+        self.assertIn("Stop treating as custom", labels)
+        card = InstalledCard(entry, zebra=False)
+        texts = [label.text() for label in card.findChildren(QLabel)]
+        self.assertTrue(any("Custom" in text for text in texts), texts)
+
     def test_reescanea_al_recuperar_el_foco(self):
         from PySide6.QtCore import QEvent
 

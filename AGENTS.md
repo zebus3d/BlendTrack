@@ -463,6 +463,22 @@ X11, Windows y macOS no cambia nada. **No volver a forzar XWayland.**
   para no llenar la lista con copias de scripts. Sin esto, esas versiones no
   aparecían y no había forma de lanzarlas. Ojo: deducir de dentro da la **serie**
   (`4.5`), no el parche, que no está en disco.
+- **Las builds custom las declara el usuario; el escaneo no las adivina.**
+  Desde el disco, una build parcheada por un estudio se ve igual que una
+  oficial (misma estructura, mismo ejecutable), así que deducirlo marcaría como
+  custom instalaciones ajenas. Se guardan en `settings.custom_builds` **por
+  ruta** normalizada (un 5.2 oficial y uno parcheado comparten número, y
+  `favorite_key` es solo rama|versión) y se marcan desde el menú de la tarjeta.
+  No es un tipo de carpeta de `channels.TYPE_*`: un tipo decide **dónde se
+  descarga** y tiene un único dueño; una custom no se descarga nunca. Efecto:
+  `installed.available_updates` no les ofrece actualizaciones (reemplazarlas
+  por la oficial borraría justo lo que las hace suyas) y `find_installed` no
+  las empareja con la tienda (la 5.2.0 oficial no es "ya la tienes"), pero
+  **siguen visibles en su canal** con la insignia "Custom": esconderlas haría
+  pensar que la app las ha perdido. `installed.mark_custom` (sin Qt) estampa la
+  marca en cada escaneo, y tiene que ir **antes** de comparar con el escaneo
+  anterior (`only_if_changed`): `InstalledBuild` es un dataclass y la marca
+  cuenta en la igualdad, así que estampar después repintaría en cada foco.
 - **macOS: el `.dmg` se monta y se instala** (`src/services/macos_dmg.py`). La
   API solo publica `.dmg`, que no es un comprimido, así que `hdiutil attach
   -mountpoint` lo monta, se copian los `.app` a la carpeta destino con `ditto`

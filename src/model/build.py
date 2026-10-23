@@ -194,6 +194,12 @@ class InstalledBuild:
     # (la fecha de modificación de la carpeta instalada). No siempre está: 0 es
     # "no lo sabemos" y entonces la tarjeta no la enseña.
     downloaded: int = 0
+    # Marcada por el usuario como build custom (parcheada por un estudio, o por
+    # él mismo). **No la deduce el escaneo**: desde el disco, una custom se ve
+    # igual que una oficial, así que la pone la interfaz con lo que el usuario
+    # declaró en los ajustes. Sirve para no ofrecerle actualizaciones ni
+    # emparejarla con la tienda, que borrarían justo lo que la hace distinta.
+    custom: bool = False
 
     @property
     def fork_name(self) -> str:

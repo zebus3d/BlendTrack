@@ -30,7 +30,6 @@ import i18n
 from i18n import tr
 from paths import ASSETS_DIR
 from services import detector, updater
-from services import installed as installed_service
 from services import opener
 from services import settings as settings_service
 from services.downloader import Downloader
@@ -182,8 +181,7 @@ class MainWindow(BuildListsMixin, SettingsViewMixin, FolderLibraryMixin,
         self._builds_forks = []
         # Número de la última petición del listado (ver ``refresh``).
         self._refresh_request = 0
-        self.installed = installed_service.scan_folders(self.settings.library_roots(),
-                                                        self.platform)
+        self.installed = self._scan_installed()
         self.view = "installed" if self.installed else "store"
         # Actualizaciones de Blender detectadas para lo que ya tienes instalado:
         # un parche de la misma serie (botón en la tarjeta) o una serie nueva
