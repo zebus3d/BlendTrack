@@ -110,8 +110,11 @@ python src/main.py
 The app opens on the store; if you already have versions in the destination it
 opens on **Local** instead. The default destination is a `Blenders` folder
 inside your Downloads folder (`~/Downloads/Blenders`, `~/Descargas/Blenders` on
-Spanish Linux, or wherever the system says Downloads lives). Change it in
-**Settings → Folders**.
+Spanish Linux, or wherever the system says Downloads lives). On Windows it is
+`%LOCALAPPDATA%\Programs\Blenders` instead: installs stay there for good, and
+Downloads is for files you download and then tidy up. Change it in
+**Settings → Folders**. A folder created by **Blender Launcher** works as it
+is: its `<library>/versions/` subfolder is scanned too.
 
 Useful flags: `--debug` (Python stack goes to the log if it crashes), `--smoke`
 (list builds in the console, no window) and `--screenshot out.png`. The log is
