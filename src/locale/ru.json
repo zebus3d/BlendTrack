@@ -231,6 +231,8 @@
   "That version has no executable.": "У этой версии нет исполняемого файла.",
   "Opening {name} in {program} {version}": "Открытие {name} в {program} {version}",
   "No local versions found": "Локальные версии не найдены",
+  "Nothing in this channel": "В этом канале ничего нет",
+  "You have {count} versions installed in other channels.": "В других каналах установлено версий: {count}.",
   "Try clearing the search or another channel filter.": "Попробуйте очистить поиск или сменить фильтр канала.",
   "Download one from the cloud to see it here.": "Скачайте что-нибудь из облака, и это появится здесь.",
   "Download failed": "Ошибка загрузки",

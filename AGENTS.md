@@ -235,7 +235,7 @@ Reglas que no hay que romper:
 - **Anidar carpetas se permite.** Tener `Blender 3D` de raíz y
   `Blender 3D/Experimentales` dentro es un reparto natural, y no duplica nada
   porque `_scan_root` solo mira los hijos **directos** de cada raíz (la única
-  excepción es una carpeta llamada `versions`, ver "Instalar versiones de
+  excepción son las carpetas que agrupan versiones, ver "Instalar versiones de
   Blender"). Lo único que se rechaza al añadir es la misma carpeta dos veces.
 - **Se puede quitar la última carpeta.** Negarlo encerraba al usuario: no podía
   cambiarla ni quitarla. Una lista vacía a propósito (la clave `folders` existe
@@ -464,18 +464,31 @@ X11, Windows y macOS no cambia nada. **No volver a forzar XWayland.**
   para no llenar la lista con copias de scripts. Sin esto, esas versiones no
   aparecían y no había forma de lanzarlas. Ojo: deducir de dentro da la **serie**
   (`4.5`), no el parche, que no está en disco.
-- **La biblioteca de Blender Launcher se reconoce tal cual.** Esa app guarda
-  las versiones en `<biblioteca>/versions/<carpeta>` (con `downloads/` y su
-  base de datos al lado), y quien viene de ella apunta **la biblioteca**, no
-  la carpeta de dentro: el listado salía vacío y parecía que BlendTrack no veía
-  nada. `_scan_root` baja un nivel dentro de una carpeta llamada `versions`
-  (`VERSIONS_DIRS`), y solo ahí: bajar por cualquier carpeta convertiría el
-  escaneo en un recorrido del árbol entero y apuntar `C:/Users` costaría
-  minutos. La instalación conserva como `root` la carpeta **configurada** (no
-  la de dentro), porque de ella cuelgan el candado de solo lectura
-  (`Settings.folder_for`) y el borrado; y `scan_folders` deduplica por ruta de
-  la instalación, para que apuntar la biblioteca *y* su `versions` no saque
-  cada versión dos veces.
+- **La biblioteca de Blender Launcher se reconoce tal cual.** Esa app no deja
+  las versiones sueltas: las agrupa en una carpeta por tipo (`stable/`,
+  `daily/`, `experimental/`, `custom/`, `bforartists/`, `upbge-stable/`,
+  `upbge-weekly/`; su versión anterior usaba `versions/`), con `.temp`, su
+  plantilla y su base de datos al lado. Quien viene de ella apunta **la
+  biblioteca** (`F:/APPS Creativas/BLENDER`), no la carpeta de dentro, así que
+  el listado salía vacío y parecía que BlendTrack no veía nada. `_scan_root`
+  baja **un** nivel dentro de cualquier hijo que no sea ya una versión, y solo
+  uno: bajar sin tope convertiría el escaneo (que corre al arrancar y en cada
+  refresco) en un recorrido del árbol entero. Dos cosas que no hay que perder:
+  - **La carpeta de encima da el fork.** Dentro de `bforartists/` las versiones
+    se llaman `3.6.3` a secas y su ejecutable es `bforartists`, no `blender`:
+    sin la pista de arriba (`CONTAINER_FORKS`) saldrían como un Blender sin
+    nada que lanzar.
+  - **`root` sigue siendo la carpeta configurada**, no la de dentro: de ella
+    cuelgan el candado de solo lectura (`Settings.folder_for`) y el borrado. Y
+    `scan_folders` deduplica por ruta de la instalación, para que apuntar la
+    biblioteca *y* su `versions` no saque cada versión dos veces.
+  Si el escaneo no encuentra nada en una carpeta, deja en el log qué contiene
+  (`scan [windows]: <ruta> -> 0 versiones`, con un nivel de listado): es lo que
+  permite diagnosticar un "no me aparecen las versiones" con el log del
+  usuario, sin adivinar. Y cuando hay versiones pero ninguna del canal que se
+  está mirando, la lista vacía lo dice (`Nothing in this channel`): una
+  biblioteca cuyo `stable/` está lleno de series LTS (2.83, 3.6, 4.5...) sale
+  en la pestaña **LTS**, y sin ese aviso parece que la app no las ve.
 - **En Windows la carpeta propuesta no es "Descargas".** `default_destination`
   devuelve `%LOCALAPPDATA%\Programs\Blenders`: una versión de Blender ocupa
   cientos de MB y se queda para siempre, así que en Descargas acaba enterrando

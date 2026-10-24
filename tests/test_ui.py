@@ -2031,6 +2031,28 @@ class LayoutTests(SettingsIsolated, unittest.TestCase):
         window._reflow()
         self.assertIsNot(window.installed_grid.itemAt(0).widget(), first)
 
+    def test_avisa_cuando_las_versiones_estan_en_otro_canal(self):
+        """Una biblioteca llena de series LTS no puede dejar la pestaña Estable
+        vacía sin explicarlo: parece que la app no ve las versiones."""
+        from PySide6.QtWidgets import QLabel
+
+        from i18n import tr
+        from model.build import InstalledBuild
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        window.installed = [InstalledBuild(
+            name="blender-4.5.15", path=Path("/tmp/blender-4.5.15"),
+            version="4.5.15", branch="v45")]
+        window.channel = "stable"
+        window._rebuild_installed()
+        card = window.installed_grid.itemAt(0).widget()
+        texts = " ".join(lbl.text() for lbl in card.findChildren(QLabel))
+        self.assertIn(tr("Nothing in this channel"), texts)
+        # Y dice cuántas hay fuera, para que el usuario sepa que están ahí.
+        self.assertIn(tr("You have {count} versions installed in other "
+                         "channels.", count=1), texts)
+
     def test_los_desplegables_llevan_flecha(self):
         """Los combos usan ``ChevronCombo``, que pinta la flecha (Qt no la dibuja
         con QSS). No se comprueba el píxel: depende de la fuente del sistema."""

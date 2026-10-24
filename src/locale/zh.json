@@ -231,6 +231,8 @@
   "That version has no executable.": "该版本没有可执行文件。",
   "Opening {name} in {program} {version}": "正在 {program} {version} 中打开 {name}",
   "No local versions found": "未找到本地版本",
+  "Nothing in this channel": "此频道中没有内容",
+  "You have {count} versions installed in other channels.": "其他频道中已安装 {count} 个版本。",
   "Try clearing the search or another channel filter.": "试试清除搜索或更换渠道筛选。",
   "Download one from the cloud to see it here.": "从云端下载一个即可在此看到。",
   "Download failed": "下载失败",

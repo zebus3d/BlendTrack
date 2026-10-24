@@ -382,6 +382,15 @@ class BuildListsMixin(GalleryFeedMixin):
                 text = tr("No {name} versions installed",
                           name=self._channel_label(self.channel))
                 hint = tr("Download one from the cloud to see it here.")
+            elif self.installed:
+                # La carpeta está bien y hay versiones, pero ninguna de este
+                # canal. Sin decirlo, la pantalla vacía parece un fallo de la
+                # app: pasa, por ejemplo, con una biblioteca de Blender
+                # Launcher cuyo `stable/` está lleno de series LTS (2.83, 3.6,
+                # 4.5...), que aquí salen en la pestaña LTS.
+                text = tr("Nothing in this channel")
+                hint = tr("You have {count} versions installed in other "
+                          "channels.", count=len(self.installed))
             else:
                 text = tr("No local versions found")
                 hint = tr("Download one from the cloud to see it here.")

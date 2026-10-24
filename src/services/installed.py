@@ -1,9 +1,11 @@
 """Escaneo de las versiones de Blender ya extraídas en la biblioteca.
 
 La biblioteca son varias carpetas (``settings.Folder``) y en cada una se mira
-solo el primer nivel. Las builds oficiales se descomprimen en carpetas con un
-nombre del estilo ``blender-4.5.13-linux-x64``. De ahí sacamos la versión y
-localizamos el ejecutable, que cambia según la plataforma (y según el fork).
+el primer nivel, más un escalón dentro de las carpetas que agrupan versiones
+(la biblioteca de Blender Launcher, que las reparte por tipo). Las builds
+oficiales se descomprimen en carpetas con un nombre del estilo
+``blender-4.5.13-linux-x64``. De ahí sacamos la versión y localizamos el
+ejecutable, que cambia según la plataforma (y según el fork).
 
 No todas las carpetas llevan ese nombre: Blender Launcher guarda las suyas como
 ``2.79`` y una build customizada por un estudio puede llamarse cualquier cosa.
@@ -25,6 +27,7 @@ from pathlib import Path
 from model.build import (FORK_BFORARTISTS, FORK_BLENDER, FORK_UPBGE,
                          InstalledBuild, minor_of, version_tuple)
 from services import channels
+from services.downloader import log
 
 # Actualización disponible para una versión instalada.
 #   kind == "patch":  misma serie con parche más nuevo (5.2.0 -> 5.2.2).
@@ -39,12 +42,16 @@ VERSION_RE = re.compile(r"blender[-_ ]?(\d+\.\d+(?:\.\d+)?)", re.IGNORECASE)
 # (que no lleva "blender" en el nombre) se ignoraba por completo.
 BFA_VERSION_RE = re.compile(r"bforartists[-_ ]?(\d+\.\d+(?:\.\d+)?)", re.IGNORECASE)
 UPBGE_VERSION_RE = re.compile(r"upbge[-_ ]?(\d+\.\d+(?:\.\d+)?)", re.IGNORECASE)
-# Carpeta cuyo nombre es **solo** la versión: ``2.79``, ``2.82a``, ``4.2.1``.
-# Así es como Blender Launcher guarda lo que descarga, y por eso sus carpetas
-# no se reconocían: no llevan la palabra "blender" por ningún lado. La letra
-# final (``2.82a``, ``2.79b``) se cae de la versión, que es lo que usan la
-# carpeta de configuración de Blender y las comparaciones.
-BARE_VERSION_RE = re.compile(r"^(\d+\.\d+(?:\.\d+)?)[a-z]?$", re.IGNORECASE)
+# Carpeta cuyo nombre es **solo** la versión: ``2.79``, ``2.82a``, ``4.2.1``,
+# ``5.2.0-alpha``. Así es como Blender Launcher guarda lo que descarga, y por
+# eso sus carpetas no se reconocían: no llevan la palabra "blender" por ningún
+# lado. La letra final (``2.82a``, ``2.79b``) y el sufijo de las alfas se caen
+# de la versión, que es lo que usan la carpeta de configuración de Blender y
+# las comparaciones; el sufijo sigue en el nombre, que es de donde
+# ``channels.type_from_marker`` sabe que es una diaria.
+BARE_VERSION_RE = re.compile(
+    r"^(\d+\.\d+(?:\.\d+)?)(?:[a-z]|[-_ ]?(?:alpha|beta|rc)\d*)?$",
+    re.IGNORECASE)
 # Dentro de la carpeta extraída, Blender trae un directorio con su serie
 # (``4.5/datafiles``, ``2.79/scripts``). Es la forma barata de saber qué es
 # cuando el nombre de la carpeta no dice la versión: una build renombrada o una
@@ -54,15 +61,20 @@ BARE_VERSION_RE = re.compile(r"^(\d+\.\d+(?:\.\d+)?)[a-z]?$", re.IGNORECASE)
 SERIES_DIR_RE = re.compile(r"^\d+\.\d+$")
 SERIES_DATA_DIRS = ("datafiles", "scripts", "python")
 
-# Dentro de su carpeta, Blender Launcher guarda las versiones en
-# ``<biblioteca>/versions/<carpeta>`` (con ``downloads/`` y su base de datos al
-# lado). Quien viene de esa app apunta la biblioteca, no la carpeta de dentro,
-# y sin esto su listado sale **vacío**: parece que la app no ve nada cuando lo
-# que pasa es que mira un escalón más arriba. Se baja un nivel solo dentro de
-# una carpeta con este nombre; bajar por cualquier carpeta convertiría el
-# escaneo en un recorrido del árbol entero (y apuntar ``C:/Users`` pasaría a
-# costar minutos).
-VERSIONS_DIRS = ("versions",)
+# Blender Launcher reparte su biblioteca en una carpeta por tipo de build
+# (``stable``, ``daily``, ``experimental``, ``custom``, ``bforartists``,
+# ``upbge-stable``, ``upbge-weekly``) y deja las versiones dentro; su versión
+# anterior usaba ``versions``. Por eso un hijo de la biblioteca que no es una
+# versión puede ser una carpeta que **las agrupa**, y hay que bajar un nivel.
+# Como los nombres de dentro ya no dicen de qué fork son (un ``3.6.3`` dentro
+# de ``bforartists/``), la carpeta de arriba es la única pista que queda: de
+# ahí este mapa.
+CONTAINER_FORKS = {
+    "bforartists": FORK_BFORARTISTS,
+    "upbge": FORK_UPBGE,
+    "upbge-stable": FORK_UPBGE,
+    "upbge-weekly": FORK_UPBGE,
+}
 
 # Marcador que escribimos al instalar para recordar qué compilación es.
 MARKER_NAME = ".blendtrack.json"
@@ -331,12 +343,18 @@ def _fork_and_match(name: str, marker: dict):
     return fork, version, guessed
 
 
-def _build_from_dir(entry: Path, platform: str, root: Path):
+def _build_from_dir(entry: Path, platform: str, root: Path,
+                    fork_hint: str = FORK_BLENDER):
     """Una carpeta concreta como instalación, o ``None`` si no lo es.
 
     ``root`` es la carpeta de la biblioteca tal y como la configuró el usuario,
     no la carpeta que se está recorriendo: de ella cuelgan la comprobación de
     si el sitio es de solo lectura y el borrado (``Settings.folder_for``).
+
+    ``fork_hint`` es lo que dice la carpeta de encima cuando la de dentro ya no
+    lo dice: en una biblioteca de Blender Launcher, ``bforartists/3.6.3`` es una
+    Bforartists aunque el nombre de la carpeta sea solo el número (y su
+    ejecutable se llama ``bforartists``, no ``blender``).
     """
     if entry.name.startswith(".") or not _is_dir(entry):
         # Las carpetas ocultas nunca son una instalación: ahí van los
@@ -346,6 +364,8 @@ def _build_from_dir(entry: Path, platform: str, root: Path):
         return None
     marker = read_marker(entry)
     fork, version, guessed = _fork_and_match(entry.name, marker)
+    if not fork:
+        fork = fork_hint
     if not version and not marker:
         # Ni el nombre ni el marcador dicen qué es: se mira dentro. Es lo
         # que salva una build renombrada a mano y las customizadas por un
@@ -403,24 +423,73 @@ def _child_dirs(folder: Path):
     return [entry for entry in entries if not entry.name.startswith(".")]
 
 
+# Último diagnóstico escrito. Un refresco al recuperar el foco repite el mismo
+# escaneo cada pocos segundos, y llenar el log con la misma línea no ayuda a
+# nadie: se escribe solo cuando cambia.
+_last_scan_log = ""
+
+
+def _log_scan(text: str) -> None:
+    global _last_scan_log
+    if text == _last_scan_log:
+        return
+    _last_scan_log = text
+    log(text)
+
+
+def _listing(folder: Path, limit: int = 15) -> str:
+    """Nombres de lo que hay en ``folder``, para el log (``versions/``, etc.)."""
+    names = [entry.name + ("/" if _is_dir(entry) else "")
+             for entry in _child_dirs(folder)]
+    if len(names) > limit:
+        names = names[:limit] + [f"... y {len(names) - limit} más"]
+    return ", ".join(names) or "(vacía)"
+
+
+def _log_empty_root(root: Path, platform: str) -> None:
+    """Deja en el log por qué una carpeta de la biblioteca no dio nada.
+
+    Sin esto, "no me aparecen las versiones" es un callejón sin salida: el log
+    no decía ni qué carpetas se habían mirado. Con estas líneas se ve de un
+    vistazo si la ruta apunta a otro sitio, si está vacía, si dentro hay un
+    nivel de más (una biblioteca de Blender Launcher, por ejemplo) o si el
+    sistema está mal elegido en el filtro (se buscan ejecutables de
+    ``platform``, no de la máquina).
+    """
+    if not _is_dir(root):
+        _log_scan(f"scan [{platform}]: {root} -> no existe o no es una carpeta")
+        return
+    lines = [f"scan [{platform}]: {root} -> 0 versiones",
+             f"scan [{platform}]:   contiene: {_listing(root)}"]
+    for entry in _child_dirs(root):
+        if _is_dir(entry):
+            lines.append(f"scan [{platform}]:   {entry.name}/ contiene: "
+                         f"{_listing(entry)}")
+    _log_scan("\n".join(lines[:12]))
+
+
 def _scan_root(root: Path, platform: str):
     """Escanea una sola carpeta y devuelve sus instalaciones sin ordenar."""
     results = []
     if not _is_dir(root):
         return results
     for entry in _child_dirs(root):
-        if entry.name.casefold() in VERSIONS_DIRS and _is_dir(entry):
-            # Biblioteca de Blender Launcher: las versiones están un escalón
-            # más abajo. Se recorren sus hijas como si colgaran de ``root``,
-            # para que no se pierdan (es el caso de quien migra desde ella).
-            for inner in _child_dirs(entry):
-                build = _build_from_dir(inner, platform, root)
-                if build is not None:
-                    results.append(build)
-            continue
         build = _build_from_dir(entry, platform, root)
         if build is not None:
             results.append(build)
+            continue
+        # No es una versión, pero puede ser una carpeta que las **agrupa**: así
+        # reparte Blender Launcher su biblioteca (``stable/``, ``daily/``,
+        # ``bforartists/``...; su versión anterior usaba ``versions/``). Se baja
+        # **un** nivel y no más: bajar sin tope convertiría el escaneo en un
+        # recorrido del árbol entero (y apuntar ``C:/Users`` costaría minutos).
+        hint = CONTAINER_FORKS.get(entry.name.casefold(), FORK_BLENDER)
+        for inner in _child_dirs(entry):
+            nested = _build_from_dir(inner, platform, root, fork_hint=hint)
+            if nested is not None:
+                results.append(nested)
+    if not results:
+        _log_empty_root(root, platform)
     return results
 
 
@@ -461,6 +530,9 @@ def scan_folders(folders, platform: str) -> list[InstalledBuild]:
             seen_builds.add(build_key)
             results.append(build)
     results.sort(key=lambda build: version_tuple(build.version), reverse=True)
+    if results:
+        _log_scan(f"scan [{platform}]: {len(results)} versión(es) en "
+                  f"{len(seen)} carpeta(s)")
     return results
 
 

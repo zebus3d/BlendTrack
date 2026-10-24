@@ -231,6 +231,8 @@
   "That version has no executable.": "Esa versión no tiene ejecutable.",
   "Opening {name} in {program} {version}": "Abriendo {name} en {program} {version}",
   "No local versions found": "No se encontraron versiones locales",
+  "Nothing in this channel": "Nada en este canal",
+  "You have {count} versions installed in other channels.": "Tienes {count} versiones instaladas en otros canales.",
   "Try clearing the search or another channel filter.": "Prueba a borrar la búsqueda o a cambiar el filtro de canal.",
   "Download one from the cloud to see it here.": "Descarga alguna desde la nube y aparecerá aquí.",
   "Download failed": "Fallo en la descarga",

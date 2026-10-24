@@ -392,27 +392,83 @@ class InstalledTests(unittest.TestCase):
             self.assertEqual([entry.version for entry in results], ["5.2.1"])
 
     def test_scan_encuentra_una_biblioteca_de_blender_launcher(self):
-        """Blender Launcher guarda sus versiones en ``<biblioteca>/versions``.
+        """Blender Launcher reparte su biblioteca en carpetas por tipo.
 
-        Quien viene de esa app apunta la biblioteca, no la carpeta de dentro,
-        así que el listado salía vacío aunque las versiones estuvieran ahí.
+        Quien viene de esa app apunta la biblioteca (``F:/APPS/BLENDER``), no
+        la carpeta de dentro, así que el listado salía vacío aunque las
+        versiones estuvieran ahí. La V1 usaba ``versions/``; la V2, una carpeta
+        por canal (``stable/``, ``daily/``, ``bforartists/``...).
         """
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            versions = root / "versions"
-            (versions / "4.5.13").mkdir(parents=True)
-            (versions / "4.5.13" / "blender").write_text("#!/bin/sh\n")
-            (versions / "2.79b").mkdir()
-            (versions / "2.79b" / "blender").write_text("#!/bin/sh\n")
-            # Lo que Blender Launcher deja al lado de ``versions``.
-            (root / "downloads").mkdir()
+            for canal, versiones in (
+                    ("versions", ("4.5.13", "2.79b")),
+                    ("stable", ("3.3.21",)),
+                    ("daily", ("5.2.0-alpha",))):
+                for version in versiones:
+                    folder = root / canal / version
+                    folder.mkdir(parents=True)
+                    (folder / "blender").write_text("#!/bin/sh\n")
+            # Lo que Blender Launcher deja al lado de las carpetas.
+            (root / ".temp").mkdir()
+            (root / "template").mkdir()
             (root / "blender_launcher.json").write_text("{}")
             results = installed.scan_folders([root], "linux")
-            self.assertEqual([entry.version for entry in results],
-                             ["4.5.13", "2.79"])
+            self.assertEqual(sorted(entry.version for entry in results),
+                             ["2.79", "3.3.21", "4.5.13", "5.2.0"])
             # La raíz que se guarda es la que configuró el usuario: de ella
             # cuelgan el candado de solo lectura y el borrado.
             self.assertEqual({entry.root for entry in results}, {root})
+
+    def test_scan_reconoce_los_forks_por_la_carpeta_que_los_agrupa(self):
+        """Dentro de ``bforartists/3.6.3`` el nombre ya no dice de quién es.
+
+        Blender Launcher guarda ahí las versiones con el nombre a secas, y su
+        ejecutable se llama ``bforartists``: sin mirar la carpeta de arriba
+        saldría como un Blender sin nada que lanzar.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for canal, exe in (("bforartists", "bforartists"),
+                               ("upbge-stable", "blender")):
+                folder = root / canal / "3.6.3"
+                folder.mkdir(parents=True)
+                (folder / exe).write_text("#!/bin/sh\n")
+            results = {entry.fork: entry for entry in
+                       installed.scan_folders([root], "linux")}
+            self.assertEqual(set(results), {"bforartists", "upbge"})
+            self.assertEqual(results["bforartists"].version, "3.6.3")
+            self.assertEqual(results["bforartists"].executable.name,
+                             "bforartists")
+            self.assertEqual(results["upbge"].executable.name, "blender")
+
+    def test_no_se_baja_mas_de_un_nivel(self):
+        """Dos niveles dentro de la biblioteca ya no es una biblioteca.
+
+        El tope es lo que evita que apuntar una carpeta grande convierta el
+        escaneo (que corre al arrancar y en cada refresco) en un recorrido del
+        árbol entero.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fondo = root / "proyectos" / "cosas" / "blender-4.5.13-linux-x64"
+            fondo.mkdir(parents=True)
+            (fondo / "blender").write_text("#!/bin/sh\n")
+            self.assertEqual(installed.scan_folders([root], "linux"), [])
+
+    def test_el_log_dice_que_hay_en_una_carpeta_vacia(self):
+        """Un listado vacío tiene que poder diagnosticarse con el log."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "stable" / "no-es-blender").mkdir(parents=True)
+            escrito = []
+            with mock.patch.object(installed, "log", escrito.append):
+                installed.scan_folders([root], "windows")
+            texto = "\n".join(escrito)
+            self.assertIn(str(root), texto)
+            self.assertIn("0 versiones", texto)
+            self.assertIn("stable/", texto)
+            self.assertIn("[windows]", texto)
 
     def test_la_biblioteca_y_su_carpeta_versions_no_duplican(self):
         """Si están las dos rutas configuradas, la versión sale una sola vez."""

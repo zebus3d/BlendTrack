@@ -231,6 +231,8 @@
   "That version has no executable.": "そのバージョンには実行ファイルがありません。",
   "Opening {name} in {program} {version}": "{name} を {program} {version} で開いています",
   "No local versions found": "ローカルバージョンが見つかりません",
+  "Nothing in this channel": "このチャンネルには何もありません",
+  "You have {count} versions installed in other channels.": "他のチャンネルに {count} 個のバージョンがインストールされています。",
   "Try clearing the search or another channel filter.": "検索をクリアするか、別のチャンネルフィルターを試してください。",
   "Download one from the cloud to see it here.": "クラウドからダウンロードするとここに表示されます。",
   "Download failed": "ダウンロード失敗",
