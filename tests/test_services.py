@@ -1986,6 +1986,79 @@ class ReleaseNotesUrlTests(unittest.TestCase):
                 "https://developer.blender.org/docs/release_notes/")
 
 
+class ApplyUpdateTests(unittest.TestCase):
+    """El binario nuevo tiene que poder relanzar una instalación antigua.
+
+    Quien tenga el BlenderManager de antes del renombrado (<= v1.62) se
+    actualiza con un asset de compatibilidad que lleva el ejecutable con el
+    nombre viejo. Si el ayudante buscara solo ``BlendTrack.exe``, copiaría la
+    versión nueva y se quedaría sin nada que abrir: la app se cerraría y no
+    volvería a arrancar.
+    """
+
+    def _aplicar(self, staging, target):
+        """Ejecuta ``apply_update`` sobre carpetas de mentira; devuelve lo lanzado."""
+        from services import updater
+
+        lanzados = []
+        with mock.patch.object(updater, "_wait_for_exit"), \
+                mock.patch.object(updater.sys, "executable",
+                                  str(Path(staging) / updater.EXE_NAME)), \
+                mock.patch.object(updater.subprocess, "Popen",
+                                  side_effect=lambda args, **kwargs:
+                                  lanzados.append(Path(args[0]).name)):
+            updater.apply_update(target, 0)
+        return lanzados
+
+    def test_relanza_el_binario_con_el_nombre_antiguo(self):
+        from services import updater
+
+        with tempfile.TemporaryDirectory() as tmp:
+            staging = Path(tmp) / "staging"
+            staging.mkdir()
+            target = Path(tmp) / "app"
+            target.mkdir()
+            # El asset de compatibilidad trae el .exe renombrado.
+            (staging / updater.LEGACY_EXE_NAME).write_bytes(b"nuevo")
+            (target / updater.LEGACY_EXE_NAME).write_bytes(b"viejo")
+
+            self.assertEqual(self._aplicar(staging, target),
+                             [updater.LEGACY_EXE_NAME])
+            self.assertEqual(
+                (target / updater.LEGACY_EXE_NAME).read_bytes(), b"nuevo")
+
+    def test_la_instalacion_normal_relanza_el_nombre_nuevo(self):
+        from services import updater
+
+        with tempfile.TemporaryDirectory() as tmp:
+            staging = Path(tmp) / "staging"
+            staging.mkdir()
+            target = Path(tmp) / "app"
+            target.mkdir()
+            (staging / updater.EXE_NAME).write_bytes(b"nuevo")
+            (target / updater.EXE_NAME).write_bytes(b"viejo")
+
+            self.assertEqual(self._aplicar(staging, target),
+                             [updater.EXE_NAME])
+
+    def test_el_binario_viejo_no_se_queda_al_lado_del_nuevo(self):
+        """Dos ejecutables en la carpeta: el usuario abriría el de siempre."""
+        from services import updater
+
+        with tempfile.TemporaryDirectory() as tmp:
+            staging = Path(tmp) / "staging"
+            staging.mkdir()
+            target = Path(tmp) / "app"
+            target.mkdir()
+            (staging / updater.EXE_NAME).write_bytes(b"nuevo")
+            (target / updater.EXE_NAME).write_bytes(b"viejo")
+            (target / updater.LEGACY_EXE_NAME).write_bytes(b"aun mas viejo")
+
+            self.assertEqual(self._aplicar(staging, target),
+                             [updater.EXE_NAME])
+            self.assertFalse((target / updater.LEGACY_EXE_NAME).exists())
+
+
 class AvailableUpdatesTests(unittest.TestCase):
     """Avisar de Blender más nuevos que los que ya tienes instalados."""
 
@@ -2375,3 +2448,76 @@ class DownloaderRetryTests(unittest.TestCase):
                                        {"Retry-After": "pronto"}, None)
         self.assertEqual(self.downloader._retry_after(error),
                          float(self.downloader.RETRY_DELAY))
+
+    def test_una_conexion_que_gotea_se_corta(self):
+        """Unos bytes cada varios segundos no pueden colgar la barra horas.
+
+        El timeout de socket solo cubre el hueco **total** entre lecturas, así
+        que una conexión viva pero muerta de hambre lo esquiva: la barra avanza
+        centésimas y no termina nunca. Se corta mirando lo que llega por
+        minuto.
+        """
+        reloj = _RelojFalso()
+        errores, hechos = [], []
+        d = self.downloader.Downloader()
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.object(d, "_connect",
+                                  return_value=_RespuestaQueGotea(reloj)), \
+                mock.patch.object(self.downloader, "time", reloj):
+            d._run("https://x/a.zip", tmp, "a.zip", None,
+                   None, hechos.append, errores.append)
+            self.assertEqual(errores, [self.downloader.STALL])
+            self.assertEqual(hechos, [])
+            # El .part a medias tampoco se queda.
+            self.assertEqual(list(Path(tmp).iterdir()), [])
+
+    def test_una_descarga_lenta_pero_viva_sigue(self):
+        """El vigilante no corta una descarga lenta de verdad (~1 MiB/min)."""
+        reloj = _RelojFalso()
+        errores = []
+        d = self.downloader.Downloader()
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.object(d, "_connect",
+                                  return_value=_RespuestaQueGotea(
+                                      reloj, trozo=b"x" * (256 * 1024),
+                                      lecturas=40)), \
+                mock.patch.object(self.downloader, "time", reloj):
+            d._run("https://x/a.zip", tmp, "a.zip", None,
+                   None, lambda _p: None, errores.append)
+            self.assertEqual(errores, [])
+            self.assertEqual((Path(tmp) / "a.zip").stat().st_size,
+                             256 * 1024 * 40)
+
+
+class _RelojFalso:
+    """Reloj de mentira: cada consulta avanza el tiempo."""
+
+    def __init__(self, paso: float = 30.0):
+        self.ahora = 0.0
+        self.paso = paso
+
+    def monotonic(self) -> float:
+        valor = self.ahora
+        self.ahora += self.paso
+        return valor
+
+
+class _RespuestaQueGotea:
+    """Respuesta HTTP falsa que suelta ``trozo`` bytes por lectura."""
+
+    def __init__(self, reloj, trozo: bytes = b"x" * 16, lecturas: int = 10 ** 6):
+        self.headers = {"Content-Length": str(10 ** 9)}
+        self.trozo = trozo
+        self.lecturas = lecturas
+
+    def read(self, size):
+        if self.lecturas <= 0:
+            return b""
+        self.lecturas -= 1
+        return self.trozo
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False

@@ -19,7 +19,7 @@ from i18n import tr
 from services import updater
 from services.downloader import log as download_log
 from ui.widgets.dialogs import AppDialog, update_available
-from ui.widgets.shell import WorkerBridge
+from ui.widgets.shell import WorkerBridge, download_reason
 
 
 class UpdateFlowMixin:
@@ -294,7 +294,7 @@ class UpdateFlowMixin:
             self._set_status(tr("Cancelled"), 5)
             return
         download_log(f"update download failed: {message}")
-        reason = tr("Checksum error") if message == "checksum" else message
+        reason = download_reason(message)
         self._set_status(tr("Download failed"), 8)
         dialog = AppDialog(
             self, tr("Download failed"),

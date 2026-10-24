@@ -236,6 +236,7 @@
   "Download failed": "Ошибка загрузки",
   "Cancelled": "Отменено",
   "Checksum error": "Ошибка контрольной суммы",
+  "The connection stalled: nothing arrived for a minute.": "Соединение зависло: за минуту не пришло ни одного байта.",
   "Deleted {name}": "{name} удалён",
   "Delete {name}?": "Удалить {name}?",
   "This will remove the folder permanently.": "Это безвозвратно удалит папку.",

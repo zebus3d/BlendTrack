@@ -53,6 +53,13 @@ ASSET_NAMES = {
 }
 CHECKSUM_NAME = "checksums.txt"
 EXE_NAME = "BlendTrack.exe" if sys.platform.startswith("win") else "BlendTrack"
+# Nombre que llevaba el binario cuando el proyecto se llamaba BlenderManager.
+# Las instalaciones anteriores al renombrado (<= v1.62) siguen teniéndolo en
+# disco, y su auto-update buscan un asset con ese nombre: el CI publica una
+# copia de compatibilidad con el binario renombrado dentro (ver build.yml), y
+# este código reconoce ese nombre para poder relanzar lo que acaba de copiar.
+LEGACY_EXE_NAME = ("BlenderManager.exe" if sys.platform.startswith("win")
+                   else "BlenderManager")
 
 _CREATE_NO_WINDOW = 0x08000000
 _DETACHED_PROCESS = 0x00000008
@@ -519,6 +526,9 @@ def _apply_macos(archive: Path) -> bool:
         f'BUNDLE="{bundle}"\n'
         f'NEW="{new_app}"\n'
         f'EXE="$NEW/Contents/MacOS/{EXE_NAME}"\n'
+        # Las instalaciones antiguas (<= v1.62) se actualizan con el asset de
+        # compatibilidad, cuyo bundle lleva el ejecutable con el nombre viejo.
+        f'if [ ! -f "$EXE" ]; then EXE="$NEW/Contents/MacOS/{LEGACY_EXE_NAME}"; fi\n'
         'while kill -0 "$PID" 2>/dev/null; do sleep 0.5; done\n'
         '/bin/sleep 1\n'
         # El bundle nuevo tiene que traer el ejecutable con permisos. Si no
@@ -632,6 +642,22 @@ def apply_update(app_dir, pid) -> None:
         log(f"update: invalid pid ({pid!r}), copying without waiting")
     _copy_tree(source, target)
     exe = target / EXE_NAME
+    legacy = target / LEGACY_EXE_NAME
+    if not exe.is_file() and legacy.is_file():
+        # Actualización de una instalación antigua (<= v1.62): el asset de
+        # compatibilidad trae el binario con el nombre viejo, así que lo que
+        # hay que abrir es ese. En la siguiente actualización ya se usará el
+        # nombre nuevo.
+        exe = legacy
+    elif exe.is_file() and legacy.is_file():
+        # Ya hay binario con el nombre nuevo: el viejo es un resto de cuando se
+        # llamaba BlenderManager. Dejarlo ahí es una trampa (el usuario abriría
+        # el de siempre, que se queda sin actualizar).
+        try:
+            legacy.unlink()
+            log(f"update: borrado el binario antiguo {legacy}")
+        except OSError as error:
+            log(f"update: no se pudo borrar {legacy}: {error}")
     try:
         subprocess.Popen([str(exe)], close_fds=True, env=_relaunch_env())
     except OSError as error:

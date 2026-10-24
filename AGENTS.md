@@ -624,16 +624,26 @@ minor** (`v1.3.0`).
   `src/services/updater.py` (`BlendTrack-x86_64.AppImage`,
   `BlendTrack-windows-x86_64.zip`, `BlendTrack-macos.zip`). Si cambian
   en el CI, actualiza también el updater.
-- **Asset de compatibilidad (temporal)**: el job `linux` publica además una
-  copia del AppImage llamada `BlenderManager-x86_64.AppImage`. NO es un error:
-  quien ya tenga instalado el antiguo BlenderManager busca ese nombre (el
-  `ASSET_NAMES` de su copia) y así su auto-update le instala este mismo
-  binario sin reinstallar a mano. En Linux el nombre interno no importa (al
-  aplicar se reemplaza el fichero en su sitio); en Windows/macOS sí, por eso no
-  se hace ahí. Quitar del `build.yml` (el `cp` y la ruta del artifact) cuando
-  ya no queden instalaciones antiguas. Solo llega a quien abra la app durante
-  la ventana, y solo desde una release **final** promovida (`releases/latest`
-  ignora los pre-releases).
+- **Assets de compatibilidad (temporales)**: los tres jobs publican además una
+  copia con el nombre antiguo (*BlenderManager*), porque quien tenga instalado
+  el proyecto de antes del renombrado (≤ v1.62) busca su asset por el nombre
+  viejo (el `ASSET_NAMES` de **su** copia) y sin eso no puede actualizarse
+  nunca: "No update available for this platform", para siempre. No es un
+  error, y el binario de dentro es el mismo (ya lleva la versión nueva):
+  - Linux: `BlenderManager-x86_64.AppImage`, copia tal cual. Al aplicarla se
+    reemplaza el fichero en su sitio y el nombre interno no importa.
+  - Windows: `BlenderManager-windows-x86_64.zip` con el `.exe` renombrado a
+    `BlenderManager.exe` **dentro** del zip: el updater de la copia vieja lo
+    busca por ese nombre para lanzarlo como ayudante.
+  - macOS: `BlenderManager-macos.zip` con el bundle y su ejecutable
+    renombrados, y `CFBundleExecutable` cambiado en el `Info.plist` (si no,
+    `open` no encuentra el binario).
+  El código nuevo reconoce ese nombre (`updater.LEGACY_EXE_NAME`): al aplicar
+  la actualización relanza el ejecutable que haya y borra el sobrante, para no
+  dejar dos binarios en la carpeta. Quitar los tres del `build.yml` (y
+  `LEGACY_EXE_NAME`) cuando ya no queden instalaciones antiguas. Solo llega a
+  quien abra la app durante la ventana, y solo desde una release **final**
+  promovida (`releases/latest` ignora los pre-releases).
 - **`checksums.txt`**: el job `release` lo genera y el updater lo usa para
   verificar el SHA-256 antes de instalar (ver "Auto-update"). No quitar ese
   paso: sin él, ninguna app instalada puede actualizarse sola.
@@ -964,6 +974,14 @@ El AppImage resultante pesa ~70 MB.
   reintenta la conexión hasta 3 veces (solo la conexión; no se reinicia una
   descarga a medias) y el `HTTPError` no se reintenta. El fallo es antes de
   descargar, así que reintentar no cuesta datos.
+- **Descarga estancada** (`services/downloader.py`): el timeout de socket solo
+  cubre el hueco **total** entre lecturas, así que una conexión que gotea unos
+  bytes cada pocos segundos lo esquiva y la barra se quedaba clavada horas
+  (reportado por un usuario: solo salía matando la app). Se mide lo que llega
+  por minuto (`STALL_TIMEOUT`/`STALL_MIN_BYTES`, 64 KiB/min) y por debajo se
+  aborta con el código `stalled`, que la interfaz traduce
+  (`ui.widgets.shell.download_reason`, la misma tabla para las descargas de
+  Blender y para la actualización de la app).
 - Aplicación por plataforma: Linux AppImage reemplaza `$APPIMAGE`; Windows
   extrae a staging y relanza el binario nuevo con `--apply-update`; macOS extrae
   el zip y lanza un **helper** (estilo Sparkle) que espera a que la app se

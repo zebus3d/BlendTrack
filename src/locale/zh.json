@@ -236,6 +236,7 @@
   "Download failed": "下载失败",
   "Cancelled": "已取消",
   "Checksum error": "校验和错误",
+  "The connection stalled: nothing arrived for a minute.": "连接已停滞：一分钟内没有收到任何数据。",
   "Deleted {name}": "已删除 {name}",
   "Delete {name}?": "删除 {name}？",
   "This will remove the folder permanently.": "这将永久移除该文件夹。",

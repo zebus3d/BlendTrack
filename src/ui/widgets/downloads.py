@@ -22,7 +22,7 @@ from services import installed as installed_service
 from services.downloader import log as download_log
 from services.extractor import ExtractCancelled, extract, is_archive
 from ui.widgets.dialogs import AppDialog, confirm, show_error
-from ui.widgets.shell import WorkerBridge, write_problem
+from ui.widgets.shell import WorkerBridge, download_reason, write_problem
 
 
 class DownloadFlowMixin:
@@ -420,7 +420,7 @@ class DownloadFlowMixin:
         # descarga" genérico y no había forma de saber si era red, checksum o
         # permisos de la carpeta (justo el caso de las LTS en Windows).
         download_log(f"download failed: {message}")
-        reason = tr("Checksum error") if message == "checksum" else message
+        reason = download_reason(message)
         self._set_status(tr("Download failed"), 8)
         show_error(self, tr("Download failed"), reason)
 

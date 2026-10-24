@@ -236,6 +236,7 @@
   "Download failed": "ダウンロード失敗",
   "Cancelled": "キャンセル済み",
   "Checksum error": "チェックサムエラー",
+  "The connection stalled: nothing arrived for a minute.": "接続が止まりました: 1 分間何も受信していません。",
   "Deleted {name}": "{name} を削除しました",
   "Delete {name}?": "{name} を削除しますか？",
   "This will remove the folder permanently.": "フォルダーが完全に削除されます。",

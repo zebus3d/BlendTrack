@@ -8,6 +8,7 @@ su responsabilidad reenviarlas al hilo de la interfaz (con una señal de Qt; ver
 
 import hashlib
 import threading
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -26,6 +27,18 @@ CONNECT_TIMEOUT = 30
 CONNECT_ATTEMPTS = 3
 RETRY_DELAY = 3  # segundos entre intentos
 
+# Sin ni un byte durante esto, la descarga se da por muerta. El tiempo de socket
+# de arriba solo cubre el hueco **total** entre dos lecturas: una conexión que
+# gotea unos pocos bytes cada pocos segundos nunca lo dispara, y la barra se
+# quedaba pillada durante horas avanzando centésimas sin que llegara nada
+# (reportado por un usuario: no había forma de salir de ahí). 64 KiB por minuto
+# son ~2 KiB/s: por debajo de eso un paquete de cientos de MB tardaría días, así
+# que se corta y el usuario puede reintentar.
+STALL_TIMEOUT = 60.0
+STALL_MIN_BYTES = 1024 * 64
+# Código del fallo, igual que CANCELLED/CHECKSUM: la interfaz lo traduce.
+STALL = "stalled"
+
 
 def log(message: str) -> None:
     """Registro sencillo a archivo, útil para diagnosticar fallos en otros equipos."""
@@ -40,8 +53,9 @@ def log(message: str) -> None:
 
 # Códigos de los fallos que no son de red. Llegan a la interfaz como texto por
 # ``on_error`` y ella decide qué decir: "cancelled" no es un error que enseñar
-# (lo pidió el usuario) y "checksum" se traduce a "Checksum error". Cualquier
-# otro texto es el mensaje de la excepción tal cual.
+# (lo pidió el usuario), "checksum" se traduce a "Checksum error" y "stalled" a
+# un texto sobre la conexión muerta (``ui.widgets.shell.download_reason``).
+# Cualquier otro texto es el mensaje de la excepción tal cual.
 #
 # Comparar cadenas es frágil (un error de red que dijera "cancelled" pasaría
 # por cancelación), pero es el contrato con ``ui.widgets.downloads`` y
@@ -172,6 +186,12 @@ class Downloader:
                 total = int(response.headers.get("Content-Length") or 0)
                 digest = hashlib.sha256()
                 downloaded = 0
+                # Vigilancia de estancamiento: se mira cuánto ha llegado en los
+                # últimos ``STALL_TIMEOUT`` segundos. Cada lectura como mucho
+                # dura ``CONNECT_TIMEOUT``, así que esta comprobación se hace al
+                # menos dos veces por minuto.
+                ventana_en = time.monotonic()
+                ventana_bytes = 0
                 with open(part_path, "wb") as handle:
                     while True:
                         if self._cancel.is_set():
@@ -182,8 +202,14 @@ class Downloader:
                         handle.write(chunk)
                         digest.update(chunk)
                         downloaded += len(chunk)
+                        ventana_bytes += len(chunk)
                         if on_progress:
                             on_progress(downloaded, total)
+                        if time.monotonic() - ventana_en >= STALL_TIMEOUT:
+                            if ventana_bytes < STALL_MIN_BYTES:
+                                raise DownloadError(STALL)
+                            ventana_en = time.monotonic()
+                            ventana_bytes = 0
             if self._cancel.is_set():
                 raise DownloadError(CANCELLED)
             # Verificación de integridad si la API nos dio la suma SHA-256.

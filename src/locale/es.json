@@ -236,6 +236,7 @@
   "Download failed": "Fallo en la descarga",
   "Cancelled": "Cancelado",
   "Checksum error": "Error en la suma de verificación",
+  "The connection stalled: nothing arrived for a minute.": "La conexión se ha quedado parada: no ha llegado nada en un minuto.",
   "Deleted {name}": "Borrado {name}",
   "Delete {name}?": "¿Borrar {name}?",
   "This will remove the folder permanently.": "Esto eliminará la carpeta permanentemente.",

@@ -12,7 +12,23 @@ from pathlib import Path
 from PySide6.QtCore import QObject, Qt, Signal
 from PySide6.QtWidgets import QSlider, QStyle, QStyleOptionSlider
 
+from i18n import tr
 from ui import theme as t
+
+
+# Motivos de fallo de descarga que tienen su propio texto (los códigos están en
+# ``services.downloader``). El resto se enseña tal cual llega: es el mensaje de
+# la excepción (un DNS caído, un 404, permisos...), y taparlo con un "falló la
+# descarga" genérico deja al usuario sin saber qué arreglar.
+DOWNLOAD_REASONS = {
+    "checksum": "Checksum error",
+    "stalled": "The connection stalled: nothing arrived for a minute.",
+}
+
+
+def download_reason(message: str) -> str:
+    """Texto para el usuario de un fallo de descarga, traducido."""
+    return tr(DOWNLOAD_REASONS.get(message, message))
 
 
 PLATFORMS = {"GNU/Linux": "linux", "Windows": "windows", "macOS": "darwin"}
