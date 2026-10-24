@@ -391,6 +391,39 @@ class InstalledTests(unittest.TestCase):
             # La carpeta ilegible se ignora; la build válida se encuentra igual.
             self.assertEqual([entry.version for entry in results], ["5.2.1"])
 
+    def test_scan_encuentra_una_biblioteca_de_blender_launcher(self):
+        """Blender Launcher guarda sus versiones en ``<biblioteca>/versions``.
+
+        Quien viene de esa app apunta la biblioteca, no la carpeta de dentro,
+        así que el listado salía vacío aunque las versiones estuvieran ahí.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            versions = root / "versions"
+            (versions / "4.5.13").mkdir(parents=True)
+            (versions / "4.5.13" / "blender").write_text("#!/bin/sh\n")
+            (versions / "2.79b").mkdir()
+            (versions / "2.79b" / "blender").write_text("#!/bin/sh\n")
+            # Lo que Blender Launcher deja al lado de ``versions``.
+            (root / "downloads").mkdir()
+            (root / "blender_launcher.json").write_text("{}")
+            results = installed.scan_folders([root], "linux")
+            self.assertEqual([entry.version for entry in results],
+                             ["4.5.13", "2.79"])
+            # La raíz que se guarda es la que configuró el usuario: de ella
+            # cuelgan el candado de solo lectura y el borrado.
+            self.assertEqual({entry.root for entry in results}, {root})
+
+    def test_la_biblioteca_y_su_carpeta_versions_no_duplican(self):
+        """Si están las dos rutas configuradas, la versión sale una sola vez."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            versions = root / "versions"
+            (versions / "4.5.13").mkdir(parents=True)
+            (versions / "4.5.13" / "blender").write_text("#!/bin/sh\n")
+            results = installed.scan_folders([root, versions], "linux")
+            self.assertEqual(len(results), 1)
+
     def test_scan_folders_une_las_dos_carpetas(self):
         # Las LTS pueden vivir en otra carpeta: hay que ver las dos.
         with tempfile.TemporaryDirectory() as tmp:
@@ -2300,6 +2333,31 @@ class DefaultDestinationTests(unittest.TestCase):
                                    return_value=Path(tmp)):
                 self.assertEqual(settings_module.default_destination(),
                                  Path(tmp) / "Descargas" / "Blenders")
+
+    def test_en_windows_no_propone_la_carpeta_descargas(self):
+        """"Descargas" es para lo que el usuario baja y ordena, no para 40 GB
+        de programas que se quedan ahí para siempre."""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.object(settings_module.sys, "platform", "win32"), \
+                    mock.patch.dict(os.environ, {"LOCALAPPDATA": tmp}):
+                self.assertEqual(settings_module.default_destination(),
+                                 Path(tmp) / "Programs" / "Blenders")
+
+    def test_en_windows_sin_localappdata_usa_el_perfil(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            entorno = {k: v for k, v in os.environ.items()
+                       if k != "LOCALAPPDATA"}
+            with mock.patch.object(settings_module.sys, "platform", "win32"), \
+                    mock.patch.dict(os.environ, entorno, clear=True), \
+                    mock.patch.object(settings_module.Path, "home",
+                                      return_value=Path(tmp)):
+                self.assertEqual(
+                    settings_module.default_destination(),
+                    Path(tmp) / "AppData" / "Local" / "Programs" / "Blenders")
 
 
 class WindowsDownloadsTests(unittest.TestCase):

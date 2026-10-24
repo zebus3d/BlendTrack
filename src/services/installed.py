@@ -54,6 +54,16 @@ BARE_VERSION_RE = re.compile(r"^(\d+\.\d+(?:\.\d+)?)[a-z]?$", re.IGNORECASE)
 SERIES_DIR_RE = re.compile(r"^\d+\.\d+$")
 SERIES_DATA_DIRS = ("datafiles", "scripts", "python")
 
+# Dentro de su carpeta, Blender Launcher guarda las versiones en
+# ``<biblioteca>/versions/<carpeta>`` (con ``downloads/`` y su base de datos al
+# lado). Quien viene de esa app apunta la biblioteca, no la carpeta de dentro,
+# y sin esto su listado sale **vacío**: parece que la app no ve nada cuando lo
+# que pasa es que mira un escalón más arriba. Se baja un nivel solo dentro de
+# una carpeta con este nombre; bajar por cualquier carpeta convertiría el
+# escaneo en un recorrido del árbol entero (y apuntar ``C:/Users`` pasaría a
+# costar minutos).
+VERSIONS_DIRS = ("versions",)
+
 # Marcador que escribimos al instalar para recordar qué compilación es.
 MARKER_NAME = ".blendtrack.json"
 
@@ -321,72 +331,96 @@ def _fork_and_match(name: str, marker: dict):
     return fork, version, guessed
 
 
+def _build_from_dir(entry: Path, platform: str, root: Path):
+    """Una carpeta concreta como instalación, o ``None`` si no lo es.
+
+    ``root`` es la carpeta de la biblioteca tal y como la configuró el usuario,
+    no la carpeta que se está recorriendo: de ella cuelgan la comprobación de
+    si el sitio es de solo lectura y el borrado (``Settings.folder_for``).
+    """
+    if entry.name.startswith(".") or not _is_dir(entry):
+        # Las carpetas ocultas nunca son una instalación: ahí van los
+        # temporales de la propia aplicación (``.blender-5.2.1.moving``, ver
+        # ``organizer.temporary_path``), que a media copia casarían con
+        # ``VERSION_RE`` y saldrían como una versión más.
+        return None
+    marker = read_marker(entry)
+    fork, version, guessed = _fork_and_match(entry.name, marker)
+    if not version and not marker:
+        # Ni el nombre ni el marcador dicen qué es: se mira dentro. Es lo
+        # que salva una build renombrada a mano y las customizadas por un
+        # estudio (el caso del Blender 2.79 de NVIDIA), que no llevan
+        # "blender" en el nombre de la carpeta. Antes de recorrer nada se
+        # pide el ejecutable en la raíz, que es lo único que no cuesta.
+        if not _has_known_executable(entry, platform):
+            return None
+        version = _version_from_tree(entry)
+        guessed = bool(version)
+    # Sirve si el nombre lleva la versión (lo normal), si se ha deducido de
+    # dentro o si tiene marcador propio: al renombrar una instalación el
+    # nombre puede dejar de llevar la versión, pero el marcador sigue
+    # diciendo qué es.
+    if not version and not marker:
+        # Ignoramos carpetas que no son de Blender (archivos temporales, etc.).
+        return None
+    executable = _executable_for(entry, platform, fork=fork)
+    if guessed and executable is None:
+        # Un ``4.5/`` dentro de una carpeta puede ser cualquier cosa (una
+        # copia de scripts, un backup) y una carpeta llamada ``4.5`` sin
+        # Blender dentro, un resto de una extracción. Adivinar la versión
+        # solo vale si además hay un Blender que lanzar; sin eso la lista se
+        # llenaría de fantasmas que no se pueden abrir.
+        return None
+    return InstalledBuild(
+        name=entry.name,
+        path=entry,
+        version=version,
+        executable=executable,
+        build_hash=str(marker.get("hash") or ""),
+        branch=str(marker.get("branch") or ""),
+        # El marcador ya guardaba el "risk" desde el principio, pero
+        # hasta ahora se tiraba: con él, saber si algo es una diaria o
+        # una LTS deja de ser una heurística sobre el nombre.
+        risk=str(marker.get("risk") or ""),
+        root=root,
+        fork=fork,
+        # Fecha de descarga: no la guardamos en ningún sitio, así que
+        # se pregunta al sistema de archivos por la fecha de
+        # modificación de la carpeta instalada (que se crea al
+        # extraer, o sea justo al descargar). Es lo único disponible
+        # y es aproximada, pero suficiente para el dato de la tarjeta.
+        downloaded=_folder_mtime(entry),
+    )
+
+
+def _child_dirs(folder: Path):
+    """Subcarpetas de ``folder``, ordenadas y sin romperse por un permiso."""
+    try:
+        entries = sorted(folder.iterdir())
+    except OSError:
+        # Sin permiso para listar la carpeta: no hay nada que sacar de aquí.
+        return []
+    return [entry for entry in entries if not entry.name.startswith(".")]
+
+
 def _scan_root(root: Path, platform: str):
     """Escanea una sola carpeta y devuelve sus instalaciones sin ordenar."""
     results = []
     if not _is_dir(root):
         return results
-    try:
-        entries = sorted(root.iterdir())
-    except OSError:
-        # Sin permiso para listar la carpeta: no hay nada que sacar de aquí.
-        return results
-    for entry in entries:
-        # Las carpetas ocultas nunca son una instalación: ahí van los
-        # temporales de la propia aplicación (``.blender-5.2.1.moving``, ver
-        # ``organizer.temporary_path``), que a media copia casarían con
-        # ``VERSION_RE`` y saldrían como una versión más.
-        if entry.name.startswith(".") or not _is_dir(entry):
+    for entry in _child_dirs(root):
+        if entry.name.casefold() in VERSIONS_DIRS and _is_dir(entry):
+            # Biblioteca de Blender Launcher: las versiones están un escalón
+            # más abajo. Se recorren sus hijas como si colgaran de ``root``,
+            # para que no se pierdan (es el caso de quien migra desde ella).
+            for inner in _child_dirs(entry):
+                build = _build_from_dir(inner, platform, root)
+                if build is not None:
+                    results.append(build)
             continue
-        marker = read_marker(entry)
-        fork, version, guessed = _fork_and_match(entry.name, marker)
-        if not version and not marker:
-            # Ni el nombre ni el marcador dicen qué es: se mira dentro. Es lo
-            # que salva una build renombrada a mano y las customizadas por un
-            # estudio (el caso del Blender 2.79 de NVIDIA), que no llevan
-            # "blender" en el nombre de la carpeta. Antes de recorrer nada se
-            # pide el ejecutable en la raíz, que es lo único que no cuesta.
-            if not _has_known_executable(entry, platform):
-                continue
-            version = _version_from_tree(entry)
-            guessed = bool(version)
-        # Sirve si el nombre lleva la versión (lo normal), si se ha deducido de
-        # dentro o si tiene marcador propio: al renombrar una instalación el
-        # nombre puede dejar de llevar la versión, pero el marcador sigue
-        # diciendo qué es.
-        if not version and not marker:
-            # Ignoramos carpetas que no son de Blender (archivos temporales, etc.).
-            continue
-        executable = _executable_for(entry, platform, fork=fork)
-        if guessed and executable is None:
-            # Un ``4.5/`` dentro de una carpeta puede ser cualquier cosa (una
-            # copia de scripts, un backup) y una carpeta llamada ``4.5`` sin
-            # Blender dentro, un resto de una extracción. Adivinar la versión
-            # solo vale si además hay un Blender que lanzar; sin eso la lista se
-            # llenaría de fantasmas que no se pueden abrir.
-            continue
-        results.append(
-            InstalledBuild(
-                name=entry.name,
-                path=entry,
-                version=version,
-                executable=executable,
-                build_hash=str(marker.get("hash") or ""),
-                branch=str(marker.get("branch") or ""),
-                # El marcador ya guardaba el "risk" desde el principio, pero
-                # hasta ahora se tiraba: con él, saber si algo es una diaria o
-                # una LTS deja de ser una heurística sobre el nombre.
-                risk=str(marker.get("risk") or ""),
-                root=root,
-                fork=fork,
-                # Fecha de descarga: no la guardamos en ningún sitio, así que
-                # se pregunta al sistema de archivos por la fecha de
-                # modificación de la carpeta instalada (que se crea al
-                # extraer, o sea justo al descargar). Es lo único disponible
-                # y es aproximada, pero suficiente para el dato de la tarjeta.
-                downloaded=_folder_mtime(entry),
-            )
-        )
+        build = _build_from_dir(entry, platform, root)
+        if build is not None:
+            results.append(build)
     return results
 
 
@@ -400,6 +434,7 @@ def scan_folders(folders, platform: str) -> list[InstalledBuild]:
     """
     results = []
     seen = set()
+    seen_builds = set()
     for folder in folders:
         if not folder:
             continue
@@ -413,7 +448,18 @@ def scan_folders(folders, platform: str) -> list[InstalledBuild]:
         if key in seen:
             continue
         seen.add(key)
-        results.extend(_scan_root(root, platform))
+        for build in _scan_root(root, platform):
+            # Dos raíces distintas pueden acabar en la misma instalación (la
+            # biblioteca y su carpeta ``versions``, sin ir más lejos). Se
+            # descarta el segundo: una versión, una tarjeta.
+            try:
+                build_key = build.path.resolve()
+            except OSError:
+                build_key = build.path
+            if build_key in seen_builds:
+                continue
+            seen_builds.add(build_key)
+            results.append(build)
     results.sort(key=lambda build: version_tuple(build.version), reverse=True)
     return results
 

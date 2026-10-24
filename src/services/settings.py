@@ -128,7 +128,21 @@ def _downloads_dir() -> Path:
 
 
 def default_destination() -> Path:
-    """Carpeta de descargas propuesta la primera vez."""
+    """Carpeta de descargas propuesta la primera vez.
+
+    En Windows **no** es ``Descargas``. Ahí van los ficheros que el usuario
+    baja y luego ordena, y una versión de Blender ocupa cientos de MB y se
+    queda para siempre: acaba enterrando lo que de verdad es una descarga.
+    Se propone ``%LOCALAPPDATA%\\Programs\\Blenders``, que es donde Windows
+    pone los programas de cada usuario (y no necesita permisos de
+    administrador). Se evita ``%LOCALAPPDATA%\\BlendTrack``, que es la carpeta
+    de datos de la app, a propósito: desinstalar o "limpiar los datos" se
+    llevaría por delante la biblioteca entera.
+    """
+    if sys.platform.startswith("win"):
+        base = os.environ.get("LOCALAPPDATA") or str(
+            Path.home() / "AppData" / "Local")
+        return Path(base) / "Programs" / "Blenders"
     return _downloads_dir() / "Blenders"
 
 

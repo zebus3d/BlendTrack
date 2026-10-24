@@ -234,8 +234,9 @@ Reglas que no hay que romper:
   la única, la app sin sitio donde descargar.
 - **Anidar carpetas se permite.** Tener `Blender 3D` de raíz y
   `Blender 3D/Experimentales` dentro es un reparto natural, y no duplica nada
-  porque `_scan_root` solo mira los hijos **directos** de cada raíz. Lo único
-  que se rechaza al añadir es la misma carpeta dos veces.
+  porque `_scan_root` solo mira los hijos **directos** de cada raíz (la única
+  excepción es una carpeta llamada `versions`, ver "Instalar versiones de
+  Blender"). Lo único que se rechaza al añadir es la misma carpeta dos veces.
 - **Se puede quitar la última carpeta.** Negarlo encerraba al usuario: no podía
   cambiarla ni quitarla. Una lista vacía a propósito (la clave `folders` existe
   pero está vacía) **no se repone** al arrancar; solo se pone la de fábrica
@@ -463,6 +464,25 @@ X11, Windows y macOS no cambia nada. **No volver a forzar XWayland.**
   para no llenar la lista con copias de scripts. Sin esto, esas versiones no
   aparecían y no había forma de lanzarlas. Ojo: deducir de dentro da la **serie**
   (`4.5`), no el parche, que no está en disco.
+- **La biblioteca de Blender Launcher se reconoce tal cual.** Esa app guarda
+  las versiones en `<biblioteca>/versions/<carpeta>` (con `downloads/` y su
+  base de datos al lado), y quien viene de ella apunta **la biblioteca**, no
+  la carpeta de dentro: el listado salía vacío y parecía que BlendTrack no veía
+  nada. `_scan_root` baja un nivel dentro de una carpeta llamada `versions`
+  (`VERSIONS_DIRS`), y solo ahí: bajar por cualquier carpeta convertiría el
+  escaneo en un recorrido del árbol entero y apuntar `C:/Users` costaría
+  minutos. La instalación conserva como `root` la carpeta **configurada** (no
+  la de dentro), porque de ella cuelgan el candado de solo lectura
+  (`Settings.folder_for`) y el borrado; y `scan_folders` deduplica por ruta de
+  la instalación, para que apuntar la biblioteca *y* su `versions` no saque
+  cada versión dos veces.
+- **En Windows la carpeta propuesta no es "Descargas".** `default_destination`
+  devuelve `%LOCALAPPDATA%\Programs\Blenders`: una versión de Blender ocupa
+  cientos de MB y se queda para siempre, así que en Descargas acaba enterrando
+  lo que sí es una descarga. No se usa `%LOCALAPPDATA%\BlendTrack` (la carpeta
+  de datos y caché de la app) a propósito: "limpiar los datos" o desinstalar se
+  llevaría por delante la biblioteca del usuario. Solo afecta a instalaciones
+  nuevas y a la carpeta de fábrica cuando no hay `settings.json`.
 - **Las builds custom las declara el usuario; el escaneo no las adivina.**
   Desde el disco, una build parcheada por un estudio se ve igual que una
   oficial (misma estructura, mismo ejecutable), así que deducirlo marcaría como
