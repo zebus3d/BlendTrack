@@ -58,6 +58,15 @@ is copied.</sub>
   to. Moving files between folders is safe (copy first, delete the source only
   once the copy is complete), and you can remove every folder if you would
   rather the app warn than quietly pick a destination for you.
+- **Keep the library you already have.** Point the app at the folder where your
+  versions live and they are listed, launched and used for migration. A library
+  made by **Blender Launcher** works as it is: its per-type subfolders
+  (`stable/`, `daily/`, `experimental/`, `bforartists/`, `upbge-*`...) are
+  scanned too, forks included.
+- **Patched builds stay yours.** Right-click a version and mark it as *custom*
+  (a studio build, an NVIDIA 2.79, anything you modified): it keeps its place
+  with its badge, stops being offered official updates, and is never mistaken
+  for the store build with the same number.
 - **Keep everything current.** When Blender publishes a same-series patch, an
   inline update is offered; a new major series is offered in a dialog you can
   ignore for that series. BlendTrack updates itself too: the AppImage in place,
