@@ -26,7 +26,7 @@ from pathlib import Path
 
 from model.build import (FORK_BFORARTISTS, FORK_BLENDER, FORK_UPBGE,
                          InstalledBuild, minor_of, version_tuple)
-from services import channels
+from services import channels, exe_version
 from services.downloader import log
 
 # Actualización disponible para una versión instalada.
@@ -60,6 +60,16 @@ BARE_VERSION_RE = re.compile(
 # entero por cada carpeta sospechosa.
 SERIES_DIR_RE = re.compile(r"^\d+\.\d+$")
 SERIES_DATA_DIRS = ("datafiles", "scripts", "python")
+
+# Carpeta que se llama como la deja el **instalador oficial** de Windows
+# (``Blender 5.2``) o como una versión sin parche escrita a mano
+# (``blender-5.2``): el nombre solo dice la serie. En ese caso el número
+# completo se lee del ejecutable (``services/exe_version``), porque si no una
+# 5.2.3 instalada desde blender.org se lee como 5.2 y la app ofrece
+# "actualizar" a la que ya está puesta. Es a propósito estrecho: una carpeta
+# ``blender-2.79b-windows64`` dice 2.79 a propósito (es lo que empareja con la
+# tienda) y no se toca.
+INSTALLER_NAME_RE = re.compile(r"^blender[-_ ]?\d+\.\d+$", re.IGNORECASE)
 
 # Blender Launcher reparte su biblioteca en una carpeta por tipo de build
 # (``stable``, ``daily``, ``experimental``, ``custom``, ``bforartists``,
@@ -343,6 +353,24 @@ def _fork_and_match(name: str, marker: dict):
     return fork, version, guessed
 
 
+def _exact_version(entry: Path, executable, platform: str,
+                   version: str) -> str:
+    """La versión con su parche, cuando el nombre solo dice la serie.
+
+    Solo se pregunta al ejecutable en el caso del instalador oficial de
+    Windows (``Blender 5.2``) o de una carpeta escrita igual (``blender-5.2``):
+    ahí el nombre **no** puede decir el parche. Cuando el nombre ya lo trae
+    manda el nombre, que es lo que comparan la tienda y las actualizaciones.
+    """
+    if platform != "windows" or executable is None:
+        return version
+    if len(version.split(".")) != 2:
+        return version
+    if not INSTALLER_NAME_RE.match(entry.name):
+        return version
+    return exe_version.file_version(executable) or version
+
+
 def _build_from_dir(entry: Path, platform: str, root: Path,
                     fork_hint: str = FORK_BLENDER):
     """Una carpeta concreta como instalación, o ``None`` si no lo es.
@@ -391,6 +419,7 @@ def _build_from_dir(entry: Path, platform: str, root: Path,
         # solo vale si además hay un Blender que lanzar; sin eso la lista se
         # llenaría de fantasmas que no se pueden abrir.
         return None
+    version = _exact_version(entry, executable, platform, version)
     return InstalledBuild(
         name=entry.name,
         path=entry,
@@ -673,6 +702,18 @@ def available_updates(installed, builds) -> list[Update]:
     como copia es ruido. Y si esa versión nueva ya está instalada, tampoco se
     ofrece (de ahí ``installed_versions``).
 
+    El parche solo se ofrece cuando se sabe el parche de la instalada. Una
+    versión que solo dice la serie (``4.5`` deducido de dentro de la carpeta,
+    o ``Blender 5.2`` del instalador cuando no se pudo leer el ejecutable)
+    puede ser ya la última: ofrecerle "actualizar" era ofrecer reemplazar la
+    que estaba puesta.
+
+    El salto de serie sale **solo desde la serie más nueva que tienes**, y solo
+    hacia una serie que no tengas. Quien guarda una 4.5 LTS junto a su 5.2 la
+    guarda a propósito: ofrecerle la 5.3 sobre la 4.5 (con un "Reemplazar" que
+    la borraría) era ruido, y con una biblioteca de Blender Launcher llena de
+    series viejas salía un diálogo por cada una.
+
     Devuelve una lista de ``Update(entry, build, kind)`` donde ``kind`` es
     ``"patch"`` (misma serie, número mayor) o ``"series"`` (serie superior). Una
     misma instalada puede salir dos veces si hay parche *y* salto de serie; son
@@ -684,6 +725,8 @@ def available_updates(installed, builds) -> list[Update]:
                if _is_stable_install(entry)
                and not getattr(entry, "custom", False)]
     installed_versions = {version_tuple(entry.version) for entry in entries}
+    newest_series = max((_minor_tuple(entry.version) for entry in entries),
+                        default=None)
 
     # La instalada más nueva de cada serie: sobre esa se avisa.
     newest_in_series = {}
@@ -696,6 +739,9 @@ def available_updates(installed, builds) -> list[Update]:
     updates = []
     for series_key, entry in newest_in_series.items():
         entry_version = version_tuple(entry.version)
+        # ``5.2`` a secas: no se sabe qué parche es, así que no hay con qué
+        # comparar (``(5, 2) < (5, 2, 3)`` diría siempre que está atrasada).
+        knows_patch = len(entry_version) >= 3
         patch = None
         series = None
         for build in stable_builds:
@@ -705,10 +751,10 @@ def available_updates(installed, builds) -> list[Update]:
                 continue
             build_minor = _minor_tuple(build.version)
             if build_minor == series_key:
-                if build_version > entry_version and (
+                if knows_patch and build_version > entry_version and (
                         patch is None or build.sort_key > patch.sort_key):
                     patch = build
-            elif build_minor > series_key:
+            elif series_key == newest_series and build_minor > series_key:
                 if series is None or build.sort_key > series.sort_key:
                     series = build
         if patch is not None:

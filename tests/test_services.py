@@ -1,5 +1,6 @@
 import json
 import os
+import struct
 import sys
 import tarfile
 import tempfile
@@ -10,8 +11,49 @@ from pathlib import Path
 
 import services.settings as settings_module
 from model.build import Build, favorite_key
-from services import api, channels, detector, elevate, installed, macos_dmg, tls
+from services import (api, channels, detector, elevate, exe_version, installed,
+                      macos_dmg, tls)
 from services.extractor import extract, is_archive
+
+
+def fake_windows_exe(major, minor, patch):
+    """Un ``.exe`` mínimo con un recurso de versión, para probar el lector.
+
+    Se monta a mano porque el CI corre en Linux y no hay ningún binario de
+    Windows cerca: cabecera DOS que apunta a la de PE, una sección ``.rsrc`` y,
+    dentro, el árbol de recursos (tipo 16 → nombre → idioma) con el bloque
+    ``VS_VERSIONINFO`` que lee ``services.exe_version``.
+    """
+    key = "VS_VERSION_INFO".encode("utf-16-le") + b"\0\0"
+    padding = b"\0" * (-(6 + len(key)) % 4)
+    high = (major << 16) | minor
+    low = patch << 16
+    fixed = struct.pack("<13I", 0xFEEF04BD, 0x10000, high, low, high, low,
+                        0x3F, 0, 0x40004, 1, 0, 0, 0)
+    info = struct.pack("<HHH", 6 + len(key) + len(padding) + len(fixed), 52, 0)
+    info += key + padding + fixed
+
+    data = bytearray(0x300 + len(info))
+    data[0:2] = b"MZ"
+    struct.pack_into("<I", data, 0x3C, 0x40)         # dónde empieza la PE
+    data[0x40:0x44] = b"PE\0\0"
+    struct.pack_into("<H", data, 0x46, 1)            # una sección
+    struct.pack_into("<H", data, 0x54, 0xE0)         # tamaño de la opcional
+    struct.pack_into("<H", data, 0x58, 0x10B)        # PE32
+    # Directorio de recursos: la entrada número 2 de la tabla.
+    struct.pack_into("<II", data, 0x58 + 96 + 16, 0x1000, 0x200)
+    data[0x138:0x13D] = b".rsrc"
+    struct.pack_into("<IIII", data, 0x140, 0x200, 0x1000, 0x200, 0x200)
+    # Raíz → tipo 16 → nombre 1 → idioma 1033 → bloque de datos.
+    struct.pack_into("<HH", data, 0x20C, 0, 1)
+    struct.pack_into("<II", data, 0x210, 16, 0x80000018)
+    struct.pack_into("<HH", data, 0x224, 0, 1)
+    struct.pack_into("<II", data, 0x228, 1, 0x80000030)
+    struct.pack_into("<HH", data, 0x23C, 0, 1)
+    struct.pack_into("<II", data, 0x240, 1033, 0x48)
+    struct.pack_into("<IIII", data, 0x248, 0x1100, len(info), 0, 0)
+    data[0x300:] = info
+    return bytes(data)
 
 
 def make_build(version, risk, branch, filename, platform="linux", arch="x86_64", mtime=0,
@@ -328,6 +370,62 @@ class FavoriteFilterTests(unittest.TestCase):
         self.assertEqual(api.filter_builds(self._builds(), "favorites"), [])
 
 
+class ExeVersionTests(unittest.TestCase):
+    """La versión exacta dentro del ``.exe`` de Windows.
+
+    El instalador oficial crea ``Blender 5.2`` aunque sea la 5.2.3, así que el
+    nombre de la carpeta no basta: el número de verdad está en el recurso de
+    versión del ejecutable (el que enseña el Explorador en Propiedades).
+    """
+
+    def _write(self, folder, data):
+        folder.mkdir(parents=True, exist_ok=True)
+        path = folder / "blender.exe"
+        path.write_bytes(data)
+        return path
+
+    def test_lee_los_numeros_del_recurso_de_version(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write(Path(tmp), fake_windows_exe(5, 2, 3))
+            self.assertEqual(exe_version.file_version(path), "5.2.3")
+
+    def test_el_parche_en_cero_se_conserva(self):
+        # ``5.2.0`` es una versión de verdad: recortarla a ``5.2`` la dejaría
+        # sin emparejar con la 5.2.0 de la tienda.
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write(Path(tmp), fake_windows_exe(5, 2, 0))
+            self.assertEqual(exe_version.file_version(path), "5.2.0")
+
+    def test_la_revision_se_ignora(self):
+        # Blender deja el cuarto número a cero: la versión comparable es la de
+        # la tienda (5.2.3), no 5.2.3.0.
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write(Path(tmp), fake_windows_exe(4, 5, 13))
+            self.assertEqual(exe_version.file_version(path), "4.5.13")
+
+    def test_un_fichero_que_no_es_un_ejecutable_no_inventa_nada(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write(Path(tmp), b"#!/bin/sh\necho hola\n")
+            self.assertEqual(exe_version.file_version(path), "")
+
+    def test_un_ejecutable_cortado_no_revienta(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            completo = fake_windows_exe(5, 2, 3)
+            for corte in (0, 10, 0x50, 0x150, 0x250, 0x310):
+                with self.subTest(corte=corte):
+                    path = self._write(Path(tmp), completo[:corte])
+                    self.assertEqual(exe_version.file_version(path), "")
+
+    def test_sin_recurso_de_version_se_queda_en_blanco(self):
+        # Un PE válido pero sin sección de recursos (o con ella vacía).
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write(Path(tmp), fake_windows_exe(5, 2, 3)[:0x200])
+            self.assertEqual(exe_version.file_version(path), "")
+
+    def test_una_ruta_que_no_existe_no_revienta(self):
+        self.assertEqual(exe_version.file_version("/nonexistent/blender.exe"), "")
+
+
 class InstalledTests(unittest.TestCase):
     def test_scan_finds_versions_and_executable(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -340,6 +438,56 @@ class InstalledTests(unittest.TestCase):
             self.assertEqual(len(results), 1)
             self.assertEqual(results[0].version, "4.5.13")
             self.assertIsNotNone(results[0].executable)
+
+    def test_una_instalacion_del_instalador_lee_su_parche(self):
+        """El instalador oficial crea ``Blender 5.2`` aunque sea la 5.2.3.
+
+        Leyendo solo el nombre, la app la tenía por una 5.2 y le ofrecía
+        "actualizar" a la 5.2.3 que ya estaba instalada. El parche se lee del
+        recurso de versión del ejecutable.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            folder = root / "Blender 5.2"
+            folder.mkdir()
+            (folder / "blender.exe").write_bytes(fake_windows_exe(5, 2, 3))
+            results = installed.scan_folders([root], "windows")
+            self.assertEqual([entry.version for entry in results], ["5.2.3"])
+
+    def test_una_instalacion_del_instalador_ya_no_pide_actualizarse(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            folder = root / "Blender 5.2"
+            folder.mkdir()
+            (folder / "blender.exe").write_bytes(fake_windows_exe(5, 2, 3))
+            entries = installed.scan_folders([root], "windows")
+            builds = [make_build("5.2.3", "stable", "v52", "b.zip",
+                                 platform="windows")]
+            self.assertEqual(installed.available_updates(entries, builds), [])
+
+    def test_un_nombre_que_dice_la_serie_a_proposito_no_se_toca(self):
+        """``blender-2.79b-windows64`` dice 2.79 y así empareja con la tienda.
+
+        El ejecutable sabe más, pero cambiar 2.79 por 2.79.7 dejaría de
+        emparejarlo con la build 2.79b de la tienda, y la app volvería a
+        ofrecer descargarla.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            folder = root / "blender-2.79b-windows64"
+            folder.mkdir()
+            (folder / "blender.exe").write_bytes(fake_windows_exe(2, 79, 7))
+            results = installed.scan_folders([root], "windows")
+            self.assertEqual([entry.version for entry in results], ["2.79"])
+
+    def test_sin_poder_leer_el_ejecutable_se_queda_la_serie(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            folder = root / "Blender 5.2"
+            folder.mkdir()
+            (folder / "blender.exe").write_text("no es un ejecutable")
+            results = installed.scan_folders([root], "windows")
+            self.assertEqual([entry.version for entry in results], ["5.2"])
 
     def test_scan_missing_folder(self):
         self.assertEqual(
@@ -2203,6 +2351,39 @@ class AvailableUpdatesTests(unittest.TestCase):
         builds = [make_build("5.3.0", "stable", "v53", "c.tar.xz")]
         entries = [self._entry("5.2.0"), self._entry("5.3.0", branch="v53")]
         self.assertEqual(installed.available_updates(entries, builds), [])
+
+    def test_el_salto_solo_sale_de_la_serie_mas_nueva(self):
+        """Una 4.5 LTS guardada junto a la 5.2 no pide saltar a la 5.3.
+
+        El diálogo del salto trae "Reemplazar": ofrecerlo sobre la LTS era
+        ofrecer borrarla.
+        """
+        builds = [make_build("5.3.0", "stable", "v53", "c.tar.xz")]
+        entries = [self._entry("4.5.13", branch="v45"), self._entry("5.2.0")]
+        result = installed.available_updates(entries, builds)
+        self.assertEqual(
+            [(u.entry.version, u.build.version, u.kind) for u in result],
+            [("5.2.0", "5.3.0", "series")])
+
+    def test_el_salto_no_va_a_una_serie_que_ya_tienes(self):
+        # Con 4.5 y 5.3.0 instaladas, la 5.3.1 es un parche de la 5.3, no un
+        # salto de serie para la 4.5.
+        builds = [make_build("5.3.1", "stable", "v53", "c.tar.xz")]
+        entries = [self._entry("4.5.13", branch="v45"),
+                   self._entry("5.3.0", branch="v53")]
+        result = installed.available_updates(entries, builds)
+        self.assertEqual(
+            [(u.entry.version, u.build.version, u.kind) for u in result],
+            [("5.3.0", "5.3.1", "patch")])
+
+    def test_sin_parche_conocido_no_se_ofrece_parche(self):
+        """Una ``5.2`` a secas puede ser ya la 5.2.3: no se le ofrece."""
+        builds = [make_build("5.2.3", "stable", "v52", "b.tar.xz"),
+                  make_build("5.3.0", "stable", "v53", "c.tar.xz")]
+        entry = self._entry("5.2", name="Blender 5.2")
+        result = installed.available_updates([entry], builds)
+        self.assertEqual([(u.build.version, u.kind) for u in result],
+                         [("5.3.0", "series")])
 
     def test_una_custom_no_recibe_avisos_de_actualizacion(self):
         """Reemplazar una build parcheada por la oficial es lo contrario de
