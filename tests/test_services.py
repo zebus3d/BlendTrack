@@ -480,6 +480,32 @@ class InstalledTests(unittest.TestCase):
             results = installed.scan_folders([root], "windows")
             self.assertEqual([entry.version for entry in results], ["2.79"])
 
+    def test_apuntar_la_propia_instalacion_la_reconoce(self):
+        """Quien añade ``...\\Blender Foundation\\Blender 5.2`` tal cual.
+
+        Antes solo se miraban los hijos de cada carpeta (``5.2/``) y la lista
+        salía vacía.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = Path(tmp) / "Blender 5.2"
+            (folder / "5.2" / "scripts").mkdir(parents=True)
+            (folder / "blender.exe").write_bytes(fake_windows_exe(5, 2, 3))
+            results = installed.scan_folders([folder], "windows")
+            self.assertEqual([(entry.version, entry.path, entry.root)
+                              for entry in results],
+                             [("5.2.3", folder, folder)])
+
+    def test_una_biblioteca_sin_ejecutable_sigue_mirando_dentro(self):
+        # El nombre dice "Blender 4.5", pero es una carpeta que guarda
+        # versiones: sin ejecutable en la raíz no se toma por una instalación.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "Blender 4.5 builds"
+            inner = root / "blender-4.5.13-linux-x64"
+            inner.mkdir(parents=True)
+            (inner / "blender").write_text("")
+            results = installed.scan_folders([root], "linux")
+            self.assertEqual([entry.version for entry in results], ["4.5.13"])
+
     def test_sin_poder_leer_el_ejecutable_se_queda_la_serie(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

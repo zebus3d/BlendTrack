@@ -502,6 +502,16 @@ def _scan_root(root: Path, platform: str):
     results = []
     if not _is_dir(root):
         return results
+    if _has_known_executable(root, platform):
+        # La carpeta configurada **es** una instalación: quien usó el
+        # instalador de blender.org apunta a menudo ``...\Blender Foundation\
+        # Blender 5.2`` en vez de la de encima. Sin esto se miraban sus hijos
+        # (``5.2/``, ``license/``) y no salía nada. Se exige el ejecutable en la
+        # raíz, que una biblioteca nunca tiene, para no confundir una carpeta
+        # llamada ``Blender 4.5 builds`` con una versión.
+        build = _build_from_dir(root, platform, root)
+        if build is not None:
+            return [build]
     for entry in _child_dirs(root):
         build = _build_from_dir(entry, platform, root)
         if build is not None:

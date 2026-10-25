@@ -2437,6 +2437,27 @@ class BlenderUpdateTests(SettingsIsolated, unittest.TestCase):
             self.assertIsNone(window._replace_entry)
             self.assertTrue(aviso.called)
 
+    def test_reemplazar_no_borra_la_nueva_si_quedo_dentro_de_la_vieja(self):
+        """La carpeta configurada era la propia instalación (``Blender 5.2``)
+        y la nueva se extrajo dentro: borrar la vieja se la llevaría."""
+        import tempfile
+        from unittest import mock
+
+        from ui.widgets.main_window import MainWindow
+
+        window = MainWindow()
+        with tempfile.TemporaryDirectory() as temp:
+            vieja = Path(temp) / "Blender 5.2"
+            nueva = vieja / "blender-5.2.4-windows-x64"
+            nueva.mkdir(parents=True)
+            window._replace_entry = self._entrada("5.2.3", carpeta=vieja)
+            with mock.patch.object(window, "refresh_installed"), \
+                    mock.patch.object(window, "_rebuild_store"):
+                window._on_extract_done(str(nueva))
+            self.assertTrue(nueva.exists())
+            self.assertTrue(vieja.exists())
+            self.assertIsNone(window._replace_entry)
+
     def test_nunca_silencia_la_serie_de_blender(self):
         from unittest import mock
 

@@ -300,6 +300,14 @@ class DownloadFlowMixin:
                 # se queda instalada y la vieja, intacta.
                 self._rebuild_store()
                 return
+            if Path(target).resolve().is_relative_to(Path(old.path).resolve()):
+                # La carpeta configurada puede ser la propia instalación (quien
+                # apuntó ``Blender Foundation\Blender 5.2``): entonces la nueva
+                # se ha extraído **dentro** de la vieja, y borrar la vieja se
+                # la llevaría por delante. Se quedan las dos.
+                download_log(f"replace skipped: {target} is inside {old.path}")
+                self._rebuild_store()
+                return
             try:
                 shutil.rmtree(old.path)
             except OSError as error:
