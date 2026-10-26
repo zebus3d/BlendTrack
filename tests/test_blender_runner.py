@@ -105,6 +105,33 @@ class RunningBlendersTest(unittest.TestCase):
                                    lambda self: self):
                 self.assertEqual(blender_runner.running_blenders(mia), [202])
 
+    def test_los_blender_en_segundo_plano_no_guardan_preferencias(self):
+        """``--background`` y ``--factory-startup`` no escriben al salir."""
+        guarda = blender_runner.saves_prefs_on_exit
+        self.assertTrue(guarda([]))
+        self.assertTrue(guarda(["escena.blend"]))
+        self.assertFalse(guarda(["--background", "--python-expr", "x"]))
+        self.assertFalse(guarda(["-b", "escena.blend"]))
+        self.assertFalse(guarda(["--factory-startup"]))
+        # Lo de detrás de ``--`` es del guion, no de Blender.
+        self.assertTrue(guarda(["--python", "x.py", "--", "-b"]))
+
+    def test_la_migracion_no_cuenta_los_blender_en_segundo_plano(self):
+        """La app lee el origen con un Blender ``--background``: no la bloquea."""
+        procesos = [(101, "/x/blender"), (202, "/y/blender")]
+        argumentos = {101: ["--background", "--python-expr", "x"], 202: []}
+        with mock.patch.object(blender_runner.sys, "platform", "linux"), \
+                mock.patch.object(blender_runner, "_linux_processes",
+                                  return_value=procesos), \
+                mock.patch.object(blender_runner, "_process_args",
+                                  side_effect=argumentos.get):
+            self.assertEqual(blender_runner.running_blenders(), [101, 202])
+            self.assertEqual(
+                blender_runner.running_blenders(prefs_writers_only=True), [202])
+            argumentos[202] = ["-b"]
+            self.assertFalse(
+                blender_runner.is_running(prefs_writers_only=True))
+
     def test_running_devuelve_una_lista(self):
         # No se afirma que esté vacía: el usuario puede tener Blender abierto.
         self.assertIsInstance(blender_runner.running_blenders(), list)

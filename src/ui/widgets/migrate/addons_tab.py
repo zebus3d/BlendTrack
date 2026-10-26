@@ -30,7 +30,8 @@ from ui.widgets.labels import ElidedLabel
 from ui.widgets.layouts import clear_layout, muted_note
 from ui.widgets.migrate.common import (ROW_HEIGHT, _STATUS,
                                            _accent_button, _destination_text,
-                                           _entry_info, _entry_program,
+                                           _entry_info, _entry_key,
+                                           _entry_program,
                                            _failure_block,
                                            _meta_text, _report_lines,
                                            _status_tooltip)
@@ -319,13 +320,15 @@ class AddonsTabMixin:
         plans, target_cfg = list(self.plans), self.target_cfg
         executable, version = _entry_info(self.target_entry)
         program = _entry_program(self.target_entry)
+        source_key = _entry_key(self.source_entry)
         ticket = self._copy_job.start(version)
         self._set_controls_enabled(False)
         self.status_message.emit(tr("Copying the add-ons..."))
 
         def worker():
             payload = {"executable": executable, "version": version,
-                       "program": program, "ticket": ticket}
+                       "program": program, "source_key": source_key,
+                       "ticket": ticket}
             try:
                 payload["result"] = baddons.apply_migration(plans, target_cfg)
             except Exception as error:  # noqa: BLE001 - se enseña el motivo
@@ -348,17 +351,51 @@ class AddonsTabMixin:
             tr("Some add-ons could not be copied:"),
             lambda plan: plan.addon.name)
 
-        # Solo se activan los que estaban activos en origen.
-        executable, version = payload["executable"], payload["version"]
-        modules = [plan.enable_module for plan in result.copied
-                   if plan.was_enabled]
-        if not (executable and modules and Path(executable).is_file()):
+        executable = payload["executable"]
+        if not (executable and result.copied and Path(executable).is_file()):
+            return
+        # Qué estaba activo en origen lo dice un Blender en segundo plano que
+        # se arranca al elegir la versión, y tarda unos segundos. Si se pulsa
+        # Copiar antes de que acabe, el plan aún cree que no había ninguno
+        # activo: antes se copiaba con esa foto y el addon llegaba apagado sin
+        # ningún aviso. Ahora, si esa lectura sigue en marcha, la activación
+        # espera a que llegue (``_resume_pending_activation``).
+        if (self._prefs_read.running
+                and self._prefs_read.key == payload["source_key"]):
+            self._pending_activation = payload
+            self.status_message.emit(tr("Enabling the add-ons in Blender..."))
+            return
+        self._activate_copied(payload)
+
+    def _activate_copied(self, payload) -> None:
+        """Activa en destino los addons copiados que estaban activos en origen.
+
+        Se consulta el estado leído **ahora** (``source_enabled``) y no el
+        ``was_enabled`` del plan que se copió, que pudo hacerse antes de que
+        terminara la lectura. Si no hay lectura de este origen (falló), se usa
+        lo que dijera el plan; nunca se activa a ciegas.
+        """
+        copied = payload["result"].copied
+        if self._source_read_for == payload["source_key"]:
+            modules = [plan.enable_module for plan in copied
+                       if baddons.addon_id_of(plan.addon.module)
+                       in self.source_enabled]
+        else:
+            modules = [plan.enable_module for plan in copied
+                       if plan.was_enabled]
+        if not modules:
             return
         # Se vuelve a mirar: mientras se copiaba, el usuario pudo abrir Blender.
         if self._blocked_by_running():
             return
-        self._start_activation(executable, modules, version,
-                               payload["program"])
+        self._start_activation(payload["executable"], modules,
+                               payload["version"], payload["program"])
+
+    def _resume_pending_activation(self) -> None:
+        """Lanza la activación que esperaba a la lectura del origen, si la hay."""
+        payload, self._pending_activation = self._pending_activation, None
+        if payload is not None:
+            self._activate_copied(payload)
 
     def undo(self) -> None:
         """Revierte la última migración sobre el destino."""

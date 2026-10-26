@@ -170,9 +170,15 @@ def blender_is_running(executable=None) -> bool:
     pasar, y en Windows la detección ni existe (devuelve siempre False). Lo
     que no puede pasar es que el fallo sea invisible: sin la línea del log,
     "no me avisó de que Blender estaba abierto" no tendría explicación.
+
+    Solo cuentan los Blender que guardan preferencias al cerrarse: los que
+    corren en ``--background`` (los que arranca la propia app para leer el
+    origen, un test, un render por consola) no pueden pisar nada, y contarlos
+    hacía que la Migración pidiera cerrar un Blender que no se veía por ningún
+    lado.
     """
     try:
-        return blender_runner.is_running(executable)
+        return blender_runner.is_running(executable, prefs_writers_only=True)
     except Exception as error:  # noqa: BLE001 - ver el docstring
         download_log(f"could not tell whether Blender is running: {error}")
         return False

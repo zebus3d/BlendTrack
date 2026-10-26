@@ -542,8 +542,25 @@ def copy_entry(source: Path, destination: Path) -> None:
     En las carpetas, ``symlinks=True`` como el propio ``preferences.copy_prev``
     de Blender: los enlaces de dentro (muy típicos en desarrollo) tienen que
     seguir apuntando a su sitio, no duplicarse.
+
+    Lo mismo vale para el addon **entero**: si en origen es un enlace a la
+    carpeta del proyecto (así se instala un addon en desarrollo, p. ej. con la
+    extensión Blender Dev), en destino se crea otro enlace al mismo sitio.
+    ``copytree`` solo respeta los enlaces de *dentro*; el de la raíz lo seguía
+    y copiaba el repositorio completo, ``.git`` y temporales incluidos: con
+    MatPlus fueron 76 GB y la migración pareció colgada durante minutos. Y
+    además una copia deja de recibir los cambios del proyecto, que es justo
+    para lo que estaba enlazado. Si el sistema no deja crear el enlace
+    (Windows sin permiso de enlaces simbólicos), se copia como antes.
     """
     source = Path(source)
+    if source.is_symlink() and source.is_dir():
+        try:
+            os.symlink(os.path.realpath(source), destination,
+                       target_is_directory=True)
+            return
+        except OSError:
+            pass
     if source.is_dir():
         shutil.copytree(source, destination, symlinks=True)
     else:

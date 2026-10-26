@@ -4273,6 +4273,46 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
                 _, modules = enable.call_args[0][:2]
                 self.assertEqual(modules, ["activo"])
 
+    def test_si_copia_antes_de_leer_el_origen_activa_al_terminar_la_lectura(self):
+        """Copiar mientras se lee el origen no deja el addon apagado.
+
+        La copia se hacía con el plan de antes de la lectura (nadie activo) y
+        el addon llegaba al destino sin activar, sin ningún aviso.
+        """
+        from unittest import mock as _mock
+        from ui.widgets.migrate.common import _entry_key
+
+        with tempfile.TemporaryDirectory() as tmp:
+            source = self._config(
+                tmp, "4.5.0",
+                legacy=("activo",
+                        'bl_info = {"name": "Activo", "version": (1, 0), '
+                        '"blender": (4, 0, 0)}\n'))
+            target = self._config(tmp, "5.3.0")
+            exe = Path(tmp) / "blender"
+            exe.write_text("", encoding="utf-8")
+            view = self._view()
+            with _mock.patch("services.blender_runner.is_running",
+                             return_value=False), \
+                    _mock.patch("ui.widgets.dialogs.show_info"), \
+                    _mock.patch("ui.widgets.migrate.addons_tab.threading") as threading, \
+                    _mock.patch("services.blender_runner.enable_addons",
+                                return_value={"enabled": ["activo"],
+                                              "errors": []}) as enable:
+                threading.Thread.side_effect = self._run_now
+                self._with_configs(view, {"4.5.0": source, "5.3.0": target},
+                                   source="4.5.0", target="5.3.0")
+                view.target_entry = _fake_installed("5.3.0")
+                view.target_entry.executable = exe
+                # La lectura del origen sigue en marcha al pulsar Copiar.
+                ticket = view._prefs_read.start(_entry_key(view.source_entry))
+                view.apply()
+                enable.assert_not_called()
+                view._on_source_read({"version": "4.5.0", "enabled": ["activo"],
+                                      "ticket": ticket})
+                self.assertTrue(enable.called)
+                self.assertEqual(enable.call_args[0][1], ["activo"])
+
     def test_no_intenta_activar_si_el_ejecutable_no_existe(self):
         from unittest import mock as _mock
 
@@ -4958,7 +4998,7 @@ class MigrateViewTests(SettingsIsolated, unittest.TestCase):
                          return_value=True) as running, \
                 _mock.patch("ui.widgets.dialogs.show_info") as info:
             self.assertTrue(view._blocked_by_running())
-        running.assert_called_with(None)
+        running.assert_called_with(None, prefs_writers_only=True)
         self.assertTrue(info.called)
 
     def test_review_explica_como_revisar(self):

@@ -471,6 +471,67 @@ class ApplyMigrationTest(unittest.TestCase):
             payload = json.loads(result.marker.read_text(encoding="utf-8"))
             self.assertEqual(payload["version"], "4.5")
 
+    def test_un_addon_enlazado_se_migra_como_enlace(self):
+        """Un addon en desarrollo (enlace al proyecto) no se copia entero.
+
+        ``copytree`` seguía el enlace de la raíz y duplicaba el repositorio
+        completo (76 GB con MatPlus); el destino tiene que apuntar al mismo
+        proyecto, como en origen.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            proyecto = Path(tmp) / "github" / "MiAddon"
+            proyecto.mkdir(parents=True)
+            (proyecto / "a.py").write_text("hola", encoding="utf-8")
+            source_cfg = _config(Path(tmp) / "source")
+            enlace = source_cfg.extensions_dir / "blender_dev" / "MiAddon"
+            enlace.parent.mkdir(parents=True)
+            enlace.symlink_to(proyecto, target_is_directory=True)
+            target = _config(Path(tmp) / "target", version="5.3")
+            plan = self._plan(self._addon(enlace),
+                              target.extensions_dir / "user_default" / "MiAddon")
+            result = baddons.apply_migration([plan], target)
+            self.assertEqual(len(result.copied), 1)
+            self.assertTrue(plan.destination.is_symlink())
+            self.assertEqual(plan.destination.resolve(), proyecto.resolve())
+            # Deshacer quita el enlace, nunca el proyecto.
+            baddons.undo_migration(target)
+            self.assertFalse(plan.destination.is_symlink())
+            self.assertTrue((proyecto / "a.py").is_file())
+
+    def test_un_addon_en_carpeta_real_se_sigue_copiando(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "addon"
+            source.mkdir()
+            (source / "a.py").write_text("hola", encoding="utf-8")
+            target = _config(Path(tmp) / "target")
+            plan = self._plan(self._addon(source), target.addons_dir / "addon")
+            baddons.apply_migration([plan], target)
+            self.assertFalse(plan.destination.is_symlink())
+            self.assertEqual((plan.destination / "a.py").read_text(), "hola")
+
+    def test_remigrar_un_enlace_cambia_la_copia_vieja_por_el_enlace(self):
+        """La copia entera de una migración anterior se sustituye por el enlace."""
+        with tempfile.TemporaryDirectory() as tmp:
+            proyecto = Path(tmp) / "github" / "MiAddon"
+            proyecto.mkdir(parents=True)
+            (proyecto / "a.py").write_text("hola", encoding="utf-8")
+            enlace = Path(tmp) / "source" / "MiAddon"
+            enlace.parent.mkdir(parents=True)
+            enlace.symlink_to(proyecto, target_is_directory=True)
+            target = _config(Path(tmp) / "target", version="5.3")
+            destination = target.extensions_dir / "user_default" / "MiAddon"
+            plan = self._plan(self._addon(enlace), destination)
+            # Lo que dejó la versión anterior de la app: una copia de verdad.
+            with mock.patch.object(baddons.os, "symlink",
+                                   side_effect=OSError("sin enlaces")):
+                baddons.apply_migration([plan], target)
+            self.assertFalse(destination.is_symlink())
+            baddons.apply_migration([plan], target)
+            self.assertTrue(destination.is_symlink())
+            # Era nuestra copia: no se queda un .bak de 76 GB al lado.
+            restos = [p.name for p in destination.parent.iterdir()]
+            self.assertEqual(restos, ["MiAddon"])
+
     def test_aparta_lo_que_ya_existe(self):
         with tempfile.TemporaryDirectory() as tmp:
             source = Path(tmp) / "addon"

@@ -553,6 +553,7 @@ class PrefsTabMixin:
         trabajo se da por cerrado en ``_on_prefs_loaded``, no aquí.
         """
         if not self._reading_current_source(payload):
+            self._resume_pending_activation()
             return
         if payload.get("enabled") is not None:
             self._source_read_for = self._prefs_read.key
@@ -562,6 +563,9 @@ class PrefsTabMixin:
         if self.source_cfg is not None and self.target_cfg is not None:
             self._rebuild_plan()
         self._update_detail_status()
+        # Una copia que terminó antes que esta lectura espera a saber qué
+        # activar (ver ``_on_addons_copied``).
+        self._resume_pending_activation()
 
     def _update_detail_status(self) -> None:
         """Resume en una línea qué se ha leído del origen: ajustes y addons."""

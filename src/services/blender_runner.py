@@ -330,7 +330,56 @@ def _macos_processes():
     return processes
 
 
-def running_blenders(executable=None) -> list:
+# Argumentos con los que Blender **no** guarda las preferencias al cerrarse.
+# Comprobado en el fuente (``wm_init_exit.cc``): en ``--background`` el salir
+# nunca hace las "acciones de usuario" (``do_user_exit_actions`` es falso) y
+# ``--factory-startup`` activa ``G_FLAG_USERPREF_NO_SAVE_ON_EXIT``.
+_NO_PREFS_SAVE_ARGS = frozenset({"-b", "--background", "--factory-startup"})
+
+
+def saves_prefs_on_exit(args) -> bool:
+    """True si un Blender lanzado con ``args`` escribe ``userpref.blend`` al salir.
+
+    Lo que va detrás de ``--`` es del guion de Python, no de Blender, y no
+    cuenta: ``blender --python x.py -- -b`` sí es un Blender con ventana.
+    """
+    for arg in args:
+        if arg == "--":
+            break
+        if arg in _NO_PREFS_SAVE_ARGS:
+            return False
+    return True
+
+
+def _process_args(pid: int) -> list:
+    """Argumentos de un proceso (sin el ejecutable), o ``[]`` si no se saben.
+
+    En Linux salen de ``/proc/<pid>/cmdline`` (separados por ``\\0``, así
+    que una ruta con espacios no se parte). En macOS, de ``ps -o args=``,
+    partidos por espacios: basta para reconocer ``-b`` o ``--background``,
+    que van sueltos. Si no se pueden leer se devuelve ``[]``, que equivale a
+    "guarda preferencias": ante la duda se avisa.
+    """
+    if sys.platform.startswith("linux"):
+        try:
+            raw = (Path("/proc") / str(pid) / "cmdline").read_bytes()
+        except OSError:
+            return []
+        return [part.decode(errors="replace")
+                for part in raw.split(b"\0")[1:] if part]
+    if sys.platform == "darwin":
+        try:
+            completed = subprocess.run(["ps", "-o", "args=", "-p", str(pid)],
+                                       capture_output=True, text=True,
+                                       timeout=5, stdin=subprocess.DEVNULL,
+                                       env=clean_env())
+        except (OSError, subprocess.SubprocessError):
+            return []
+        return completed.stdout.split()[1:]
+    return []
+
+
+def running_blenders(executable=None, prefs_writers_only=False) -> list:
     """PIDs de los Blender abiertos, si se pueden averiguar.
 
     * **Linux**: se mira a qué apunta ``/proc/<pid>/exe`` (robusto aunque el
@@ -344,6 +393,15 @@ def running_blenders(executable=None) -> list:
 
     Escribir ``userpref.blend`` con Blender abierto es perder el cambio al
     cerrarlo, así que conviene comprobarlo antes de tocar nada.
+
+    ``prefs_writers_only`` deja fuera los Blender que no guardan preferencias
+    al salir (``--background``, ``--factory-startup``; ver
+    ``saves_prefs_on_exit``). Es lo que pregunta la Migración: la propia app
+    arranca el Blender de origen en ``--background`` para leer sus addons y
+    ajustes, y sin este filtro se bloqueaba a sí misma con un "cierra Blender"
+    sin ninguna ventana abierta (pasaba también con los tests o los renders
+    por consola del usuario). Para mover o borrar una versión no vale: ahí
+    cualquier proceso que use sus ficheros estorba.
     """
     target = None
     if executable:
@@ -352,12 +410,16 @@ def running_blenders(executable=None) -> list:
         except OSError:
             target = None
     if sys.platform.startswith("linux"):
-        return _matching_pids(_linux_processes(), target)
-    if sys.platform == "darwin":
-        return _matching_pids(_macos_processes(), target)
-    return []
+        pids = _matching_pids(_linux_processes(), target)
+    elif sys.platform == "darwin":
+        pids = _matching_pids(_macos_processes(), target)
+    else:
+        return []
+    if prefs_writers_only:
+        pids = [pid for pid in pids if saves_prefs_on_exit(_process_args(pid))]
+    return pids
 
 
-def is_running(executable=None) -> bool:
+def is_running(executable=None, prefs_writers_only=False) -> bool:
     """True si hay un Blender abierto (de esa build, o cualquiera)."""
-    return bool(running_blenders(executable))
+    return bool(running_blenders(executable, prefs_writers_only))

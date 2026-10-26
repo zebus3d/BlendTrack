@@ -96,6 +96,9 @@ class MigrateView(AddonsTabMixin, PrefsTabMixin, FactoryTabMixin,
         # hizo, para no repetir el arranque de Blender mientras no cambie.
         self._source_read_for = None
         self.source_enabled = set()
+        # Copia terminada que espera a la lectura del origen para saber qué
+        # addons activar (ver ``_on_addons_copied``).
+        self._pending_activation = None
         self.detail_prefs = []
         self.detail_checks = []
         # Cuántas claves no se pudieron leer en la última lectura del origen.
