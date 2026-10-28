@@ -130,13 +130,24 @@ llevan; la interfaz pone el texto con `fork_label`/`fork_name`.
 Las dos fuentes, comprobadas en directo y con las mismas que usa Blender
 Launcher V2:
 
-- **Bforartists** (`fetch_bforartists`): NextCloud público, listado **WebDAV**
-  (`cloud.bforartists.de/public.php/webdav`, token `JxCjbyt2fFcHjy4`) con un
-  `PROPFIND` a la raíz y otro por versión. Se cachea por `getlastmodified` para
-  no repetir 30 y pico peticiones cada refresco. El ejecutable es
-  **`bforartists`** (no `blender`) y las descargas llevan la misma Basic auth
-  (`forks.download_headers`, que la UI pasa por `Source.headers` → el
-  `Downloader`). macOS publica dos `.dmg` por arquitectura desde 4.5.
+- **Bforartists** (`fetch_bforartists`): desde octubre de 2026 publica en
+  **`downloads.bforartists.com`** (nos lo pasó su autor), una sola página HTML
+  con un `<details>` por versión (`<summary>Bforartists 5.2.0</summary>`) y una
+  tabla con un enlace por fichero. Una petición trae el catálogo entero y las
+  descargas **no** llevan autenticación. Solo se aceptan enlaces HTTPS de ese
+  mismo host (lo que se baja se ejecuta). El ejecutable es **`bforartists`**
+  (no `blender`). macOS publica dos `.dmg` por arquitectura desde 4.5.
+  `devbuilds.bforartists.com` (compilaciones de desarrollo con fecha y sin
+  número de versión) **no** se lee.
+  - **Respaldo: el NextCloud de antes**, listado **WebDAV**
+    (`cloud.bforartists.de/public.php/webdav`, token `JxCjbyt2fFcHjy4`) con un
+    `PROPFIND` a la raíz y otro por versión, cacheado por `getlastmodified`. Se
+    usa si el servidor nuevo falla o no trae versiones. No quitarlo todavía:
+    los DNS con filtro (NextDNS, Cloudflare for Families...) bloquean durante
+    semanas los dominios recién registrados, y así le pasó al propio
+    desarrollador (resolvía a `0.0.0.0`). Esas descargas llevan la Basic auth
+    (`forks.download_headers`, que la UI pasa por `Source.headers` → el
+    `Downloader`).
 - **UPBGE** (`fetch_upbge`): API de releases de GitHub (`UPBGE/upbge`) con
   `ETag`/`If-None-Match` (el 304 no gasta cuota). Hoy solo publica
   `weekly-build-N` alfa (`branch="upbge-weekly"`, `risk="alpha"`,
@@ -657,26 +668,15 @@ minor** (`v1.3.0`).
   `src/services/updater.py` (`BlendTrack-x86_64.AppImage`,
   `BlendTrack-windows-x86_64.zip`, `BlendTrack-macos.zip`). Si cambian
   en el CI, actualiza también el updater.
-- **Assets de compatibilidad (temporales)**: los tres jobs publican además una
-  copia con el nombre antiguo (*BlenderManager*), porque quien tenga instalado
-  el proyecto de antes del renombrado (≤ v1.62) busca su asset por el nombre
-  viejo (el `ASSET_NAMES` de **su** copia) y sin eso no puede actualizarse
-  nunca: "No update available for this platform", para siempre. No es un
-  error, y el binario de dentro es el mismo (ya lleva la versión nueva):
-  - Linux: `BlenderManager-x86_64.AppImage`, copia tal cual. Al aplicarla se
-    reemplaza el fichero en su sitio y el nombre interno no importa.
-  - Windows: `BlenderManager-windows-x86_64.zip` con el `.exe` renombrado a
-    `BlenderManager.exe` **dentro** del zip: el updater de la copia vieja lo
-    busca por ese nombre para lanzarlo como ayudante.
-  - macOS: `BlenderManager-macos.zip` con el bundle y su ejecutable
-    renombrados, y `CFBundleExecutable` cambiado en el `Info.plist` (si no,
-    `open` no encuentra el binario).
-  El código nuevo reconoce ese nombre (`updater.LEGACY_EXE_NAME`): al aplicar
-  la actualización relanza el ejecutable que haya y borra el sobrante, para no
-  dejar dos binarios en la carpeta. Quitar los tres del `build.yml` (y
-  `LEGACY_EXE_NAME`) cuando ya no queden instalaciones antiguas. Solo llega a
-  quien abra la app durante la ventana, y solo desde una release **final**
-  promovida (`releases/latest` ignora los pre-releases).
+- **Solo se publican assets con el nombre BlendTrack.** Hasta la v1.75 los
+  tres jobs subían además una copia con el nombre antiguo (*BlenderManager*)
+  para que las instalaciones de antes del renombrado (≤ v1.62) pudieran
+  actualizarse. Se quitó a propósito: el puente estuvo abierto trece minors y
+  quien no abrió la app en ese tiempo tiene que bajar BlendTrack a mano. **No
+  volver a publicar nada con el nombre viejo.** Lo único que queda es
+  `updater.LEGACY_EXE_NAME`, que no genera nada: al aplicar una actualización
+  en Windows borra el `BlenderManager.exe` que pudiera seguir en la carpeta de
+  quien se actualizó por el puente, para que no abra el de siempre.
 - **`checksums.txt`**: el job `release` lo genera y el updater lo usa para
   verificar el SHA-256 antes de instalar (ver "Auto-update"). No quitar ese
   paso: sin él, ninguna app instalada puede actualizarse sola.

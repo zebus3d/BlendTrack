@@ -6,12 +6,16 @@ propias versiones y la gente las usa a diario. Blender Launcher V2 las ofrece
 desde hace años, y este módulo trae las mismas dos fuentes, con la biblioteca
 estándar (``urllib``): **no se añade ninguna dependencia** al empaquetado.
 
-* **Bforartists** vive en un NextCloud público. Su listado es **WebDAV**:
-  un ``PROPFIND`` a la raíz devuelve una carpeta ``Bforartists X.Y.Z`` por
-  versión y, dentro, los ficheros por plataforma. El share es público y su
-  token va aquí igual que en Blender Launcher, que lo publica en su código.
-  Para no repetir 30 y pico peticiones en cada refresco, cada versión se cachea
-  por su ``getlastmodified`` y solo se vuelve a pedir la que cambió.
+* **Bforartists** publica en ``downloads.bforartists.com`` (servidor nuevo,
+  octubre de 2026, nos lo pasó su autor): **una sola página** con un
+  ``<details>`` por versión y, dentro, un enlace por fichero. Una petición
+  trae el catálogo entero y las descargas no piden autenticación. El
+  NextCloud de antes (``cloud.bforartists.de``, listado **WebDAV** con un
+  ``PROPFIND`` por versión) se queda de **respaldo**: un dominio recién
+  registrado lo bloquean durante semanas los DNS con filtro (NextDNS y
+  compañía bloquean los dominios nuevos), y sin el respaldo esos usuarios se
+  quedarían sin pestaña. En el respaldo cada versión se cachea por su
+  ``getlastmodified`` para no repetir 30 y pico peticiones en cada refresco.
 * **UPBGE** publica en GitHub Releases. Es una sola petición JSON, con ``ETag``
   para no gastar cuota cuando nada cambió (GitHub no cuenta los 304). Sus
   builds son casi siempre semanales (``weekly-build-N``, alfa de la rama de
@@ -28,6 +32,7 @@ No importa Qt.
 
 import base64
 import concurrent.futures
+import html.parser
 import json
 import re
 import time
@@ -53,6 +58,15 @@ BFA_WORKERS = 6
 
 # --------------------------------------------------------------- Bforartists
 
+# El servidor de descargas nuevo: una página con todas las versiones.
+BFA_DOWNLOADS_HOST = "downloads.bforartists.com"
+BFA_DOWNLOADS_URL = f"https://{BFA_DOWNLOADS_HOST}/"
+# ``534 MB`` -> bytes. La página no da el tamaño exacto, solo redondeado, pero
+# basta para la tarjeta y la barra de progreso usa el ``Content-Length``.
+BFA_SIZE_RE = re.compile(r"([\d.]+)\s*(B|KB|MB|GB)", re.IGNORECASE)
+BFA_SIZE_UNITS = {"b": 1, "kb": 1024, "mb": 1024 ** 2, "gb": 1024 ** 3}
+
+# El NextCloud de antes, que queda de respaldo.
 BFA_HOST = "cloud.bforartists.de"
 BFA_ORIGIN = f"https://{BFA_HOST}"
 BFA_WEBDAV_URL = f"{BFA_ORIGIN}/public.php/webdav"
@@ -129,6 +143,108 @@ def _http_get_json(url: str, timeout: int, etag: str | None = None):
         raise
 
 
+def _http_get_text(url: str, timeout: int) -> str:
+    """Descarga una página y la devuelve como texto (UTF-8)."""
+    request = urllib.request.Request(url, headers={"User-Agent": net.USER_AGENT})
+    with urllib.request.urlopen(request, timeout=timeout,
+                                context=tls.ssl_context()) as response:
+        return response.read().decode("utf-8", errors="replace")
+
+
+class _BfaDownloadsParser(html.parser.HTMLParser):
+    """Lee la página de ``downloads.bforartists.com``.
+
+    Cada versión es un ``<details>`` cuyo ``<summary>`` dice
+    ``Bforartists 5.2.0`` y cuya tabla lleva una fila por fichero: el enlace y,
+    en la celda ``class="s"``, el tamaño. El bloque «Latest» de arriba repite
+    la última versión fuera de cualquier ``<details>``, así que se ignora solo.
+    Se usa el parser de la biblioteca estándar y no expresiones regulares
+    sobre el HTML: el orden de los atributos o una comilla de más no lo rompen.
+    """
+
+    def __init__(self):
+        super().__init__()
+        # ``[(versión, [(url, tamaño en texto)])]``, en el orden de la página.
+        self.versions = []
+        self._in_details = False
+        self._in_summary = False
+        self._summary = ""
+        self._current = None
+        self._in_size = False
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == "details":
+            self._in_details = True
+            self._summary = ""
+        elif tag == "summary" and self._in_details:
+            self._in_summary = True
+        elif tag == "a" and self._current is not None and attrs.get("href"):
+            self._current[1].append([attrs["href"], ""])
+        elif (tag == "td" and self._current is not None and self._current[1]
+              and attrs.get("class") == "s"):
+            self._in_size = True
+
+    def handle_endtag(self, tag):
+        if tag == "summary" and self._in_summary:
+            self._in_summary = False
+            match = BFA_VERSION_RE.search(self._summary)
+            if match:
+                self._current = (match.group(1), [])
+                self.versions.append(self._current)
+        elif tag == "td":
+            self._in_size = False
+        elif tag == "details":
+            self._in_details = False
+            self._current = None
+
+    def handle_data(self, data):
+        if self._in_summary:
+            self._summary += data
+        elif self._in_size:
+            self._current[1][-1][1] += data
+
+
+def _bfa_size(text: str) -> int:
+    """``534 MB`` -> bytes (0 si no se entiende)."""
+    match = BFA_SIZE_RE.search(text or "")
+    if not match:
+        return 0
+    try:
+        return int(float(match.group(1)) * BFA_SIZE_UNITS[match.group(2).lower()])
+    except ValueError:
+        return 0
+
+
+def _parse_bfa_downloads(page: str) -> dict:
+    """Convierte la página de descargas en ``{versión: [Build]}``.
+
+    Solo se aceptan enlaces HTTPS del propio servidor de descargas: lo que se
+    baja de aquí se ejecuta, y un enlace a otro dominio en la página no debe
+    acabar en la tienda.
+    """
+    parser = _BfaDownloadsParser()
+    try:
+        parser.feed(page)
+    except Exception as error:  # el parser no debería fallar, pero por si acaso
+        log(f"bforartists downloads: HTML ilegible ({error})")
+        return {}
+    versions = {}
+    for version, links in parser.versions:
+        entries = []
+        for href, size in links:
+            url = urllib.parse.urljoin(BFA_DOWNLOADS_URL, href)
+            parsed = urllib.parse.urlparse(url)
+            if parsed.scheme != "https" or parsed.hostname != BFA_DOWNLOADS_HOST:
+                continue
+            name = urllib.parse.unquote(parsed.path.rsplit("/", 1)[-1])
+            entries.append({"url": url, "name": name, "is_dir": False,
+                            "modified": 0, "size": _bfa_size(size)})
+        # Una versión que aparezca dos veces (no debería) se queda la primera.
+        versions.setdefault(version, _bfa_builds_from(entries, version))
+    return versions
+
+
 def _parse_multistatus(data: bytes) -> list:
     """Convierte el XML de un ``PROPFIND`` en una lista de entradas.
 
@@ -202,7 +318,7 @@ def _bfa_builds_from(entries: list, version: str) -> list:
                 risk="stable",
                 platform=platform,
                 arch=_bfa_platform_arch(name),
-                url=BFA_ORIGIN + entry["href"],
+                url=entry.get("url") or BFA_ORIGIN + entry["href"],
                 filename=name,
                 size=entry["size"],
                 mtime=entry["modified"],
@@ -266,15 +382,47 @@ def _bfa_builds_from_versions(versions: dict) -> list:
     return builds
 
 
-def fetch_bforartists(timeout: int = 20) -> list:
-    """Listado de Bforartists: versiones y ficheros, con caché por fecha.
+def _save_bfa_cache(versions: dict) -> None:
+    """Guarda las versiones de Bforartists (las dos fuentes usan la misma forma)."""
+    try:
+        write_json_atomic(bfa_cache_path(),
+                          {"saved_at": int(time.time()), "versions": versions})
+    except OSError as error:
+        log(f"could not save bforartists cache: {error}")
 
-    Se pide la raíz (una petición) y luego una por versión, **solo de las que
-    cambiaron** desde la última vez. Las que no, se sirven del caché en disco.
-    Si algo falla, se cae al caché entero antes que dejar la pestaña vacía.
+
+def fetch_bforartists(timeout: int = 20) -> list:
+    """Listado de Bforartists: el servidor nuevo y, si no contesta, el viejo.
+
+    Primero ``downloads.bforartists.com`` (una petición). Si falla o la página
+    no trae ninguna versión, se pasa al WebDAV de antes, y si también falla, al
+    caché: antes eso que dejar la pestaña vacía.
     """
     cache = _load_cache(bfa_cache_path())
     cached = _bfa_cached_versions(cache)
+    try:
+        versions = _parse_bfa_downloads(_http_get_text(BFA_DOWNLOADS_URL, timeout))
+    except Exception as error:
+        log(f"bforartists downloads unavailable, trying webdav: {error}")
+        versions = {}
+    if versions:
+        # Sin fecha por versión (``modified`` 0): si un día se vuelve al
+        # WebDAV, esas versiones se piden de nuevo en vez de fiarse del caché.
+        fresh = {version: {"modified": 0,
+                           "assets": [asdict(build) for build in builds]}
+                 for version, builds in versions.items()}
+        _save_bfa_cache(fresh)
+        return _bfa_builds_from_versions(fresh)
+    log("bforartists downloads has no versions; trying webdav")
+    return _fetch_bforartists_webdav(timeout, cached)
+
+
+def _fetch_bforartists_webdav(timeout: int, cached: dict) -> list:
+    """El listado del NextCloud de antes, con caché por fecha.
+
+    Se pide la raíz (una petición) y luego una por versión, **solo de las que
+    cambiaron** desde la última vez. Las que no, se sirven del caché en disco.
+    """
     try:
         root_entries = _parse_multistatus(_propfind(BFA_WEBDAV_URL + "/", timeout))
     except Exception as error:
@@ -333,11 +481,7 @@ def fetch_bforartists(timeout: int = 20) -> list:
     builds = _bfa_builds_from_versions(
         {version: fresh[version] for version, _entry in versions
          if version in fresh})
-    try:
-        write_json_atomic(bfa_cache_path(),
-                          {"saved_at": int(time.time()), "versions": fresh})
-    except OSError as error:
-        log(f"could not save bforartists cache: {error}")
+    _save_bfa_cache(fresh)
     return builds
 
 
@@ -485,10 +629,11 @@ def fetch(fork: str, timeout: int = 20) -> list:
 def download_headers(url: str) -> dict:
     """Cabeceras que necesita una descarga según de dónde venga.
 
-    El share de Bforartists es un NextCloud público: el listado y los ficheros
-    exigen la misma autenticación Basic (usuario = token, contraseña vacía).
-    Sin esto, descargar una versión de Bforartists daba 401. El resto de
-    fuentes (CDN de Blender, releases de GitHub) son públicas.
+    El share de Bforartists de antes (el respaldo) es un NextCloud público:
+    el listado y los ficheros exigen la misma autenticación Basic (usuario =
+    token, contraseña vacía); sin esto, descargar de ahí daba 401. El servidor
+    nuevo de Bforartists y el resto de fuentes (CDN de Blender, releases de
+    GitHub) son públicos.
     """
     # Se compara el host ya interpretado, no el principio del texto: con
     # ``startswith`` también pasaban ``https://cloud.bforartists.de.otro.com``

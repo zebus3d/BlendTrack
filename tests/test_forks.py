@@ -1,4 +1,5 @@
-"""Tests de ``services.forks``: Bforartists (WebDAV) y UPBGE (GitHub).
+"""Tests de ``services.forks``: Bforartists (página de descargas y WebDAV) y
+UPBGE (GitHub).
 
 Los dos parsers son funciones puras sobre el texto que devuelve el servidor,
 así que se prueban con XML/JSON de mentira y **sin red**. Lo que se comprueba
@@ -88,11 +89,105 @@ VERSION_XML = """<?xml version="1.0"?>
 </d:multistatus>"""
 
 
-class BfaWebDavTests(unittest.TestCase):
+# Un trozo de la página de ``downloads.bforartists.com``: el bloque «Latest»
+# (fuera de cualquier ``<details>``) y dos versiones, con instalador, notas y
+# un enlace a otro dominio que no deben colarse.
+DOWNLOADS_HTML = """<html><body>
+<h2>Latest: Bforartists 5.2.0</h2><div class="cards">
+<a class="btn" href="https://downloads.bforartists.com/Bforartists-5.2.0-Windows.zip">x</a>
+</div>
+<details><summary>Bforartists 5.2.0 <span class=s>(5 files)</span></summary><table>
+<tr><td><a href="https://downloads.bforartists.com/Bforartists-5.2.0-Windows.zip">w</a></td><td class=p>Windows</td><td class=s>534 MB</td></tr>
+<tr><td><a href="https://downloads.bforartists.com/Install_Bforartists5_520.exe">i</a></td><td class=p>Windows</td><td class=s>403 MB</td></tr>
+<tr><td><a href="https://downloads.bforartists.com/Bforartists-5.2.0-Mac-Silicon.dmg">m</a></td><td class=p>macOS</td><td class=s>570 MB</td></tr>
+<tr><td><a href="https://downloads.bforartists.com/Bforartists-5.2.0-Linux.tar.xz">l</a></td><td class=p>Linux</td><td class=s>423 MB</td></tr>
+<tr><td><a href="https://otro.example.com/Bforartists-5.2.0-Linux.tar.xz">x</a></td><td class=p>Linux</td><td class=s>1 MB</td></tr>
+</table></details>
+<details><summary>Bforartists 4.5.2 <span class=s>(1 files)</span></summary><table>
+<tr><td><a href="/Bforartists-4.5.2-Linux.tar.xz">l</a></td><td class=p>Linux</td><td class=s>384 MB</td></tr>
+</table></details>
+</body></html>"""
+
+
+class BfaDownloadsTests(unittest.TestCase):
+    """El servidor nuevo: una página con todas las versiones."""
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self._original = fk.cache_dir
         fk.cache_dir = lambda: Path(self.tmp.name)
+
+    def tearDown(self):
+        fk.cache_dir = self._original
+        self.tmp.cleanup()
+
+    def test_cada_version_trae_sus_ficheros(self):
+        versions = fk._parse_bfa_downloads(DOWNLOADS_HTML)
+        self.assertEqual(list(versions), ["5.2.0", "4.5.2"])
+        names = {(b.platform, b.arch): b.filename for b in versions["5.2.0"]}
+        self.assertEqual(names, {
+            ("windows", "x86_64"): "Bforartists-5.2.0-Windows.zip",
+            ("darwin", "arm64"): "Bforartists-5.2.0-Mac-Silicon.dmg",
+            ("linux", "x86_64"): "Bforartists-5.2.0-Linux.tar.xz",
+        })
+        linux = [b for b in versions["5.2.0"] if b.platform == "linux"][0]
+        self.assertEqual(linux.size, 423 * 1024 ** 2)
+        self.assertEqual(linux.fork, FORK_BFORARTISTS)
+
+    def test_solo_se_aceptan_enlaces_del_servidor_de_descargas(self):
+        """Lo que se baja de aquí se ejecuta: otro dominio no entra."""
+        builds = fk._parse_bfa_downloads(DOWNLOADS_HTML)["5.2.0"]
+        self.assertTrue(all(b.url.startswith("https://downloads.bforartists.com/")
+                            for b in builds))
+
+    def test_los_enlaces_relativos_se_completan(self):
+        build = fk._parse_bfa_downloads(DOWNLOADS_HTML)["4.5.2"][0]
+        self.assertEqual(
+            build.url, "https://downloads.bforartists.com/Bforartists-4.5.2-Linux.tar.xz")
+
+    def test_las_descargas_nuevas_no_llevan_autenticacion(self):
+        self.assertEqual(fk.download_headers(
+            "https://downloads.bforartists.com/Bforartists-5.2.0-Linux.tar.xz"), {})
+
+    def test_con_el_servidor_nuevo_no_se_toca_el_webdav(self):
+        with mock.patch.object(fk, "_http_get_text", return_value=DOWNLOADS_HTML), \
+                mock.patch.object(fk, "_propfind",
+                                  side_effect=AssertionError("no debería")):
+            builds = fk.fetch_bforartists()
+        self.assertEqual({b.version for b in builds}, {"5.2.0", "4.5.2"})
+
+    def test_si_el_servidor_nuevo_falla_se_usa_el_webdav(self):
+        """Un DNS con filtro bloquea durante semanas los dominios nuevos."""
+        def propfind(url, timeout):
+            return (ROOT_XML if url.endswith("/webdav/") else VERSION_XML).encode()
+        with mock.patch.object(fk, "_http_get_text", side_effect=OSError("bloqueado")), \
+                mock.patch.object(fk, "_propfind", side_effect=propfind):
+            builds = fk.fetch_bforartists()
+        self.assertTrue(builds)
+        self.assertTrue(all(b.url.startswith("https://cloud.bforartists.de/")
+                            for b in builds))
+
+    def test_sin_red_se_sirve_lo_ultimo_del_servidor_nuevo(self):
+        with mock.patch.object(fk, "_http_get_text", return_value=DOWNLOADS_HTML):
+            first = fk.fetch_bforartists()
+        with mock.patch.object(fk, "_http_get_text", side_effect=OSError("sin red")), \
+                mock.patch.object(fk, "_propfind", side_effect=OSError("sin red")):
+            offline = fk.fetch_bforartists()
+        self.assertEqual(len(offline), len(first))
+
+
+class BfaWebDavTests(unittest.TestCase):
+    """El NextCloud de antes, que queda de respaldo del servidor nuevo."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self._original = fk.cache_dir
+        fk.cache_dir = lambda: Path(self.tmp.name)
+        # Estos tests son del respaldo: el servidor nuevo "no contesta".
+        patcher = mock.patch.object(fk, "_http_get_text",
+                                    side_effect=OSError("servidor nuevo caído"))
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def tearDown(self):
         fk.cache_dir = self._original
