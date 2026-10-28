@@ -155,14 +155,6 @@ jobs:
           # Copiamos el AppImage a la raíz para que el artefacto contenga
           # únicamente el archivo, sin la carpeta dist/.
           cp dist/BlendTrack-x86_64.AppImage BlendTrack-x86_64.AppImage
-          # Puente de compatibilidad temporal: quien ya tenga instalado el
-          # antiguo BlenderManager busca su asset por el nombre viejo
-          # (updater.ASSET_NAMES en su copia). Publicamos también una copia con
-          # ese nombre (mismo binario, solo cambia el fichero) para que su
-          # auto-update le instale esta version. En Linux no importa el nombre
-          # interno de la AppImage: al aplicarla se reemplaza el fichero en su
-          # sitio. Quitar cuando no queden instalaciones antiguas.
-          cp BlendTrack-x86_64.AppImage BlenderManager-x86_64.AppImage
       - name: Smoke test del AppImage generado
         run: |
           chmod +x BlendTrack-x86_64.AppImage
@@ -194,9 +186,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: BlendTrack-linux
-          path: |
-            BlendTrack-x86_64.AppImage
-            BlenderManager-x86_64.AppImage
+          path: BlendTrack-x86_64.AppImage
 
   windows:
     needs: version
@@ -278,17 +268,6 @@ jobs:
           # En Windows el spec genera onefile: un unico BlendTrack.exe, sin
           # carpeta _internal que el usuario pueda borrar por error.
           Compress-Archive -Path dist/BlendTrack.exe -DestinationPath BlendTrack-windows-x86_64.zip
-      # Puente de compatibilidad temporal (el mismo que el AppImage del job
-      # linux): quien tenga el antiguo BlenderManager (<= v1.62) busca su asset
-      # por el nombre viejo, y en Windows ademas el updater de esa copia busca
-      # BlenderManager.exe DENTRO del zip para lanzarlo como ayudante. Se
-      # publica una copia con el .exe renombrado; el binario es el mismo (ya
-      # lleva la version nueva dentro). Quitar cuando no queden instalaciones
-      # antiguas.
-      - name: Empaquetar la copia de compatibilidad (nombre antiguo)
-        run: |
-          Copy-Item dist/BlendTrack.exe dist/BlenderManager.exe
-          Compress-Archive -Path dist/BlenderManager.exe -DestinationPath BlenderManager-windows-x86_64.zip
       # Que el .exe arranque de verdad. Sin esto, un Windows roto se descubre
       # cuando lo baja un usuario: no tenemos ninguna maquina Windows a mano.
       - name: Comprobar que el binario arranca (GUI incluida)
@@ -312,9 +291,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: BlendTrack-windows
-          path: |
-            BlendTrack-windows-x86_64.zip
-            BlenderManager-windows-x86_64.zip
+          path: BlendTrack-windows-x86_64.zip
 
   macos:
     needs: version
@@ -363,26 +340,10 @@ jobs:
           test -n "${ICNS}"
           test -s "${ICNS}"
           /usr/libexec/PlistBuddy -c "Print :CFBundleIconFile" dist/BlendTrack.app/Contents/Info.plist
-      # Puente de compatibilidad temporal (ver el job windows): quien tenga el
-      # antiguo BlenderManager (<= v1.62) busca BlenderManager-macos.zip y,
-      # dentro, un .app cuyo ejecutable se llame BlenderManager. Se publica una
-      # copia del mismo bundle con el nombre viejo; hay que renombrar tambien
-      # la clave CFBundleExecutable del Info.plist o `open` no encuentra con
-      # que abrirlo. Quitar cuando no queden instalaciones antiguas.
-      - name: Empaquetar la copia de compatibilidad (nombre antiguo)
-        run: |
-          /usr/bin/ditto dist/BlendTrack.app dist/BlenderManager.app
-          mv dist/BlenderManager.app/Contents/MacOS/BlendTrack \
-             dist/BlenderManager.app/Contents/MacOS/BlenderManager
-          /usr/libexec/PlistBuddy -c "Set :CFBundleExecutable BlenderManager" \
-            dist/BlenderManager.app/Contents/Info.plist
-          cd dist && zip -r ../BlenderManager-macos.zip BlenderManager.app
       - uses: actions/upload-artifact@v4
         with:
           name: BlendTrack-macos
-          path: |
-            BlendTrack-macos.zip
-            BlenderManager-macos.zip
+          path: BlendTrack-macos.zip
 
   # Publica la release con los binarios adjuntos.
   #

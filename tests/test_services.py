@@ -2250,13 +2250,11 @@ class ReleaseNotesUrlTests(unittest.TestCase):
 
 
 class ApplyUpdateTests(unittest.TestCase):
-    """El binario nuevo tiene que poder relanzar una instalación antigua.
+    """El ayudante relanza ``BlendTrack.exe`` y no deja el nombre viejo al lado.
 
-    Quien tenga el BlenderManager de antes del renombrado (<= v1.62) se
-    actualiza con un asset de compatibilidad que lleva el ejecutable con el
-    nombre viejo. Si el ayudante buscara solo ``BlendTrack.exe``, copiaría la
-    versión nueva y se quedaría sin nada que abrir: la app se cerraría y no
-    volvería a arrancar.
+    El CI ya no publica assets con el nombre de BlenderManager, pero quien se
+    actualizó con aquel puente puede tener todavía ``BlenderManager.exe`` en
+    su carpeta: si se quedara, el usuario seguiría abriendo el de siempre.
     """
 
     def _aplicar(self, staging, target):
@@ -2272,23 +2270,6 @@ class ApplyUpdateTests(unittest.TestCase):
                                   lanzados.append(Path(args[0]).name)):
             updater.apply_update(target, 0)
         return lanzados
-
-    def test_relanza_el_binario_con_el_nombre_antiguo(self):
-        from services import updater
-
-        with tempfile.TemporaryDirectory() as tmp:
-            staging = Path(tmp) / "staging"
-            staging.mkdir()
-            target = Path(tmp) / "app"
-            target.mkdir()
-            # El asset de compatibilidad trae el .exe renombrado.
-            (staging / updater.LEGACY_EXE_NAME).write_bytes(b"nuevo")
-            (target / updater.LEGACY_EXE_NAME).write_bytes(b"viejo")
-
-            self.assertEqual(self._aplicar(staging, target),
-                             [updater.LEGACY_EXE_NAME])
-            self.assertEqual(
-                (target / updater.LEGACY_EXE_NAME).read_bytes(), b"nuevo")
 
     def test_la_instalacion_normal_relanza_el_nombre_nuevo(self):
         from services import updater
